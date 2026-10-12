@@ -1,0 +1,897 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>リスト</title>
+<link rel="stylesheet" href="app.css">
+<style>
+  .sortrow { display: flex; justify-content: flex-end; margin: 0 0 8px; font-size: 13px; color: var(--sub); }
+  .sortrow select { font: inherit; color: var(--fg); background: var(--surface-2); border: 0; border-radius: 10px; padding: 6px 10px; }
+  .check-row { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; margin-top: 6px; min-height: 1em; font-size: 13px; color: var(--sub); }
+  .check-row[hidden] { display: none; }
+  .hday { font-size: 12px; font-weight: 700; color: var(--sub); letter-spacing: .08em; margin: 18px 4px 8px; }
+  .hlist { display: flex; flex-direction: column; gap: 8px; }
+  .hrow { display: flex; align-items: center; gap: 6px; padding: 10px 12px 10px 16px; }
+  .hrow:active { background: var(--surface-2); }
+  .hrow .main { flex: 1; min-width: 0; }
+  .hrow .title { font-size: 15px; font-weight: 700; line-height: 1.45; word-break: break-all;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .hrow .meta { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; font-size: 12px; color: var(--sub); margin-top: 4px; }
+  .page-head { align-items: center; }
+  .hsrc { font-size: 11px; font-weight: 800; padding: 1px 8px; border-radius: 999px; }
+  .hsrc.app { background: var(--accent-soft); color: var(--accent-strong); }
+  .hsrc.site { background: var(--surface-2); color: var(--sub); }
+  .hsrc.list { background: var(--warn-soft); color: var(--warn); }
+  .hadd { width: var(--hadd-w); height: var(--hadd-h); }
+  .hadd.on { color: var(--accent-text); grid-auto-flow: row; align-content: center; justify-items: center; border-radius: 14px; }
+  .hadd.on::after { content: "登録済み"; display: var(--hadd-label); font-size: 10px; font-weight: 700; margin-top: 1px; white-space: nowrap; }
+  .hofficial { margin-top: 28px; padding: 16px; }
+  .hofficial p { margin: 0 0 12px; font-size: 13px; color: var(--sub); line-height: 1.6; }
+  .hofficial .btns { display: flex; gap: 8px; flex-wrap: wrap; }
+  .check-btn { height: var(--btn-h); padding: 0 14px; border: 1.5px solid var(--accent-strong, #23744a); border-radius: 999px; background: transparent; color: var(--accent-strong, #23744a); font: 700 13px "Noto Sans JP", sans-serif; cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center; gap: 5px; line-height: 1; min-width: 8.5em; } /* min-width: 「確認中」と「更新を確認」で幅が変わらないように */
+  .check-btn:active { opacity: .6; }
+  .check-ico { flex: none; width: 16px; height: 16px; fill: currentColor; }
+  .check-btn.spinning .check-ico { animation: nh-spin 1s linear infinite; }
+  .check-btn:disabled { border-color: var(--line, #ccc); color: var(--sub); cursor: default; opacity: .8; }
+  .check-last { font-size: 12px; color: var(--sub); font-variant-numeric: tabular-nums; }
+  .check-prog { font-size: 13px; font-weight: 700; color: var(--sub); font-variant-numeric: tabular-nums; }
+  @keyframes nh-spin { to { transform: rotate(360deg); } }
+  /* タブ: スクロールしても上に残る */
+  .tabbar { position: sticky; top: 0; z-index: 5; background: var(--bg); padding: 6px 0 10px; margin: 0 -16px; padding-left: 16px; padding-right: 16px; }
+  .tabbar .seg button .n { margin-left: 6px; font-size: 12px; padding: 1px 7px; border-radius: 999px; background: var(--surface-2); color: var(--sub); }
+  .tabbar .seg button.on .n { background: var(--accent-soft); color: var(--accent-strong); }
+  .filters { margin-bottom: 14px; }
+  /* 検索: 虫眼鏡で開く。作品名・メモ・タグ・サイト・連載状態を、空白で区切った言葉がすべて含まれるもので絞る */
+  .icon-btn.on { background: var(--accent-soft); color: var(--accent-strong); }
+  .searchbar { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; padding: 0 4px 0 14px; height: 46px; border-radius: 14px;
+    background: var(--surface); animation: nh-drop .18s ease-out; }
+  .searchbar > svg { width: 20px; height: 20px; fill: var(--sub); flex: none; }
+  .searchbar input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; font: inherit; font-size: 16px; color: var(--fg); }
+  .searchbar input::placeholder { color: var(--muted); }
+  .searchbar .count { font-size: 13px; color: var(--sub); white-space: nowrap; }
+  @keyframes nh-drop { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
+
+  /* 続きから読む */
+  .hero {
+    display: block; width: 100%; text-align: left; color: #fff; padding: 18px 18px 16px; border-radius: 22px; margin-bottom: 18px;
+    background: radial-gradient(120% 140% at 100% 0%, #3fae73 0%, #23744a 55%, #1b5c3b 100%);
+    box-shadow: 0 10px 28px rgba(35, 116, 74, .32); position: relative; overflow: hidden;
+  }
+  .hero:active { transform: scale(.985); }
+  .hero .eyebrow { font-size: 12px; font-weight: 700; letter-spacing: .08em; opacity: .85; display: flex; align-items: center; gap: 6px; }
+  .hero .title { font-size: 18px; font-weight: 800; line-height: 1.4; margin: 6px 52px 10px 0;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; word-break: break-all; }
+  .hero .meta { font-size: 12px; opacity: .85; display: flex; flex-wrap: wrap; gap: 2px 0; }
+  .hero .meta span { white-space: nowrap; }
+  .hero .meta span:not(:last-child)::after { content: "・"; margin: 0 .3em; }
+  .hero .play { position: absolute; right: 16px; top: 50%; transform: translateY(-50%); width: 44px; height: 44px; border-radius: 50%;
+    background: rgba(255, 255, 255, .2); display: grid; place-items: center; }
+  .hero .play svg { width: 24px; height: 24px; fill: #fff; }
+  .hero .bar { height: 4px; border-radius: 2px; background: rgba(255, 255, 255, .22); margin-top: 12px; overflow: hidden; }
+  .hero .bar i { display: block; height: 100%; background: #fff; border-radius: 2px; }
+
+  /* 作品カード */
+  .list { display: flex; flex-direction: column; gap: 10px; }
+  .item { display: flex; align-items: center; gap: 4px; padding: 14px 6px 14px 16px; position: relative; overflow: hidden; }
+  .item:active { background: var(--surface-2); }
+  .item .main { flex: 1; min-width: 0; }
+  .item .meta { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; font-size: 12px; color: var(--sub); margin-bottom: 4px; }
+  .item .meta .site { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; }
+  .badge { font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 999px; }
+  .badge.unread { background: var(--warn-soft); color: var(--warn); }
+  .badge.tag { background: var(--surface-2); color: var(--sub); }
+  .item .title { font-size: 15px; font-weight: 700; line-height: 1.45; word-break: break-all;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .item .memo { font-size: 13px; color: var(--sub); margin-top: 4px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; word-break: break-all; }
+  .item .resume { font-size: 12px; font-weight: 700; color: var(--accent-strong); margin-top: 6px; }
+  .item .prog { position: absolute; left: 0; bottom: 0; height: 3px; background: var(--accent); border-radius: 0 2px 0 0; opacity: .9; }
+  .item.done { opacity: .6; }
+  .item.done .title { text-decoration: line-through; text-decoration-color: var(--muted); }
+
+  /* 長押しして上下へ動かす並べ替え: 長押しの文字選択・メニューを出さず、持ち上げている間は浮かせる */
+  .item { touch-action: pan-y; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+  .item.removing { background: #ff3b30; }
+  .item.dragging { z-index: 20; box-shadow: 0 14px 34px rgba(0, 0, 0, .35); transition: none; position: relative; }
+  /* 読む順番の上下 (⋯ の左)。設定でオフにできる */
+  .move { display: flex; flex-direction: column; }
+  .move .icon-btn { width: var(--move-w); height: var(--move-h); border-radius: 10px; }
+  .move .icon-btn:disabled { opacity: .25; }
+  .done-tools { display: flex; justify-content: flex-end; margin: 10px 0 0; }
+  .done-hint { font-size: 12px; color: var(--sub); margin: 8px 4px 0; text-align: right; }
+
+  .empty { text-align: center; color: var(--sub); padding: 40px 20px; }
+  .empty .ico { width: 64px; height: 64px; border-radius: 20px; margin: 0 auto 14px; display: grid; place-items: center; background: var(--surface-2); }
+  .empty .ico svg { width: 30px; height: 30px; fill: var(--muted); }
+  .empty h2 { margin: 0 0 6px; color: var(--fg); font-size: 16px; }
+  .empty p { margin: 0 0 16px; font-size: 13px; }
+
+  details.done-box { margin-top: 24px; }
+  details.done-box summary { list-style: none; display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; color: var(--sub); padding: 10px 4px; cursor: pointer; }
+  details.done-box summary::-webkit-details-marker { display: none; }
+  details.done-box summary svg { width: 18px; height: 18px; fill: currentColor; transition: transform .2s; }
+  details.done-box[open] summary svg { transform: rotate(180deg); }
+
+  /* シートの中身 */
+  .sheet h2 { margin: 0 0 4px; font-size: 17px; line-height: 1.4; word-break: break-all; }
+  .sheet .sheet-sub { font-size: 12px; color: var(--sub); margin-bottom: 14px; display: flex; align-items: center; gap: 6px; }
+  .actions { display: flex; gap: 8px; margin-bottom: 16px; } /* ボタンの数 (2〜3) で幅を分ける */
+  .action { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 4px; border-radius: 14px; background: var(--surface-2); font-size: 12px; font-weight: 700; color: var(--fg); }
+  .action:active { transform: scale(.96); }
+  .action svg { width: 22px; height: 22px; fill: currentColor; }
+  .action:only-child { flex-direction: row; justify-content: center; gap: 8px; padding: 12px; } /* 1 つだけの段は横長に */
+  .action.danger { color: var(--danger-text); background: var(--danger-soft); }
+  .field-label { font-size: 12px; font-weight: 700; color: var(--sub); margin: 14px 2px 8px; }
+  .sheet textarea, .sheet input[type=text] {
+    width: 100%; border: 1px solid var(--line); background: var(--bg); border-radius: 12px; padding: 10px 12px; font-size: 14px; outline: none;
+  }
+  .sheet textarea { min-height: 76px; resize: vertical; }
+  .sheet textarea:focus, .sheet input[type=text]:focus { border-color: var(--accent); }
+  .tag-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .sheet .done-row { display: flex; gap: 10px; margin-top: 18px; }
+  .sheet .done-row .btn { flex: 1; height: 46px; border-radius: 14px; }
+</style>
+</head>
+<body>
+<main>
+<header class="page-head">
+  <div>
+    <h1>リスト</h1>
+    <div class="check-row" id="checkRow">
+      <span class="check-prog" id="checkProg" hidden></span>
+      <span class="check-last" id="checkLast"></span>
+    </div>
+  </div>
+  <div style="display:flex;gap:4px;align-items:center">
+    <button class="check-btn" id="collect" type="button"><svg class="check-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M17.65 6.35A7.96 7.96 0 0 0 12 4a8 8 0 1 0 7.73 10h-2.08A6 6 0 1 1 12 6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg><span id="collectText">更新を確認</span></button>
+    <button class="icon-btn" id="searchBtn" aria-label="検索"></button>
+  </div>
+</header>
+
+<div class="tabbar"><div class="seg" id="tabs"></div></div>
+<div class="searchbar" id="searchBar" hidden>
+  <svg viewBox="0 0 24 24" id="searchIcon"></svg>
+  <input id="q" type="search" placeholder="作品名・メモ・タグ・サイトで検索" autocomplete="off" enterkeyhint="search">
+  <span class="count" id="qCount"></span>
+  <button class="icon-btn" id="qClose" aria-label="検索を閉じる"></button>
+</div>
+<div class="sortrow" id="sortRow"><label>並べ替え <select id="sortSel"></select></label></div>
+<div class="chips filters" id="filters"></div>
+<div id="hero"></div>
+<div class="list" id="active"></div>
+
+<details class="done-box" id="doneBox">
+  <summary><span id="doneHead">読了</span><svg viewBox="0 0 24 24"><path d="M16.59 8.59 12 13.17 7.41 8.59 6 10l6 6 6-6z"/></svg></summary>
+  <div class="list" id="done"></div>
+  <div class="done-tools"><button class="btn danger" id="clearDone">読了をまとめて削除</button></div>
+  <div class="done-hint" id="pruneHint"></div>
+</details>
+
+</main>
+<div class="scrim" id="scrim"></div>
+<div class="sheet" id="sheet" role="dialog" aria-modal="true"></div>
+<div class="snack" id="snack" role="status" aria-live="polite"><span id="snackText"></span><button id="snackUndo">元に戻す</button></div>
+<datalist id="tagList"></datalist>
+
+<script src="js/core.js"></script>
+<script src="app.js"></script>
+<script>
+const PRESET_TAGS = ['異世界', '現代', '恋愛', 'ラブコメ', 'ホラー', 'ミステリー', 'SF', '歴史', 'その他'];
+// 保存データの読み書きと「続きから」の規則は core.js (サイト上の注入スクリプトと共通)
+const { load, resumeUrl, kindOf } = NH;
+
+const ui = { tab: null, site: '', tag: '', status: '', q: '', src: 'all' };
+// 連載状態の絞り込み (作品の status。ランキング・検索の一覧と作品ページから分かったものだけ。分からない作品は「すべて」にだけ出る)
+const STATUS_CHIPS = [['serial', '連載中'], ['complete', '完結'], ['short', '短編']];
+const STATUS_NAME = Object.fromEntries(STATUS_CHIPS);
+// 検索: 全角・半角と大文字・小文字をそろえ、空白で区切った言葉がすべて含まれる作品だけ
+const norm = (t) => String(t || '').normalize('NFKC').toLowerCase();
+const queryTerms = () => norm(ui.q).split(' ').filter(Boolean);
+function matchQuery(it, terms) {
+  if (!terms.length) return true;
+  const hay = norm([it.title, it.memo, it.tag, NH.siteLabel(it), STATUS_NAME[it.status]].join(' '));
+  return terms.every((t) => hay.includes(t));
+}
+try { ui.tab = localStorage.getItem('nh-tab'); } catch (e) {}
+if (location.hash === '#history') ui.tab = 'history'; // 設定の「閲覧履歴」からは履歴のタブを開く
+
+
+// ---- 読書位置 ----
+function progressOf(d, it) {
+  const p = (d.progress || {})[it.key];
+  if (!p || (it.urlAt && p.at < it.urlAt)) return null; // 更新取得のあとに読んでいなければ使わない
+  return p;
+}
+// 作品の全話数: 作品ページで覚えた全話数 (total) と、更新の確認で分かった最終話 (lastEp) の大きいほう (どちらも無ければ 0)
+const totalOf = (it) => Math.max(Number(it.total) || 0, Number(it.lastEp) || 0);
+function resumeText(p, total) {
+  if (!p) return total ? '全' + total + '話' : ''; // まだ読んでいない作品も、全話数は出す
+  const n = NH.epNumber(p); // カクヨムは話 ID が連番でないので、読書位置の no (目次の並びの番号)。'0' は短編で番号なし
+  const ep = n ? '第' + n + '話' + (total ? '/' + total : '') : ''; // total = 全何話 (分かるとき)
+  if (!p.done) return '続きから ' + (ep ? ep + ' ' : '') + Math.round(p.y * 100) + '%';
+  return p.next ? (ep ? ep + 'まで読了 ・ 次の話から' : '次の話から') : '';
+}
+
+// 絞り込み (サイト・タグ・連載状態) か検索をしているか
+const isNarrowed = () => !!(ui.site || ui.tag || ui.status || queryTerms().length);
+
+// 作品を開く。絞り込み・検索中なら、いま並んでいる順を控えて、読了のあとはその続きを次の作品にする (絞り込みなしなら控えを消す)
+function openWork(d, it, list) {
+  NH.update((x) => NH.setReadSeq(x, isNarrowed() && list ? list.map((y) => y.key) : null));
+  openUrl(openTarget(d, it));
+}
+
+// 開く先。通信できないとき、オフライン保存のある作品は保存した本文で開く (続きの話が保存してあればそこから)
+function openTarget(d, it) {
+  const online = resumeUrl(d, it);
+  if (navigator.onLine !== false || !NH.off.available()) return online;
+  const meta = NH.off.meta(it.site, it.id);
+  if (!meta || !(meta.eps || []).length) return online;
+  const eps = meta.eps;
+  const p = (d.progress || {})[it.key];
+  const cur = p ? eps.findIndex((e) => e.ep === p.ep) : -1;
+  const at = cur < 0 ? 0 : p.done ? Math.min(eps.length - 1, cur + 1) : cur;
+  return 'offline.html?w=' + encodeURIComponent(it.key) + '&ep=' + encodeURIComponent(eps[at].ep);
+}
+
+// ---- カード ----
+function card(d, it, isActive, visible) {
+  const c = el('div', 'card item' + (isActive ? '' : ' done'));
+  asButton(c, () => { if (Date.now() - dragEndedAt > 500) openWork(d, it, visible); }); // 持ち上げて離したときは開かない (キーボードでも Enter / Space で開く)
+  if (isActive) enableDrag(c, it, visible, sortMode(d) === 'manual');
+
+  const main = el('div', 'main');
+  const meta = el('div', 'meta');
+  const site = el('span', 'site');
+  site.append(el('span', 'dot ' + it.site), document.createTextNode(NH.siteLabel(it)));
+  meta.appendChild(site);
+  if (isActive && it.unread) meta.appendChild(el('span', 'badge unread', '未読 ' + it.unread + '話'));
+  if (it.tag) meta.appendChild(el('span', 'badge tag', it.tag));
+  main.append(meta, el('div', 'title', it.title));
+  if (it.memo) main.appendChild(el('div', 'memo', it.memo));
+  const p = isActive ? progressOf(d, it) : null;
+  const rt = resumeText(p, totalOf(it));
+  if (rt) main.appendChild(el('div', 'resume', rt));
+  c.appendChild(main);
+
+  if (isActive) {
+    // 読む順番の上下 (設定でオフにできる)。表示中の並びの端では押せない
+    const i = visible.indexOf(it);
+    if (arrowsOn(d) && sortMode(d) === 'manual' && visible.length > 1) {
+      const mv = el('div', 'move');
+      const up = iconBtn('up', '上へ', () => move(it.key, -1, visible));
+      const down = iconBtn('down', '下へ', () => move(it.key, 1, visible));
+      up.disabled = i === 0; down.disabled = i === visible.length - 1;
+      mv.append(up, down);
+      c.appendChild(mv);
+    }
+    const more = iconBtn('more', 'メニュー', () => openSheet(it.key));
+    more.dataset.key = it.key; // シートを閉じたあと、描き直したこのボタンへフォーカスを戻す
+    c.appendChild(more);
+  } else {
+    c.appendChild(iconBtn('undo', '未読に戻す', () => restore(it.key)));
+  }
+  if (p && !p.done && p.y > 0) {
+    const bar = el('div', 'prog'); bar.style.width = Math.min(100, Math.round(p.y * 100)) + '%'; c.appendChild(bar);
+  }
+  return c;
+}
+
+function emptyState(icon, title, text, button) {
+  const e = el('div', 'empty');
+  const i = el('div', 'ico'); i.innerHTML = svg(icon);
+  e.append(i, el('h2', '', title), el('p', '', text));
+  if (button) e.appendChild(button);
+  return e;
+}
+
+// 絞り込みのチップを fl に足す関数 (label, 選択中か, 押したとき, サイトの点の色) を返す
+const chipAdder = (fl) => (label, on, fn, dot) => {
+  const b = setPressed(el('button', 'chip' + (on ? ' on' : '')), on);
+  if (dot) b.appendChild(el('span', 'dot ' + dot));
+  b.appendChild(document.createTextNode(label)); b.onclick = fn; fl.appendChild(b);
+};
+
+// ---- 描画 ----
+function render() {
+  const d = load();
+  // 前回の確認の時刻 (確認していないときだけ。確認中は「確認中」と進み具合になる)
+  $('checkLast').textContent = !checking && d.lastCollect ? '前回の確認 ' + new Date(d.lastCollect).toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+  paintCollectWait();
+  const shown = d.readLater.filter((x) => !NH.nsfwHides(d, x)); // NSFW モードがオンなら R18 の作品は出さない (データは消さない)
+  const active = shown.filter((x) => !x.done);
+  const done = shown.filter((x) => x.done);
+  const cnt = { update: active.filter((x) => kindOf(x) === 'update').length, later: active.filter((x) => kindOf(x) === 'later').length };
+  if (!['update', 'later', 'history'].includes(ui.tab)) ui.tab = cnt.update ? 'update' : 'later';
+  // 開いたとき (最初の 1 回だけ): 前回選んだタブが空で、もう一方に作品があるなら、そちらを開く (見えない作品に気づけるように)
+  if (!ui.tabChecked) {
+    ui.tabChecked = true;
+    const other = ui.tab === 'update' ? 'later' : 'update';
+    if (ui.tab !== 'history' && !cnt[ui.tab] && cnt[other]) ui.tab = other;
+  }
+  const unreadEps = active.reduce((n, x) => n + (x.unread || 0), 0);
+  // 更新を確認するサイトが 1 つも無いとき、またはその (対象の) どのサイトにもログインしていないときは、
+  // 更新アイコンと、(更新の作品が無ければ)「未読の更新」の欄を出さない (ログインの有無は d.logins。Kotlin が写している)
+  const canCollect = NH.collectAnyActive(d);
+  $('checkRow').hidden = !canCollect;
+  $('collect').hidden = !canCollect;
+  const showUpdateTab = canCollect || cnt.update > 0;
+  if (!showUpdateTab && ui.tab === 'update') ui.tab = 'later';
+
+
+  // タブ
+  const tabs = $('tabs'); tabs.innerHTML = '';
+  [['update', '更新'], ['later', '後で読む'], ['history', '履歴']].filter(([k]) => k !== 'update' || showUpdateTab).forEach(([k, label]) => {
+    const b = setPressed(el('button', ui.tab === k ? 'on' : '', label), ui.tab === k);
+    if (k !== 'history') b.appendChild(el('span', 'n', String(cnt[k]))); // 履歴は増える一方で数に意味がないので出さない
+    b.onclick = () => { ui.tab = k; ui.site = ''; ui.tag = ''; ui.status = ''; try { localStorage.setItem('nh-tab', k); } catch (e) {} render(); };
+    tabs.appendChild(b);
+  });
+
+  if (ui.tab === 'history') { $('sortRow').hidden = true; return renderHistory(d); } // 並べ替えは作品の一覧だけ
+  // 絞り込み (このタブにある分だけ)。検索中も、いまのタブの中だけを探す
+  const terms = queryTerms();
+  const inTab = active.filter((x) => kindOf(x) === ui.tab && matchQuery(x, terms));
+  const sites = [...new Set(inTab.map(NH.siteKey))]; // R18 はノクターンなどに分ける
+  const stats = STATUS_CHIPS.filter(([k]) => inTab.some((x) => x.status === k)); // 連載状態が分かっている作品があるものだけ
+  const tags = [...new Set(inTab.map((x) => x.tag).filter(Boolean))];
+  if (ui.site && !sites.includes(ui.site)) ui.site = '';
+  if (ui.status && !stats.some(([k]) => k === ui.status)) ui.status = '';
+  if (ui.tag && !tags.includes(ui.tag)) ui.tag = '';
+  const fl = $('filters'); fl.innerHTML = '';
+  if (sites.length > 1 || tags.length || stats.length) {
+    const f = chipAdder(fl);
+    f('すべて', !ui.site && !ui.tag && !ui.status, () => { ui.site = ''; ui.tag = ''; ui.status = ''; render(); });
+    stats.forEach(([k, label]) => f(label, ui.status === k, () => { ui.status = ui.status === k ? '' : k; render(); }));
+    if (sites.length > 1) sites.forEach((s) => f(NH.siteLabel({ site: s }), ui.site === s, () => { ui.site = ui.site === s ? '' : s; render(); }, s));
+    tags.forEach((t) => f('# ' + t, ui.tag === t, () => { ui.tag = ui.tag === t ? '' : t; render(); }));
+  }
+  fl.hidden = !fl.childElementCount;
+
+  const mode = sortMode(d);
+  const visible = sortItems(inTab.filter((x) => (!ui.site || NH.siteKey(x) === ui.site) && (!ui.tag || x.tag === ui.tag) && (!ui.status || x.status === ui.status)), mode);
+  // 並べ替えの欄 (選ぶと設定に覚える)
+  const sel = $('sortSel');
+  if (!sel.dataset.ready) {
+    sel.dataset.ready = '1';
+    SORTS.forEach(([k, label]) => sel.appendChild(el('option', '', label)).value = k);
+    sel.addEventListener('change', () => { NH.setSetting('listSort', sel.value); render(); });
+  }
+  sel.value = mode;
+  $('sortRow').hidden = inTab.length < 2; // 並べる作品が 2 つ以上あるときだけ
+  const hero = $('hero'); hero.innerHTML = '';
+  const root = $('active'); root.innerHTML = '';
+
+  if (!visible.length) {
+    if (terms.length && !inTab.length) {
+      const b = el('button', 'btn', '検索をやめる'); b.onclick = () => closeSearch();
+      root.appendChild(emptyState('search', '「' + ui.q.trim() + '」に合う作品がありません', '別の言葉や、サイト名・連載状態でも探せます', b));
+    } else if (inTab.length) {
+      root.appendChild(emptyState('search', '条件に合う作品がありません', '絞り込みを解除してください'));
+    } else if (ui.tab === 'update') {
+      const b = el('button', 'btn primary', '更新を確認'); b.onclick = collect; // (この欄が出るのは更新を確認できるときだけ)
+      root.appendChild(emptyState('inbox', 'しおりの作品の更新はありません', 'ブックマーク・しおり・フォローから未読を取り込みます', b));
+    } else {
+      root.appendChild(emptyState('book', '後で読むリストは空です', 'ランキングや検索結果の「＋ 後で読む」で追加できます'));
+    }
+  } else {
+    // 上のカードは「さっきまで読んでいた作品の続き」。読んだ形跡が無ければ、リストの先頭 (次に読む)。
+    // 絞り込み中は、絞り込んだ中から選ぶ (絞り込みなしなら、どちらのタブの作品でもよい)
+    // 検索中は、結果を見やすくするため上のカードは出さない
+    if (!terms.length) {
+      const resume = !(d.settings && d.settings.heroResume === false); // 設定: さっきまで読んでいた作品を出す
+      const pick = (resume ? lastRead(d, isNarrowed() ? visible : active) : null) || visible[0];
+      hero.appendChild(heroCard(d, pick, visible.filter((x) => x !== pick).length, visible));
+    }
+    visible.forEach((it) => root.appendChild(card(d, it, true, visible)));
+  }
+
+  const doneRoot = $('done'); doneRoot.innerHTML = '';
+  const doneShown = done.filter((x) => (!terms.length || kindOf(x) === ui.tab) && matchQuery(x, terms));
+  doneShown.slice().reverse().forEach((it) => doneRoot.appendChild(card(d, it, false)));
+  $('doneBox').hidden = !doneShown.length;
+  $('doneHead').textContent = '読了 ' + doneShown.length;
+  $('qCount').textContent = terms.length ? visible.length + doneShown.length + ' 件' : '';
+  const st = d.settings || {};
+  $('pruneHint').textContent = st.pruneDone === false ? '' : '読了から ' + (st.pruneDays || NH.PRUNE_DAYS) + ' 日たつと自動で削除します (設定で変更)';
+}
+// ---- 履歴のタブ (旧 history.html。閲覧した作品を日付ごとに。検索はこのタブの中だけ) ----
+const H_FILTERS = [['all', 'すべて'], ['app', 'アプリで読んだ'], ['site', '公式のみ'], ['both', '両方']];
+const H_MATCH = { all: () => true, app: (e) => !!e.appAt, site: (e) => !e.appAt && !!e.siteAt, both: (e) => !!e.appAt && !!e.siteAt };
+const H_OFFICIAL = { narou: 'https://yomou.syosetu.com/rireki/list/', hameln: 'https://syosetu.org/?mode=rireki', kakuyomu: 'https://kakuyomu.jp/my/antenna/reading_histories' };
+const H_TIME = new Intl.DateTimeFormat('ja-JP', { hour: '2-digit', minute: '2-digit' });
+const midnight = (t) => { const x = new Date(t); x.setHours(0, 0, 0, 0); return x.getTime(); };
+function dayLabel(t) {
+  const days = Math.round((midnight(Date.now()) - midnight(t)) / 86400000);
+  const d = new Date(t);
+  return days === 0 ? '今日' : days === 1 ? '昨日' : (d.getMonth() + 1) + '月' + d.getDate() + '日';
+}
+// 開く先: リストにあれば「続きから」、そうでなければ履歴の URL (アプリで読んだ話 → 公式の続き)
+function historyOpenUrl(d, e) {
+  const it = d.readLater.find((x) => x.key === e.key);
+  return it ? NH.resumeUrl(d, it) : NH.resumeUrl(d, { key: e.key, url: e.url || e.siteUrl });
+}
+function historyRow(d, e, inList) {
+  const r = el('div', 'card hrow');
+  asButton(r, () => openUrl(historyOpenUrl(d, e)));
+  const main = el('div', 'main');
+  main.appendChild(el('div', 'title', e.title || '(作品名不明)'));
+  const meta = el('div', 'meta');
+  const site = el('span'); site.append(el('span', 'dot ' + e.site), document.createTextNode(' ' + NH.siteLabel(e)));
+  meta.appendChild(site);
+  const p = (d.progress || {})[e.key];
+  if (e.appAt) {
+    const n = e.ep && /^[1-9]\d{0,4}$/.test(e.ep) ? Number(e.ep) : p && p.url === e.url ? NH.epNumber(p) : null; // カクヨムは読書位置の no (同じ話のとき)
+    const ep = n ? '第' + n + '話 ' : '';
+    const pr = p && p.url === e.url ? (p.done ? '読了' : Math.round(p.y * 100) + '%') : '';
+    meta.appendChild(el('span', 'hsrc app', 'アプリ ' + H_TIME.format(new Date(e.appAt)) + (ep || pr ? ' ・ ' + ep + pr : '')));
+  }
+  if (e.siteAt) meta.appendChild(el('span', 'hsrc site', '公式' + (e.total ? ' ・ 全' + e.total + '話' : '')));
+  if (inList) meta.appendChild(el('span', 'hsrc list', 'リスト'));
+  main.appendChild(meta);
+  r.appendChild(main);
+  // 後で読むに追加 (リストにあるときは印だけ)
+  const add = el('button', 'icon-btn hadd' + (inList ? ' on' : ''));
+  add.innerHTML = svg(inList ? 'check' : 'add');
+  add.setAttribute('aria-label', inList ? 'リストに追加済み' : '後で読むに追加');
+  add.onclick = (ev) => {
+    ev.stopPropagation();
+    if (inList) return;
+    NH.update((dd) => {
+      if (!dd.readLater.some((x) => x.key === e.key)) {
+        dd.readLater.push(Object.assign({ key: e.key, site: e.site, id: e.id, url: e.url || e.siteUrl, title: e.title, addedAt: Date.now(), done: false, kind: 'later' }, e.sub ? { sub: e.sub } : {}));
+      } else {
+        NH.setDone(dd.readLater.find((x) => x.key === e.key), false);
+      }
+    });
+    snack('後で読むに追加しました');
+    render();
+  };
+  r.appendChild(add);
+  return r;
+}
+function renderHistory(d) {
+  const terms = queryTerms();
+  const h = (d.history || []).filter((e) => !NH.nsfwHides(d, e));
+  const onList = new Set(d.readLater.filter((x) => !x.done).map((x) => x.key));
+  // 履歴のタブでは、上のカード・読了の欄・読了の自動削除の案内は出さない
+  $('hero').innerHTML = '';
+  $('doneBox').hidden = true;
+  $('pruneHint').textContent = '';
+  const sites = [...new Set(h.map(NH.siteKey))]; // R18 はノクターンなどに分ける
+  if (ui.site && !sites.includes(ui.site)) ui.site = '';
+  const fl = $('filters'); fl.innerHTML = '';
+  const f = chipAdder(fl);
+  H_FILTERS.forEach(([k, label]) => f(label, ui.src === k, () => { ui.src = k; render(); }));
+  if (sites.length > 1) sites.forEach((s) => f(NH.siteLabel({ site: s }), ui.site === s, () => { ui.site = ui.site === s ? '' : s; render(); }, s));
+  fl.hidden = !fl.childElementCount;
+
+  const root = $('active'); root.innerHTML = '';
+  if (!NH.historyOn(d)) {
+    root.appendChild(emptyState('book', '履歴の記録はオフです', '設定の「閲覧履歴を記録する」で切り替えられます'));
+  } else {
+    const shown = h.filter((e) => H_MATCH[ui.src || 'all'](e) && (!ui.site || NH.siteKey(e) === ui.site) && matchQuery(e, terms));
+    $('qCount').textContent = terms.length ? shown.length + ' 件' : '';
+    if (!shown.length) {
+      if (terms.length && h.length) {
+        const b = el('button', 'btn', '検索をやめる'); b.onclick = () => closeSearch();
+        root.appendChild(emptyState('search', '「' + ui.q.trim() + '」に合う履歴がありません', '別の言葉でも探せます', b));
+      } else {
+        root.appendChild(emptyState('book', h.length ? '条件に合う履歴がありません' : '履歴はまだありません', h.length ? '絞り込みを変えてください' : '作品を開くと、ここに記録されます'));
+      }
+    } else {
+      // アプリで読んだ作品は日付ごと、公式にしか無い作品 (時刻不明) は最後にまとめる
+      let lastDay = null, list = null;
+      shown.forEach((e) => {
+        const day = e.appAt ? dayLabel(e.appAt) : '公式の履歴のみ (別の端末など)';
+        if (day !== lastDay) { root.appendChild(el('div', 'hday', day)); list = el('div', 'hlist'); root.appendChild(list); lastDay = day; }
+        list.appendChild(historyRow(d, e, onList.has(e.key)));
+      });
+    }
+  }
+  // 公式の閲覧履歴は、各サイトの履歴ページを開いたときにアプリの履歴と突き合わせる (自動では取りに行かない)
+  const off = el('div', 'card hofficial');
+  off.appendChild(el('p', '', '公式の閲覧履歴は、各サイトの履歴ページを開いたときにアプリの履歴と突き合わせます (自動では取りに行きません)。別の端末で読んだ作品は「公式」として表示されます。'));
+  const btns = el('div', 'btns');
+  MAIN_SITES.forEach(([k, label]) => { // app.js のサイトの表 (R18 を除く)
+    const b = el('button', 'btn tonal'); b.append(el('span', 'dot ' + k), document.createTextNode(label + 'の履歴'));
+    b.onclick = () => (location.href = H_OFFICIAL[k]); btns.appendChild(b);
+  });
+  off.appendChild(btns);
+  root.appendChild(off);
+}
+const arrowsOn = (d) => !(d.settings && d.settings.listArrows === false);
+
+// 一覧の並べ替え (表示の順だけ。手動の並び (▲▼ で動かした順) は残す)。手動以外のときは ▲▼ を出さない
+const SORTS = [['manual', '自分で並べた順'], ['updated', '更新が新しい順'], ['unread', '未読が多い順'], ['title', '名前順'], ['site', 'サイト順']];
+const SORT_KEY = {
+  updated: (x) => -(x.urlAt || x.addedAt || 0),
+  unread: (x) => -(x.unread || 0),
+  title: (x) => x.title || '',
+  site: (x) => NH.siteLabel(x),
+};
+const sortMode = (d) => (SORT_KEY[d.settings && d.settings.listSort] ? d.settings.listSort : 'manual');
+// 同じ値の作品は手動の順のまま (Array.prototype.sort は安定)
+function sortItems(items, mode) {
+  const k = SORT_KEY[mode];
+  if (!k) return items;
+  return items.slice().sort((a, b) => {
+    const x = k(a), y = k(b);
+    return typeof x === 'string' ? x.localeCompare(y, 'ja') : x - y;
+  });
+}
+
+// 読書位置が一番新しい作品 (途中まで、または読み終えた話の次がある作品)。無ければ null
+function lastRead(d, items) {
+  let best = null;
+  let at = 0;
+  items.forEach((it) => {
+    const p = progressOf(d, it);
+    if (p && (!p.done || p.next) && p.at > at) { best = it; at = p.at; }
+  });
+  return best;
+}
+
+// others = このカードの作品のほかに、リストにある作品の数
+function heroCard(d, it, others, list) {
+  const p = progressOf(d, it);
+  const h = el('button', 'hero');
+  const eyebrow = el('div', 'eyebrow');
+  const resuming = !!p && (!p.done || !!p.next);
+  eyebrow.append(el('span', 'dot ' + it.site), document.createTextNode((resuming ? '続きから読む' : '次に読む') + ' ・ ' + NH.siteLabel(it)));
+  const meta = [resumeText(p, totalOf(it)), it.unread ? '未読 ' + it.unread + '話' : '', others > 0 ? 'ほか ' + others + ' 件' : ''].filter(Boolean);
+  const metaBox = el('div', 'meta');
+  meta.forEach((t) => metaBox.appendChild(el('span', '', t))); // 区切りの「・」は CSS。折り返しは項目の切れ目でだけ起きる
+  h.append(eyebrow, el('div', 'title', it.title), metaBox);
+  const play = el('div', 'play'); play.innerHTML = svg('play'); h.appendChild(play);
+  if (p && !p.done && p.y > 0) {
+    const bar = el('div', 'bar'); const i = el('i'); i.style.width = Math.round(p.y * 100) + '%'; bar.appendChild(i); h.appendChild(bar);
+  }
+  h.onclick = () => openWork(d, it, list);
+  return h;
+}
+
+// ---- 操作シート ----
+function openSheet(key) {
+  const d = load();
+  const it = d.readLater.find((x) => x.key === key);
+  if (!it) return;
+  const sh = $('sheet'); sh.innerHTML = '';
+  ui.sheetKey = key;
+  sh.appendChild(el('div', 'grip'));
+  sh.appendChild(el('h2', '', it.title));
+  const sub = el('div', 'sheet-sub');
+  sub.append(el('span', 'dot ' + it.site), document.createTextNode(NH.siteLabel(it) + ' ・ ' + (kindOf(it) === 'update' ? '未読の更新' : '後で読む')));
+  sh.appendChild(sub);
+
+  const acts = el('div', 'actions');
+  // 操作の前に書きかけのメモとジャンルを保存する (後にすると「元に戻す」の表示が消えるため先に)
+  const act = (icon, label, fn, into = acts) => {
+    const b = el('button', 'action'); b.innerHTML = svg(icon); b.appendChild(el('span', '', label));
+    b.onclick = () => { closeSheet(true); fn(); };
+    into.appendChild(b);
+  };
+  if (sortMode(d) === 'manual') act('top', '先頭へ', () => toTop(key)); // ほかの並べ替えでは、動かしても表示が変わらないので出さない
+  act('check', '読了にする', () => markDone(key));
+  act('swap', kindOf(it) === 'update' ? '後で読むへ' : '未読へ', () => switchKind(key));
+  sh.appendChild(acts);
+
+  // オフライン保存: 保存してあれば「オフラインで読む」、無ければ「オフラインに保存」。どちらも追加・更新の保存ができる
+  const workUrl = NH.workUrl(it.site, it.id);
+  if (NH.off.available() && workUrl) {
+    // 話が 1 つも無い (保存が途中で止まった・空の) ときは、読むボタンを出さず「オフラインに保存」にする
+    const savedEps = ((NH.off.meta(it.site, it.id) || {}).eps || []).length;
+    const row = el('div', 'actions');
+    if (savedEps) act('book', 'オフラインで読む (' + savedEps + '話)', () => (location.href = 'offline.html?w=' + encodeURIComponent(key)), row);
+    act('download', savedEps ? '追加・更新を保存' : 'オフラインに保存', () => openUrl(workUrl + '#nh-save'), row);
+    sh.appendChild(row);
+  }
+
+  sh.appendChild(el('div', 'field-label', 'メモ'));
+  const ta = el('textarea'); ta.placeholder = '気になった点、おすすめされた理由など'; ta.value = it.memo || '';
+  sh.appendChild(ta);
+  sh.appendChild(el('div', 'field-label', 'ジャンル'));
+  const inp = el('input'); inp.type = 'text'; inp.placeholder = '自由入力、または下から選択'; inp.setAttribute('list', 'tagList'); inp.value = it.tag || '';
+  sh.appendChild(inp);
+  const row = el('div', 'tag-row');
+  PRESET_TAGS.forEach((t) => {
+    const b = el('button', 'chip' + (inp.value === t ? ' on' : ''), t);
+    b.onclick = () => { inp.value = inp.value === t ? '' : t; row.querySelectorAll('.chip').forEach((x) => x.classList.toggle('on', x.textContent === inp.value)); };
+    row.appendChild(b);
+  });
+  inp.oninput = () => row.querySelectorAll('.chip').forEach((x) => x.classList.toggle('on', x.textContent === inp.value.trim()));
+  sh.appendChild(row);
+
+  const dr = el('div', 'done-row');
+  const del = el('button', 'btn danger', '削除'); del.onclick = () => { remove(key); closeSheet(); };
+  const ok = el('button', 'btn primary', '保存');
+  ok.onclick = () => closeSheet(true);
+  dr.append(del, ok);
+  sh.appendChild(dr);
+
+  // 外側のタップや「戻る」で閉じたときも、メモとジャンルは保存する
+  ui.sheetSave = () => {
+    if (ta.value.trim() !== (it.memo || '') || inp.value.trim() !== (it.tag || '')) patch(key, (x) => { x.memo = ta.value.trim(); x.tag = inp.value.trim(); });
+  };
+  sheetShow(sh, it.title, () => closeSheet(true));
+  history.pushState({ nhSheet: true }, ''); // Android の「戻る」でシートだけ閉じるため
+}
+// シートを閉じる。履歴に積んだ分を戻し、popstate で実際に隠す
+function closeSheet(saveEdits) {
+  if (saveEdits && ui.sheetSave) ui.sheetSave();
+  ui.sheetSave = null;
+  if (history.state && history.state.nhSheet) history.back(); else hideSheet();
+}
+function hideSheet() {
+  if (ui.sheetSave) { ui.sheetSave(); ui.sheetSave = null; }
+  const key = ui.sheetKey; ui.sheetKey = null;
+  sheetHide($('sheet')); render();
+  // render() で一覧を作り直すので、シートを開いたカードのメニューボタンへフォーカスを戻す (カードが無くなっていれば戻さない)
+  if (key && document.activeElement === document.body) {
+    const b = [...$('active').querySelectorAll('[data-key]')].find((x) => x.dataset.key === key);
+    if (b) b.focus({ preventScroll: true });
+  }
+}
+window.addEventListener('popstate', hideSheet);
+
+// ---- データ操作 (変更前の状態を取っておき、元に戻せるようにする) ----
+function mutate(fn, message) {
+  let before = null; // 変更前の写し
+  NH.update((d) => { before = JSON.parse(JSON.stringify({ readLater: d.readLater, progress: d.progress })); fn(d); });
+  render();
+  if (message) snack(message, () => { NH.update((x) => { x.readLater = before.readLater; x.progress = before.progress; }); render(); });
+  else hideSnack(); // 別の操作をしたら、前の「元に戻す」は使えなくする (その操作まで戻ってしまうため)
+}
+function patch(key, fn) { mutate((d) => { const x = d.readLater.find((y) => y.key === key); if (x) fn(x); }); }
+function remove(key) { mutate((d) => { d.readLater = d.readLater.filter((x) => x.key !== key); NH.dropProgress(d, [key]); }, 'リストから削除しました'); }
+function markDone(key) { mutate((d) => { const x = d.readLater.find((y) => y.key === key); if (x) NH.setDone(x, true); }, '読了にしました'); }
+function restore(key) { mutate((d) => { const x = d.readLater.find((y) => y.key === key); if (x) NH.setDone(x, false); }); }
+function clearDone() {
+  const keys = load().readLater.filter((x) => x.done).map((x) => x.key);
+  if (!keys.length) return;
+  mutate((d) => { d.readLater = d.readLater.filter((x) => !x.done); NH.dropProgress(d, keys); }, '読了 ' + keys.length + ' 作品を削除しました');
+}
+function switchKind(key) {
+  const it = load().readLater.find((y) => y.key === key);
+  if (!it) return;
+  const to = kindOf(it) === 'update' ? 'later' : 'update';
+  mutate((d) => { const x = d.readLater.find((y) => y.key === key); if (x) x.kind = to; }, '「' + (to === 'later' ? '後で読む' : '未読の更新') + '」へ移しました');
+}
+function toTop(key) {
+  mutate((d) => {
+    const i = d.readLater.findIndex((x) => x.key === key);
+    if (i > 0) d.readLater.unshift(d.readLater.splice(i, 1)[0]);
+  });
+}
+// 表示中の並びの中で入れ替える (絞り込み中でも、見えている隣と入れ替わる)
+function move(key, delta, visible) {
+  const pos = visible.findIndex((x) => x.key === key);
+  const to = pos + delta;
+  if (pos < 0 || to < 0 || to >= visible.length) return;
+  mutate((d) => {
+    const a = d.readLater.findIndex((x) => x.key === key);
+    const b = d.readLater.findIndex((x) => x.key === visible[to].key);
+    [d.readLater[a], d.readLater[b]] = [d.readLater[b], d.readLater[a]];
+  });
+}
+
+// ---- 検索 (虫眼鏡で開く。閉じると、言葉を消して元の表示に戻る) ----
+$('searchBtn').innerHTML = svg('search');
+$('searchIcon').innerHTML = '<path d="' + ICON_PATHS.search + '"/>';
+$('qClose').innerHTML = svg('close');
+function openSearch() {
+  $('searchBar').hidden = false;
+  $('searchBtn').classList.add('on');
+  $('q').focus();
+}
+function closeSearch() {
+  runSearch.cancel();
+  $('searchBar').hidden = true;
+  $('searchBtn').classList.remove('on');
+  $('q').value = '';
+  if (ui.q) { ui.q = ''; render(); }
+}
+const runSearch = debounce(() => { ui.q = $('q').value; render(); }, 120); // 打つたびに全体を描き直さない
+$('searchBtn').onclick = () => ($('searchBar').hidden ? openSearch() : closeSearch());
+$('qClose').onclick = closeSearch;
+$('q').addEventListener('input', runSearch);
+$('q').addEventListener('keydown', (e) => { if (e.key === 'Escape') closeSearch(); if (e.key === 'Enter') { runSearch.flush(); $('q').blur(); } });
+
+// 更新の確認: アプリが画面に出さずに確認して、結果だけ知らせる (NHStore.collectNow)。
+// 確認中は更新ボタンを回し、終わったら (nhCollecting(false)) 取り込んだ結果で描き直す
+function collect() {
+  if (window.NHStore && NHStore.collectNow) NHStore.collectNow();
+}
+// 確認のあいだは、ボタンを「確認中」(灰色・押せない) にする。終わったら一覧を出し直す (結果は確認のお知らせのバーで出す)
+var checking = false; // var: render() は下で書く前に呼ばれることがある (let だと読めない)
+// 確認中はボタンを灰色にして押せなくし、横に「2 / 4」(何サイト目か) を出す
+window.nhCollecting = (on) => {
+  checking = !!on;
+  $('collect').disabled = checking;
+  $('checkProg').hidden = !checking;
+  $('checkLast').hidden = !!checking;
+  $('collectText').textContent = checking ? '確認中' : '更新を確認';
+  $('collect').classList.toggle('spinning', checking);
+  $('checkProg').textContent = checking ? '…' : '';
+  if (!on) render();
+};
+// 手動の確認は、前回の確認から 10 分は押せない (残りは Kotlin の CollectCooldown が NHStore.collectWaitMs で返す)。
+// 待つ間はボタンを押せなくして「あと N 分」を出し、時間が来たら描き直して押せるように戻す
+var waitTimer = 0;
+function paintCollectWait() {
+  clearTimeout(waitTimer);
+  const ms = !checking && window.NHStore && NHStore.collectWaitMs ? Number(NHStore.collectWaitMs()) || 0 : 0;
+  $('collect').disabled = checking || ms > 0;
+  if (ms > 0) {
+    $('checkLast').textContent += ' ・ あと ' + Math.ceil(ms / 60000) + ' 分';
+    waitTimer = setTimeout(render, Math.min(ms, 60000) + 200); // 1 分ごとに「あと N 分」を進める
+  }
+}
+window.nhProgress = (i, n) => { if (checking) $('checkProg').textContent = i + ' / ' + n; };
+$('collect').onclick = collect;
+// サイト (ノクターンなど) が分からない R18 の作品は、アプリが作品ページを読んで判別する。分かったら描き直す
+window.nhSubsFilled = () => render();
+(() => {
+  const ids = load().readLater.filter((x) => x.site === 'narou18' && !x.sub).map((x) => x.id);
+  if (ids.length && window.NHStore && NHStore.fillR18Subs) NHStore.fillR18Subs(JSON.stringify(ids));
+})();
+// ハーメルンの作品が R-18 かは、まだ調べていない作品 (r18 が未設定) を、小説情報のページで判別する (NSFW モード中は通信しない)
+(() => {
+  const ids = load().readLater.filter((x) => x.site === 'hameln' && x.r18 === undefined).map((x) => x.id);
+  if (ids.length && window.NHStore && NHStore.fillHamelnR18) NHStore.fillHamelnR18(JSON.stringify(ids));
+})();
+if (window.NHStore && NHStore.collecting && NHStore.collecting()) {
+  nhCollecting(true);
+  // 起動時の確認など、リストを開く前から進んでいたときは、いまの進み具合を出す
+  const p = NHStore.progressNow ? NHStore.progressNow() : '';
+  if (p) $('checkProg').textContent = p;
+}
+// ---- 長押しして上下へ動かす並べ替え / 横にスワイプして削除 ----
+// 作品を長押しすると持ち上がり、指を上下に動かして離した場所に入る。画面の端に近づくと自動でスクロールする。
+// 長押しになる前に横へ動かすと、カードが指について動き、幅の SWIPE_RATIO を越えて離すとリストから削除する (Gmail と同じ)。
+// 表示中 (絞り込み後) の並びの中で入れ替え、見えていない作品の位置は変えない。
+const LONG_PRESS_MS = 380;
+const SWIPE_RATIO = 0.35; // 幅のこの割合を越えて離すと削除
+let dragEndedAt = 0;
+
+// 表示中の作品 (keys) の並びを新しい順にする。d.readLater の中では、表示中の作品が占めていた場所に順に入れ直す
+function applyOrder(keys) {
+  mutate((d) => {
+    const set = new Set(keys);
+    const slots = [];
+    d.readLater.forEach((x, i) => { if (set.has(x.key)) slots.push(i); });
+    const byKey = new Map(d.readLater.map((x) => [x.key, x]));
+    keys.forEach((k, j) => { d.readLater[slots[j]] = byKey.get(k); });
+  });
+}
+
+// reorder = 長押しで動かせるか (自分で並べた順のときだけ)。横スワイプでの削除はいつでも使える
+function enableDrag(c, it, visible, reorder) {
+  let timer = 0, sx = 0, sy = 0, st = null, raf = 0, swiping = false, swipeDx = 0;
+  c.addEventListener('contextmenu', (e) => e.preventDefault());
+
+  const layout = (clientY) => {
+    st.y = clientY;
+    const dy = Math.max(st.minDy, Math.min(st.maxDy, clientY + scrollY - st.startY));
+    c.style.transform = 'translateY(' + dy + 'px) scale(1.02)';
+    // 持ち上げた作品の中心より上にある作品の数 = 入る位置
+    const center = st.tops[st.idx] + st.hs[st.idx] / 2 + dy;
+    let target = 0;
+    st.tops.forEach((t, j) => { if (j !== st.idx && t + st.hs[j] / 2 < center) target++; });
+    st.target = target;
+    const step = st.hs[st.idx] + st.gap;
+    st.cards.forEach((x, j) => {
+      if (j === st.idx) return;
+      const shift = st.idx < target && j > st.idx && j <= target ? -step : st.idx > target && j >= target && j < st.idx ? step : 0;
+      x.style.transform = shift ? 'translateY(' + shift + 'px)' : '';
+    });
+  };
+  // 画面の端に近いあいだは自動でスクロールする
+  const autoScroll = () => {
+    if (!st) return;
+    const edge = 90, v = st.y < edge + 60 ? -14 : st.y > innerHeight - edge ? 14 : 0;
+    if (v) { scrollBy(0, v); layout(st.y); }
+    raf = requestAnimationFrame(autoScroll);
+  };
+  const start = () => {
+    const cards = [...$('active').querySelectorAll('.item')];
+    const idx = cards.indexOf(c);
+    if (idx < 0) return;
+    const tops = cards.map((x) => x.getBoundingClientRect().top + scrollY);
+    const hs = cards.map((x) => x.offsetHeight);
+    const gap = cards.length > 1 ? Math.max(0, tops[1] - (tops[0] + hs[0])) : 0;
+    st = { cards, idx, tops, hs, gap, startY: sy + scrollY, y: sy, target: idx,
+      minDy: tops[0] - tops[idx], maxDy: tops[cards.length - 1] + hs[cards.length - 1] - hs[idx] - tops[idx] };
+    c.classList.add('dragging');
+    cards.forEach((x) => { if (x !== c) x.style.transition = 'transform .15s'; });
+    try { navigator.vibrate && navigator.vibrate(15); } catch (e) { /* 振動なし */ }
+    raf = requestAnimationFrame(autoScroll);
+  };
+  const finish = (apply) => {
+    clearTimeout(timer); timer = 0;
+    if (!st) return;
+    cancelAnimationFrame(raf);
+    const { cards, idx, target } = st;
+    st = null;
+    dragEndedAt = Date.now();
+    c.classList.remove('dragging');
+    cards.forEach((x) => { x.style.transform = ''; x.style.transition = ''; });
+    if (apply && target !== idx) {
+      const keys = visible.map((x) => x.key);
+      keys.splice(target, 0, keys.splice(idx, 1)[0]);
+      applyOrder(keys);
+    }
+  };
+
+  // 横スワイプ: カードが指について動き、十分動かして離すと画面の外へ出て削除される。足りなければ元へ戻る
+  const swipeTo = (dx) => {
+    const w = c.offsetWidth, p = Math.min(1, Math.abs(dx) / (w * SWIPE_RATIO));
+    c.style.transform = 'translateX(' + dx + 'px)';
+    c.style.opacity = String(1 - p * 0.4);
+    const over = p >= 1;
+    if (over !== c.classList.contains('removing')) {
+      c.classList.toggle('removing', over);
+      if (over) try { navigator.vibrate && navigator.vibrate(20); } catch (e) { /* 振動なし */ }
+    }
+  };
+  const endSwipe = (apply) => {
+    if (!swiping) return;
+    swiping = false;
+    dragEndedAt = Date.now();
+    const dx = swipeDx;
+    if (apply && Math.abs(dx) >= c.offsetWidth * SWIPE_RATIO) {
+      c.style.transition = 'transform .18s, opacity .18s';
+      c.style.transform = 'translateX(' + (dx > 0 ? '110%' : '-110%') + ')';
+      c.style.opacity = '0';
+      setTimeout(() => remove(it.key), 180);
+    } else {
+      c.style.transition = 'transform .18s, opacity .18s';
+      c.style.transform = ''; c.style.opacity = ''; c.classList.remove('removing');
+      setTimeout(() => { c.style.transition = ''; }, 200);
+    }
+  };
+
+  c.addEventListener('touchstart', (e) => {
+    if (e.touches.length !== 1 || e.target.closest('button')) return;
+    endSwipe(false);
+    sx = e.touches[0].clientX; sy = e.touches[0].clientY;
+    clearTimeout(timer);
+    timer = setTimeout(() => { timer = 0; if (reorder) start(); }, LONG_PRESS_MS);
+  }, { passive: true });
+  c.addEventListener('touchmove', (e) => {
+    const t = e.touches[0];
+    if (swiping) { if (e.cancelable) e.preventDefault(); swipeDx = t.clientX - sx; swipeTo(swipeDx); return; }
+    if (!st) { // 長押しになる前に動いたら、横ならスワイプ、縦ならふつうのスクロール
+      if (!timer) return;
+      const dx = t.clientX - sx, dy = t.clientY - sy;
+      if (Math.hypot(dx, dy) <= 10) return;
+      clearTimeout(timer); timer = 0;
+      if (Math.abs(dx) > Math.abs(dy) * 1.2) { swiping = true; swipeDx = dx; if (e.cancelable) e.preventDefault(); swipeTo(dx); }
+      return;
+    }
+    if (e.cancelable) e.preventDefault();
+    layout(t.clientY);
+  }, { passive: false });
+  c.addEventListener('touchend', () => { endSwipe(true); finish(true); });
+  c.addEventListener('touchcancel', () => { endSwipe(false); finish(false); });
+}
+
+$('clearDone').onclick = clearDone;
+// ジャンルの候補 (既定 + これまで使ったもの)
+(() => {
+  const dl = $('tagList');
+  [...new Set([...PRESET_TAGS, ...load().readLater.map((x) => x.tag).filter(Boolean)])].forEach((t) => { const o = el('option'); o.value = t; dl.appendChild(o); });
+})();
+// 開いたときに、読了から一定日数たった作品を片付ける (設定で切り替え)
+(() => {
+  let n = 0;
+  NH.update((d) => { n = NH.pruneDone(d); NH.pruneProgress(d); NH.pruneHistory(d); });
+  render();
+  if (n) snack('読了から日数のたった ' + n + ' 作品を削除しました');
+  // 版ごとに足される、開いたときの処理 (差し込み口。<!--#include--> は MainActivity の expandIncludes が展開する)
+})();
+</script>
+</body>
+</html>

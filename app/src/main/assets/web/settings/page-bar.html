@@ -1,0 +1,32 @@
+<!-- ===== 上部バー ===== -->
+<section class="page" role="main" id="p-bar" hidden>
+  <div class="section-label">表示</div>
+  <div class="group">
+    <label class="cell"><span class="text">スクロールで隠す</span><input type="checkbox" class="switch" id="hideBar" data-setting="hideBarOnScroll"></label>
+    <label class="cell"><span class="text">再読み込みのボタンを出す</span><input type="checkbox" class="switch" id="showReload" data-setting="showReload"></label>
+    <label class="cell"><span class="text">読み込みの進み具合を線で出す</span><input type="checkbox" class="switch" id="showLoadBar" data-setting="showLoadBar"></label>
+  </div>
+  <div class="hint">「スクロールで隠す」は、サイトのページを下へスクロールすると隠し、上へ戻すと出します。再読み込みのボタンと進み具合の線は、サイトのページだけに出ます。</div>
+
+  <div class="section-label">タブ</div>
+  <div class="group">
+    <label class="cell"><span class="text">いつも 1 段にまとめる</span><input type="checkbox" class="switch" id="tabsOneRow" data-setting="tabsOneRow" data-default="off"></label>
+    <label class="cell"><span class="text">タブの背景に色を付ける</span><input type="checkbox" class="switch" id="tabsTinted" data-setting="tabsTinted" data-default="off"></label>
+  </div>
+  <div class="hint">オンにすると、タブの幅をそろえて 1 段に並べ、入りきらなければ 2 行に折り返します。オフは、入りきらないタブだけ 2 段目に並べます。</div>
+
+  <div class="section-label">メニュー (⋮)</div>
+  <div class="group">
+    <button class="cell" data-go="menu"><span class="text">メニューに出す項目</span><span class="value"></span></button>
+  </div>
+  <div class="hint">読み上げ・共有・ほかのブラウザで開く・表示の診断などを、1 つずつ出す / 出さないを選べます。</div>
+
+  <div class="section-label">タブの並び・名前・色</div>
+  <div class="group" id="nameList"></div>
+  <div class="hint">上から順に、上部バーの左から並びます (▲▼ で入れ替え)。名前はリストや履歴にも使います。空にすると元に戻ります (12 文字まで)。</div>
+  <div id="r18ModeBox">
+    <div class="section-label">R18 の出し方</div>
+    <div class="group" id="r18ModeList"></div>
+    <div class="hint">「なろう」を隠しているときは、サイト名のタブで出ます。</div>
+  </div>
+</section>

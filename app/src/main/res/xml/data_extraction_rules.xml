@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 12 以降のバックアップ (Google への自動バックアップ・機種変更のときの移行) の対象。設定の写し (SettingsBackup) だけ。
+     ログイン情報 (WebView の Cookie)・連携先の接続情報・リスト・履歴・オフライン保存は入れない -->
+<data-extraction-rules>
+    <cloud-backup>
+        <include domain="sharedpref" path="settings_backup.xml" />
+    </cloud-backup>
+    <device-transfer>
+        <include domain="sharedpref" path="settings_backup.xml" />
+    </device-transfer>
+</data-extraction-rules>

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- アプリの更新でダウンロードした APK を、パッケージインストーラーに渡すための場所 (cache/update/) -->
+<paths>
+    <cache-path name="update" path="update/" />
+</paths>

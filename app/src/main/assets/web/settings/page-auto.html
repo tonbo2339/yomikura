@@ -1,0 +1,25 @@
+<!-- ===== 更新の自動確認 ===== -->
+<section class="page" role="main" id="p-auto" hidden>
+  <div class="section-label">更新を確認するサイト</div>
+  <div class="group" id="collectSiteList"></div>
+  <div class="hint" id="collectSiteHint">ブックマーク・しおり・フォローから未読を取り込みます。ログインしているサイトだけ選べます。</div>
+  <div class="hint" id="needLogin" hidden>ログインしているサイトがありません。ログインすると選べます (設定 → サイト → ログイン)。</div>
+  <div class="hint" id="collectNone" hidden>更新を確認するサイトがありません。リストの更新ボタンと「更新」タブは隠れます。</div>
+  <div id="autoBody">
+  <div class="group" style="margin-top:16px">
+    <label class="cell"><span class="text">起動時に自動で確認</span><input type="checkbox" class="switch" id="autoCheck" data-setting="autoCheck"></label>
+  </div>
+  <div id="autoHoursBox">
+    <div class="section-label">前回の確認から、この時間以上あいたとき</div>
+    <div class="group" id="autoHoursList"></div>
+    <div class="hint">確認画面が出たサイトは、しばらく休みます。</div>
+  </div>
+  <div class="section-label">なろうのブックマーク</div>
+  <div class="group" id="catsNarou"></div>
+  <div id="catsR18Box">
+    <div class="section-label">R18 のブックマーク</div>
+    <div class="group" id="catsNarou18"></div>
+  </div>
+  <div class="hint">更新を確認するカテゴリです (1 つ以上)。名前と件数は、一度確認すると出ます。</div>
+  </div>
+</section>

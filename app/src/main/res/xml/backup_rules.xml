@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 11 以前のバックアップの対象 (data_extraction_rules.xml と同じ)。設定の写し (SettingsBackup) だけ -->
+<full-backup-content>
+    <include domain="sharedpref" path="settings_backup.xml" />
+</full-backup-content>

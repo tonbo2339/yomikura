@@ -1,0 +1,198 @@
+/* Yomikura アプリ内ページ (リスト / 履歴 / 設定) 共通のデザイン。iOS の画面の作り (グレーの地 + 白い角丸のグループ) に寄せる */
+:root {
+  color-scheme: light dark;
+  --bg: #f2f2f7;
+  --surface: #ffffff;
+  --surface-2: rgba(118, 118, 128, .12);   /* 塗り (セグメントの地、チップなど) */
+  --surface-3: rgba(120, 120, 128, .2);
+  --line: rgba(60, 60, 67, .18);           /* 区切り線 */
+  --fg: #000000;
+  --sub: rgba(60, 60, 67, .75);
+  --muted: rgba(60, 60, 67, .3);
+  --accent: #1e9a55;                       /* アプリの色 (緑)。線・塗り・記号に使う (文字には、下の accent-text) */
+  --accent-text: #12703c;                  /* アクセント色の文字 (背景と 4.5:1 以上。ライトでは accent より濃い緑) */
+  --accent-fill: #157a42;                  /* 主なボタンの塗り (白い文字が 4.5:1 以上) */
+  --accent-strong: #157a42;
+  --accent-soft: rgba(30, 154, 85, .12);
+  --on-accent: #fff;
+  --switch-on: #34c759;
+  --warn: #c76a00;
+  --warn-soft: rgba(255, 149, 0, .14);
+  --danger: #ff3b30;
+  --danger-text: #c4211a;                  /* 赤い文字 (背景と 4.5:1 以上。ライトでは danger より濃い赤) */
+  --danger-soft: rgba(255, 59, 48, .1);
+  --narou: #007aff; --narou18: #d63384; --hameln: #ff8a00; --kakuyomu: #10a49a;
+  --r: 12px;
+  --shadow: none;
+  --shadow-lg: 0 10px 40px rgba(0, 0, 0, .18);
+  --scrim: rgba(0, 0, 0, .35);
+  /* 操作部分の大きさ (設定「操作部分の大きさ」。html[data-ui] で切り替える。既定は標準) */
+  --seg-h: 36px; --chip-h: 35px; --btn-h: 34px;
+  --move-w: 44px; --move-h: 36px; --hadd-w: 44px; --hadd-h: 44px; --hadd-label: none;
+}
+html[data-ui="compact"] { --seg-h: 32px; --chip-h: 32px; --btn-h: 30px; --move-w: 40px; --move-h: 34px; --hadd-w: 40px; --hadd-h: 40px; --hadd-label: none; }
+html[data-ui="large"] { --seg-h: 40px; --chip-h: 38px; --btn-h: 40px; --move-w: 48px; --move-h: 40px; --hadd-w: 56px; --hadd-h: 52px; --hadd-label: block; }
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #000000;
+    --surface: #1c1c1e;
+    --surface-2: rgba(118, 118, 128, .24);
+    --surface-3: rgba(120, 120, 128, .36);
+    --line: rgba(84, 84, 88, .6);
+    --fg: #ffffff;
+    --sub: rgba(235, 235, 245, .6);
+    --muted: rgba(235, 235, 245, .3);
+    --accent: #30d158;
+    --accent-text: #30d158;
+    --accent-fill: #30d158;
+    --accent-strong: #4ade80;
+    --accent-soft: rgba(48, 209, 88, .16);
+    --on-accent: #00230e;
+    --switch-on: #30d158;
+    --warn: #ffb340;
+    --warn-soft: rgba(255, 159, 10, .18);
+    --danger: #ff453a;
+    --danger-text: #ff6b61;
+    --danger-soft: rgba(255, 69, 58, .16);
+    --narou: #0a84ff; --narou18: #ff6bb0; --hameln: #ff9f0a; --kakuyomu: #40c8be;
+    --shadow-lg: 0 10px 40px rgba(0, 0, 0, .7);
+    --scrim: rgba(0, 0, 0, .55);
+  }
+}
+
+/* display を指定した要素でも hidden 属性で隠れるように */
+[hidden] { display: none !important; }
+/* inert = 押せない (ログインしていないときの設定など)。薄く見せる。inert が使えない古い WebView でも押せないよう pointer-events も止める */
+[inert] { opacity: .45; pointer-events: none; }
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; background: var(--bg); color: var(--fg); }
+body {
+  font-family: "Noto Sans JP", "Noto Sans CJK JP", -apple-system, sans-serif;
+  font-size: 16px; line-height: 1.45; padding: 0 16px 40px;
+  -webkit-font-smoothing: antialiased;
+}
+button, input, textarea { font: inherit; color: inherit; }
+button { border: 0; background: none; cursor: pointer; padding: 0; }
+svg { display: block; }
+/* キーボード・スイッチ操作の目印 (タップでは出ない) */
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.switch:focus-visible { outline-offset: 3px; }
+[role="button"]:focus-visible { border-radius: var(--r); }
+
+/* 大きな見出し (iOS の Large Title) */
+.page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; padding: 18px 4px 12px; }
+.page-head h1 { margin: 0; font-size: 32px; font-weight: 800; letter-spacing: .01em; line-height: 1.15; }
+.page-head .sub { margin-top: 6px; font-size: 13px; color: var(--sub); }
+.page-head .sub b { color: var(--fg); font-weight: 700; }
+/* グループの見出しと注記 (iOS の Section header / footer) */
+.section-label { font-size: 13px; font-weight: 400; color: var(--sub); margin: 24px 16px 7px; }
+.hint { font-size: 13px; color: var(--sub); line-height: 1.5; margin: 7px 16px 0; }
+
+/* ボタン */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  height: 36px; padding: 0 16px; border-radius: 999px; font-size: 15px; font-weight: 600;
+  background: var(--surface-2); color: var(--accent-text); transition: opacity .15s, transform .12s;
+}
+.btn:active { opacity: .6; }
+.btn.primary { background: var(--accent-fill); color: var(--on-accent); }
+.btn.tonal { background: var(--accent-soft); color: var(--accent-text); }
+.btn.danger { background: var(--danger-soft); color: var(--danger-text); }
+.btn.block { display: flex; width: 100%; height: 50px; border-radius: 12px; font-size: 17px; }
+.btn:disabled { opacity: .4; pointer-events: none; }
+.icon-btn {
+  width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; color: var(--accent);
+  transition: background .15s, opacity .15s;
+}
+.icon-btn:active { opacity: .5; }
+/* 説明文の長い注記: 先頭の 2 行だけ見せ、「くわしく」で全文を開く */
+details.more { margin: 7px 16px 0; font-size: 13px; color: var(--sub); line-height: 1.5; }
+details.more summary { list-style: none; cursor: pointer; }
+details.more summary::-webkit-details-marker { display: none; }
+details.more summary::after { content: " くわしく ▾"; color: var(--accent-strong); font-weight: 600; white-space: nowrap; }
+details.more[open] summary::after { content: " 閉じる ▴"; }
+details.more p { margin: 6px 0 0; }
+.icon-btn svg { width: 24px; height: 24px; fill: currentColor; }
+
+/* カード (白い角丸)。iOS と同じく影は付けない */
+.card { background: var(--surface); border-radius: var(--r); box-shadow: var(--shadow); }
+
+/* グループ化した一覧 (iOS の Inset Grouped List) */
+.group { background: var(--surface); border-radius: var(--r); overflow: hidden; }
+.cell {
+  display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 10px 16px; position: relative;
+  width: 100%; text-align: left; background: var(--surface); color: var(--fg); font-size: 16px;
+}
+button.cell:active, a.cell:active, label.cell:active { background: var(--surface-3); }
+/* 区切り線は左を空ける (アイコンの分) */
+.cell + .cell::before { content: ""; position: absolute; top: 0; right: 0; left: 16px; border-top: .5px solid var(--line); }
+.cell.has-icon + .cell::before { left: 58px; }
+.cell .ico { width: 30px; height: 30px; border-radius: 7px; display: grid; place-items: center; flex: none; color: #fff; }
+.cell .ico svg { width: 19px; height: 19px; fill: currentColor; }
+.cell .text { flex: 1 0 auto; max-width: 72%; word-break: auto-phrase; } /* ラベルを優先して幅を取り、右の値のほうを省略する */
+.cell .text small { display: block; font-size: 13px; color: var(--sub); margin-top: 1px; line-height: 1.4; }
+.cell .value { color: var(--sub); font-size: 15px; flex: 0 1 auto; min-width: 3em; max-width: 45%; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cell .chev { width: 8px; height: 13px; flex: none; color: var(--muted); }
+.cell.danger { color: var(--danger-text); justify-content: center; }
+.cell.accent { color: var(--accent-text); }
+.cell .check { width: 18px; height: 18px; flex: none; fill: var(--accent); }
+
+/* スイッチ (iOS) */
+.switch { appearance: none; -webkit-appearance: none; flex: none; width: 51px; height: 31px; border-radius: 999px; margin: 0;
+  background: var(--surface-3); position: relative; transition: background .2s; cursor: pointer; }
+.switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 27px; height: 27px; border-radius: 50%;
+  background: #fff; box-shadow: 0 3px 8px rgba(0, 0, 0, .15), 0 1px 1px rgba(0, 0, 0, .16); transition: transform .2s cubic-bezier(.3, .7, .4, 1); }
+.switch:checked { background: var(--switch-on); }
+.switch:checked::after { transform: translateX(20px); }
+/* 行の中では右端に寄せる (ラベルは最大 72% までしか伸びないので、残りの幅はスイッチの左に空く) */
+.cell > .switch { margin-left: auto; }
+
+/* セグメント (iOS の Segmented Control) */
+.seg { display: flex; gap: 2px; padding: 2px; border-radius: 9px; background: var(--surface-2); }
+.seg button {
+  flex: 1; min-height: var(--seg-h); padding: 4px; border-radius: 7px; font-size: 14px; font-weight: 500; color: var(--fg);
+  transition: background .2s;
+}
+.seg button.on { background: var(--surface); font-weight: 600; box-shadow: 0 3px 8px rgba(0, 0, 0, .12), 0 3px 1px rgba(0, 0, 0, .04); }
+/* ダークは地が暗く、選んでいる側が灰色の塊にしか見えないので、アクセント色の縁と文字色で区別する */
+@media (prefers-color-scheme: dark) { .seg button.on { background: #48484a; color: var(--accent-strong); box-shadow: inset 0 0 0 1.5px var(--accent); } }
+
+/* チップ (絞り込み) */
+.chips { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; margin: 0 -16px; padding: 2px 40px 4px 16px;
+  /* 右端をぼかして、横にまだ続くことを示す (右の余白 40px で、最後のチップはぼかしの外まで動かせる) */
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent); }
+.chips::-webkit-scrollbar { display: none; }
+.chip {
+  flex: none; height: var(--chip-h); padding: 0 15px; border-radius: 999px; font-size: 14px; font-weight: 500;
+  background: var(--surface); color: var(--fg); display: inline-flex; align-items: center; gap: 6px;
+}
+.chip.on { background: var(--accent); color: var(--on-accent); }
+.dot { width: 8px; height: 8px; border-radius: 50%; flex: none; display: inline-block; }
+.dot.narou { background: var(--narou); } .dot.narou18, .dot.noc, .dot.mnlt, .dot.mid { background: var(--narou18); }
+.dot.hameln { background: var(--hameln); } .dot.kakuyomu { background: var(--kakuyomu); }
+
+/* スナックバー */
+.snack {
+  position: fixed; left: 16px; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom)); z-index: 50;
+  display: flex; align-items: center; gap: 12px; padding: 12px 12px 12px 18px; border-radius: 14px;
+  background: rgba(44, 44, 46, .96); color: #fff; box-shadow: var(--shadow-lg); font-size: 15px;
+  transform: translateY(calc(100% + 40px)); visibility: hidden;
+  transition: transform .25s cubic-bezier(.3, .7, .4, 1), visibility 0s .25s;
+}
+.snack.show { transform: none; visibility: visible; transition: transform .25s cubic-bezier(.3, .7, .4, 1); }
+.snack span { flex: 1; }
+.snack button { color: #30d158; font-weight: 700; padding: 6px 10px; border-radius: 8px; }
+
+/* ボトムシート */
+.scrim { position: fixed; inset: 0; z-index: 40; background: var(--scrim); opacity: 0; pointer-events: none; transition: opacity .25s; }
+.scrim.show { opacity: 1; pointer-events: auto; }
+.sheet {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 41; max-height: 88vh; overflow-y: auto;
+  background: var(--bg); border-radius: 14px 14px 0 0; padding: 6px 16px calc(20px + env(safe-area-inset-bottom));
+  box-shadow: var(--shadow-lg); transform: translateY(105%); transition: transform .3s cubic-bezier(.3, .7, .4, 1);
+}
+.sheet.show { transform: none; }
+.sheet[inert] { opacity: 1; } /* 閉じる動きのあいだ、[inert] の薄い表示にしない */
+.sheet:focus { outline: none; } /* シートを開いたとき、読み上げの対象にするためにフォーカスを置くだけ (枠は出さない) */
+.sheet .grip { width: 36px; height: 5px; border-radius: 3px; background: var(--surface-3); margin: 4px auto 14px; }
+button.cell:disabled { opacity: .4; pointer-events: none; }

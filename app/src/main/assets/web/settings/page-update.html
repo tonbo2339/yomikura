@@ -1,0 +1,22 @@
+<!-- ===== アプリの更新 ===== -->
+<section class="page" role="main" id="p-update" hidden>
+  <div class="group" style="margin-top:16px">
+    <div class="cell"><span class="text">いまのバージョン</span><span class="value" id="u-current"></span></div>
+    <div class="cell"><span class="text">最新のバージョン</span><span class="value" id="u-latest"></span></div>
+  </div>
+  <div class="status" id="u-status"></div>
+  <div class="progress" id="u-progress" hidden><i id="u-bar"></i></div>
+  <div class="group">
+    <button class="cell accent" id="updInstall" hidden>ダウンロードしてインストール</button>
+    <button class="cell accent" id="updCheck">更新を確認</button>
+  </div>
+  <div class="hint">初めてのときは、先に「このアプリからのインストール」の許可を求められます。</div>
+
+  <div id="updLoginBox">
+  <div class="section-label">GitHub</div>
+  <div class="group">
+    <button class="cell accent" id="updLogin">GitHub にログイン</button>
+  </div>
+  <div class="hint">更新は GitHub の非公開のリポジトリから取るので、一度ログインしてください。ログイン後は、右上の ⋮ メニューの「設定」から戻ります。</div>
+  </div>
+</section>

@@ -1,0 +1,23 @@
+<!-- ===== 読書の統計 ===== -->
+<section class="page" role="main" id="p-stats" hidden>
+  <div class="group" style="margin-top:16px">
+    <label class="cell"><span class="text">読書の統計を記録する</span><input type="checkbox" class="switch" id="stats" data-setting="stats"></label>
+  </div>
+  <div class="hint">話の最後まで読んだときに、1 話として数えます。記録は端末の中だけにあり、外へは送りません (バックアップにも入りません)。</div>
+  <div class="section-label">読んだ量</div>
+  <div class="group" id="statsTable"></div>
+  <div class="section-label">連続して読んだ日数</div>
+  <div class="group">
+    <div class="cell"><span class="text">いま</span><span class="value" id="stNow"></span></div>
+    <div class="cell"><span class="text">いちばん長く</span><span class="value" id="stBest"></span></div>
+  </div>
+  <div class="hint">今日まだ読んでいないときは、昨日までの日数です (今日これから読めば続きます)。</div>
+  <div class="section-label">直近 14 日に読んだ話数</div>
+  <div class="group"><div class="cell stat-chart" id="statsChart" role="img"></div></div>
+  <div class="section-label">この 30 日に多く読んだ作品</div>
+  <div class="group" id="statsTop"></div>
+  <div class="group" style="margin-top:20px">
+    <button class="cell danger" id="statsReset">統計の記録を消す</button>
+  </div>
+  <div class="hint" id="statsSince"></div>
+</section>

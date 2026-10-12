@@ -1,0 +1,46 @@
+<!-- ===== ランキングのミュート ===== -->
+<section class="page" role="main" id="p-mute" hidden>
+  <div class="section-label">既読の表示</div>
+  <div class="group">
+    <label class="cell"><span class="text">読んだ作品を薄く表示</span><input type="checkbox" class="switch" id="dimRead" data-setting="dimRead"></label>
+  </div>
+  <div class="hint">ランキングと検索結果で、読んだ作品を薄くして、「読了 / 読みかけ / 閲覧済み」の印を付けます。</div>
+  <div class="section-label">ミュートに一致した作品</div>
+  <div class="group" id="muteModeList"></div>
+  <div class="hint">ランキングと検索結果に使います。各作品の「ミュート」ボタンからも追加できます。</div>
+  <div class="section-label">ミュートを追加</div>
+  <div class="group">
+    <div class="cell" style="flex-direction:column;align-items:stretch;gap:10px">
+      <div class="seg" id="muteKind"><button data-v="words">キーワード・タグ</button><button data-v="authors">作者</button></div>
+      <div style="display:flex;gap:8px">
+        <input type="text" id="muteInput" class="field" placeholder="例: 追放" style="flex:1;min-width:0">
+        <button class="btn primary" id="muteAdd">追加</button>
+      </div>
+    </div>
+  </div>
+  <div class="hint">キーワードはタイトルとタグに含まれていれば一致します。作者は名前が完全に一致したときだけです。</div>
+  <div class="section-label">ミュートの一覧</div>
+  <div class="group">
+    <button class="cell" data-names="muteWords"><span class="text">キーワード・タグ</span><span class="value" id="nc-muteWords"></span></button>
+    <button class="cell" data-names="muteAuthors"><span class="text">作者</span><span class="value" id="nc-muteAuthors"></span></button>
+  </div>
+
+  <div class="section-label">ブロックを追加</div>
+  <div class="group">
+    <div class="cell" style="flex-direction:column;align-items:stretch;gap:10px">
+      <div class="seg" id="blockKind"><button data-v="words">キーワード・タグ</button><button data-v="authors">作者</button></div>
+      <div style="display:flex;gap:8px">
+        <input type="text" id="blockInput" class="field" placeholder="例: 追放" style="flex:1;min-width:0">
+        <button class="btn primary" id="blockAdd">追加</button>
+      </div>
+    </div>
+  </div>
+  <details class="more"><summary>ブロックに一致した作品は完全に出しません (件数にも出ません)。</summary>
+    <p>ランキング・検索結果のほか、おすすめや作者の作品一覧からも消えます。作品ごとのブロックは、「ミュート」ボタンで「ブロック」に切り替えて追加します。</p></details>
+  <div class="section-label">ブロックの一覧</div>
+  <div class="group">
+    <button class="cell" data-names="blockWorks"><span class="text">作品</span><span class="value" id="nc-blockWorks"></span></button>
+    <button class="cell" data-names="blockWords"><span class="text">キーワード・タグ</span><span class="value" id="nc-blockWords"></span></button>
+    <button class="cell" data-names="blockAuthors"><span class="text">作者</span><span class="value" id="nc-blockAuthors"></span></button>
+  </div>
+</section>

@@ -1,0 +1,20 @@
+<!-- ===== 読書の補助 ===== -->
+<section class="page" role="main" id="p-reading" hidden>
+  <div class="section-label" style="margin-top:16px">音量キー</div>
+  <div class="group">
+    <label class="cell"><span class="text">音量キーでページを送る</span><input type="checkbox" class="switch" id="volumeKeys" data-setting="volumeKeys" data-default="off"></label>
+  </div>
+  <div class="hint">作品のページを読んでいるあいだ、音量の「下」で 1 画面下へ、「上」で 1 画面上へ進みます。そのあいだは、音量の調整には使えません。</div>
+  <div class="section-label">自動スクロール</div>
+  <div class="group">
+    <div class="cell"><div class="slider"><span class="name">速さ</span>
+      <button class="stepper" data-k="autoScrollSpeed" data-d="-1" aria-label="遅く">−</button><input type="range" id="autoSpeed" min="1" max="10" step="1" aria-label="自動スクロールの速さ"><button class="stepper" data-k="autoScrollSpeed" data-d="1" aria-label="速く">＋</button><span class="val" id="autoSpeedV"></span></div></div>
+  </div>
+  <div class="hint">作品のページの ⋮ メニューの「自動スクロール」で始めます。画面を触ると止まります。ページの下に出るボタンでも、速さを変えられます。読んでいる位置は、ふだんの読書と同じように記録されます。</div>
+  <div class="section-label">読み上げ</div>
+  <div class="group">
+    <div class="cell"><div class="slider"><span class="name">速さ</span>
+      <button class="stepper" data-k="ttsRate" data-d="-1" aria-label="ゆっくり">−</button><input type="range" id="ttsRate" min="5" max="20" step="1" aria-label="読み上げの速さ"><button class="stepper" data-k="ttsRate" data-d="1" aria-label="速く">＋</button><span class="val" id="ttsRateV"></span></div></div>
+  </div>
+  <div class="hint">作品のページの ⋮ メニューの「読み上げ」で、開いている話の本文を、Android の音声合成 (日本語の声) で読み上げます。ルビは読みません。画面を離れる・別のページへ移ると止まります。声の種類は、Android の設定の「音声合成の出力」で選べます。</div>
+</section>

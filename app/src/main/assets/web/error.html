@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>読み込めませんでした</title>
+<link rel="stylesheet" href="app.css">
+<style>
+  .box { padding: 40px 20px 0; text-align: center; }
+  .box h1 { font-size: 22px; margin: 0 0 8px; }
+  .box p { color: var(--sub); font-size: 14px; line-height: 1.7; margin: 6px 0; word-break: break-all; }
+  .actions { display: flex; flex-direction: column; gap: 10px; margin: 28px 0 0; }
+</style>
+</head>
+<body>
+<main class="box">
+  <h1>読み込めませんでした</h1>
+  <p id="why"></p>
+  <p id="url"></p>
+  <div class="actions">
+    <button class="btn primary block" id="retry">もう一度読み込む</button>
+    <button class="btn block" id="list">リストを開く</button>
+    <button class="btn block" id="offline">オフライン保存を開く</button>
+    <button class="btn block" id="back">前のページへ戻る</button>
+  </div>
+  <p style="margin-top:20px">機内モードや電波の状態、サイトの一時的な不具合などで読み込めないことがあります。</p>
+</main>
+<script src="app.js"></script>
+<script>
+// 読み込みに失敗したページの代わりに出す画面 (MainActivity の onReceivedError が u= に元の URL、m= に理由を付けて開く)
+const q = new URLSearchParams(location.search);
+const u = q.get('u') || '';
+const ok = /^https?:\/\//.test(u); // 元の URL が http(s) のときだけ使う (それ以外の文字列は開かない)
+$('why').textContent = q.get('m') || '';
+$('url').textContent = ok ? u : '';
+$('retry').hidden = !ok;
+$('retry').onclick = () => location.replace(u);
+$('list').onclick = () => (location.href = 'list.html');
+$('offline').onclick = () => (location.href = 'offline.html');
+$('back').onclick = () => history.back();
+</script>
+</body>
+</html>

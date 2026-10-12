@@ -1,0 +1,359 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>オフライン</title>
+<link rel="stylesheet" href="app.css">
+<style>
+  .list { display: flex; flex-direction: column; gap: 8px; }
+  .row { display: flex; align-items: center; gap: 6px; padding: 12px 6px 12px 16px; }
+  .row:active { background: var(--surface-2); }
+  .row .main { flex: 1; min-width: 0; }
+  .row .title { font-size: 15px; font-weight: 700; line-height: 1.45; word-break: break-all;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .row .meta { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; font-size: 12px; color: var(--sub); margin-top: 4px; }
+  .empty { text-align: center; color: var(--sub); padding: 40px 20px; font-size: 13px; line-height: 1.7; }
+  .empty h2 { margin: 0 0 6px; color: var(--fg); font-size: 16px; }
+  .topnav { display: flex; align-items: center; height: 44px; margin: 0 -8px; }
+  .topnav button { display: flex; align-items: center; gap: 2px; color: var(--accent-text); font-size: 17px; height: 44px; padding: 0 8px; }
+  .topnav svg { width: 24px; height: 24px; fill: currentColor; }
+  .ep-title { font-size: 14px; word-break: break-all; }
+  .ep .state { font-size: 12px; color: var(--accent-text); flex: none; }
+  .actions-row { display: flex; gap: 8px; margin: 14px 0 4px; flex-wrap: wrap; }
+  .actions-row .btn { flex: 1 0 auto; padding: 0 14px; font-size: 14px; white-space: nowrap; } /* 文字の幅より縮めず、入りきらなければ 2 段に折り返す */
+
+  /* 読む画面 */
+  body.reading { padding: 0; background: var(--surface); }
+  .rbar { position: fixed; left: 0; right: 0; z-index: 10; display: flex; align-items: center; gap: 4px; padding: 0 6px;
+    height: 48px; background: var(--surface); box-shadow: 0 0 0 .5px var(--line); }
+  .rbar.top { top: 0; } .rbar.bottom { bottom: 0; height: 52px; padding-bottom: env(safe-area-inset-bottom); box-sizing: content-box; }
+  .rbar .name { flex: 1; min-width: 0; font-size: 13px; color: var(--sub); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .rbar .pos { flex: 1; text-align: center; font-size: 13px; color: var(--sub); font-variant-numeric: tabular-nums; }
+  .rbar button:disabled { opacity: .25; pointer-events: none; }
+  #page { padding: 64px 22px 72px; max-width: 760px; margin: 0 auto; }
+  #page h2 { font-size: 1.1em; margin: 0 0 1.4em; line-height: 1.5; }
+  #text p { margin: 0; }
+  #text hr { border: 0; border-top: 1px solid var(--line); margin: 2em 0; }
+  #text rt { font-size: .5em; }
+  /* 挿絵: 幅に合わせて縮める。縦書きでは高さに合わせる (横にはみ出さない)。表示しない設定のときは隠す */
+  #text img { display: block; max-width: 100%; height: auto; margin: 1em auto; }
+  #vwrap #text img { max-height: 86vh; width: auto; max-width: none; }
+  #text.no-img img { display: none; }
+  #text .img-missing { display: block; margin: 1em 0; color: var(--sub); font-size: .85em; }
+  #vwrap { position: fixed; top: 48px; bottom: calc(52px + env(safe-area-inset-bottom)); left: 0; right: 0; overflow-x: auto; overflow-y: hidden; writing-mode: vertical-rl; }
+  #vwrap #inner { height: 100%; padding: 22px 26px; box-sizing: border-box; text-combine-upright: digits 2; }
+  #vwrap hr { border: 0; border-right: 1px solid var(--line); margin: 0 2em; }
+  #vwrap h2 { margin: 0 0 0 1.4em; }
+  .setrow { display: flex; align-items: center; gap: 10px; padding: 12px 16px; background: var(--surface); }
+  .setrow + .setrow { border-top: .5px solid var(--line); }
+  .setrow .lbl { flex: 1; font-size: 16px; }
+  .setrow .val { min-width: 3.4em; text-align: right; color: var(--sub); font-variant-numeric: tabular-nums; }
+  .step { width: 44px; height: 44px; border-radius: 50%; background: var(--surface-2); font-size: 18px; font-weight: 600; color: var(--accent-text); flex: none; }
+  .setrow .seg { flex: 1; }
+  .loading { padding: 14px 16px; color: var(--sub); font-size: 14px; }
+</style>
+</head>
+<body>
+<main id="app"></main>
+<div class="scrim" id="scrim"></div>
+<div class="sheet" id="sheet" role="dialog" aria-modal="true"></div>
+<div class="snack" id="snack" role="status" aria-live="polite"><span id="snackText"></span></div>
+
+<script src="js/core.js"></script>
+<script src="app.js"></script>
+<script>
+// オフライン保存した作品を、一覧 → 目次 → 本文の順に開く画面。
+// ?w=<site:id> で作品の目次、?w=...&ep=<話> で本文。保存と削除は端末の内部ストレージ (OfflineStore)。
+// ?src=<EXT.srcName> なら、端末ではなく外の作品を読む (版ごとに足される機能。EXT の登録は、その版が差し込む JS)。
+const { load } = NH;
+const q = new URLSearchParams(location.search);
+const wkey = q.get('w');
+const root = $('app');
+const date = (t) => new Date(t).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' });
+const go = (url) => location.replace(url);
+// 一覧へ移ってからお知らせを出す (移るとお知らせが消えるので、控えて移った先で出す)
+const goWithFlash = (url, text) => { flashNext(text); go(url); };
+// 版ごとに足される機能の差し込み口。登録が無い版は、端末の作品だけ
+//   srcName = ?src= がこの値なら外の作品を読む / source = その読み元 {meta, episode} / srcLabel = 保存先の名前 (「N 話を○○に保存」)
+//   rowButtons(w) = 一覧の端末の作品の行に足すボタン / section() = 一覧の下に足す欄 (無ければ null)
+//   tocButtons(site, id, title) = 端末の作品の目次に足すボタン / remoteTocButtons = 外の作品の目次のボタン / onOpen() = 開いたときの処理
+const EXT = { srcName: '', source: null, srcLabel: '', rowButtons: () => [], section: () => null, tocButtons: () => [], remoteTocButtons: () => [], onOpen: () => {} };
+const SRC = EXT.srcName && q.get('src') === EXT.srcName ? EXT.srcName : '';
+// 読む元。どちらも Promise を返す
+const source = SRC && EXT.source ? EXT.source
+  : { meta: async (site, id) => NH.off.meta(site, id), episode: async (site, id, ep) => NH.off.episode(site, id, ep) };
+const here = (w, ep, src = SRC) => 'offline.html?w=' + encodeURIComponent(w) + (ep != null ? '&ep=' + encodeURIComponent(ep) : '') + (src ? '&src=' + src : '');
+
+// 上の帯の「‹ オフライン」(一覧へ戻る)
+function backNav() {
+  const nav = el('div', 'topnav');
+  const bk = el('button'); bk.innerHTML = svg('back') + '<span>オフライン</span>'; bk.onclick = () => go('offline.html');
+  nav.appendChild(bk);
+  return nav;
+}
+// 読めなかったとき (外の作品につながらないなど)
+function showError(text) {
+  root.innerHTML = '';
+  const e = el('div', 'empty'); e.append(el('h2', '', '開けませんでした'), el('p', '', text));
+  root.append(backNav(), e);
+}
+const settings = () => load().settings || {};
+const setSetting = NH.setSetting;
+
+// ---- 確認シート (削除など): ask(見出し, 実行の名前, 実行, 説明) と closeConfirm() は app.js ----
+
+// ---- 一覧 ----
+function library() {
+  const d0 = NH.load(); // NSFW モードがオンなら、R18 の作品は一覧に出さない (保存データは消さない)
+  const works = NH.off.list().filter((w) => !NH.nsfwHides(d0, w)).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  const total = works.reduce((n, w) => n + (w.bytes || 0), 0);
+  root.innerHTML = '';
+  const head = el('header', 'page-head');
+  const hd = el('div'); hd.append(el('h1', '', 'オフライン'), el('div', 'sub', works.length + ' 作品 ・ ' + NH.fmtBytes(total)));
+  head.appendChild(hd);
+  root.appendChild(head);
+
+  if (!works.length) {
+    const e = el('div', 'empty');
+    e.append(el('h2', '', '保存した作品はありません'), el('p', '', 'リストの作品の「⋮」から「オフラインに保存」を選ぶと、通信なしで読めるようになります。'));
+    root.appendChild(e);
+  } else {
+    const list = el('div', 'list');
+    works.forEach((w) => {
+      const del = iconBtn('del', '削除', () => ask('「' + w.title + '」を削除', '削除', () => { NH.off.remove(w.site, w.id); snack('削除しました'); library(); }, 'この作品の保存データ (' + NH.fmtBytes(w.bytes || 0) + ') を端末から消します。サイトの作品や、リストの記録には影響しません。'));
+      list.appendChild(workRow(w, (w.eps || []).length + (w.total ? ' / ' + w.total : '') + ' 話', '', [...EXT.rowButtons(w), del]));
+    });
+    root.appendChild(list);
+  }
+  const ext = EXT.section();
+  if (ext) root.appendChild(ext);
+
+  // 保存キュー (いま保存している作品・順番待ち) の画面への入り口。作品があるときは件数を出す
+  const queued = NH.off.queueList().filter(NH.queueActive).length;
+  const qg = el('div', 'group'); qg.style.marginTop = '16px';
+  const ql = el('a', 'cell'); ql.href = 'queue.html'; ql.style.textDecoration = 'none';
+  ql.append(el('span', 'text', '保存キュー'), el('span', 'value', queued ? queued + ' 作品が保存待ち' : ''));
+  qg.appendChild(ql);
+  root.appendChild(qg);
+
+  const g = addGroup(root, '保存の設定');
+  const lab = el('label', 'cell');
+  const t = el('span', 'text', 'Wi-Fi のときだけ保存する'); t.appendChild(el('small', '', 'モバイル回線のときは、保存を始める前に確認します。保存中に Wi-Fi が切れたら、つながるまで待って続きから再開します'));
+  const sw = el('input', 'switch'); sw.type = 'checkbox'; sw.checked = !!settings().offlineWifiOnly;
+  sw.onchange = () => setSetting('offlineWifiOnly', sw.checked);
+  lab.append(t, sw); g.appendChild(lab);
+  if (works.length) {
+    const g2 = el('div', 'group'); g2.style.marginTop = '16px';
+    const b = el('button', 'cell danger', 'すべてのオフライン保存を削除…');
+    b.onclick = () => ask('すべて削除', 'すべて削除', () => { NH.off.removeAll(); snack('削除しました'); library(); }, works.length + ' 作品 (' + NH.fmtBytes(total) + ') を端末から消します。');
+    g2.appendChild(b); root.appendChild(g2);
+  }
+}
+
+// 作品の行 (端末・外の作品共通)。count = 「12 / 30 話」、src = 開く元、buttons = 右端のボタン
+function workRow(w, count, src, buttons) {
+  const c = el('div', 'card row');
+  asButton(c, () => (location.href = here(w.site + ':' + w.id, null, src)));
+  const main = el('div', 'main');
+  const meta = el('div', 'meta');
+  const site = el('span'); site.style.cssText = 'display:inline-flex;align-items:center;gap:6px;font-weight:700';
+  site.append(el('span', 'dot ' + w.site), document.createTextNode(NH.siteLabel(w)));
+  meta.append(site, el('span', '', count), el('span', '', NH.fmtBytes(w.bytes || 0)), el('span', '', date(w.updatedAt || w.savedAt) + ' 保存'));
+  main.append(el('div', 'title', w.title), meta);
+  c.appendChild(main);
+  buttons.filter(Boolean).forEach((b) => c.appendChild(b));
+  return c;
+}
+// ---- 作品の目次 ----
+async function work(key) {
+  const { site, id } = NH.splitKey(key);
+  let meta;
+  try { meta = await source.meta(site, id); } catch (e) { return showError(e.message); }
+  if (!meta) return go('offline.html');
+  const eps = meta.eps || [];
+  const d = load();
+  const p = (d.progress || {})[key];
+  root.innerHTML = '';
+  root.appendChild(backNav());
+  const head = el('header', 'page-head');
+  const hd = el('div'); hd.append(el('h1', '', meta.title), el('div', 'sub', NH.siteLabel(meta) + ' ・ ' + eps.length + (meta.total ? ' / ' + meta.total : '') + ' 話を' + (SRC ? EXT.srcLabel : '') + '保存'));
+  head.appendChild(hd); root.appendChild(head);
+  head.querySelector('h1').style.fontSize = '24px';
+
+  // 続きから: 読書位置の話が保存してあればそこ、読了なら次の話、無ければ最初
+  const cur = p && eps.findIndex((e) => e.ep === p.ep);
+  let start = 0;
+  if (p && cur >= 0) start = p.done ? Math.min(eps.length - 1, cur + 1) : cur;
+  const row = el('div', 'actions-row');
+  if (eps.length) {
+    const rd = el('button', 'btn primary', p && cur >= 0 ? '続きから読む' : '最初から読む');
+    rd.onclick = () => (location.href = here(key, eps[start].ep));
+    row.appendChild(rd);
+  }
+  if (!SRC) { // 外の作品は、読むのと消すだけ (保存し直すのは端末の作品で)
+    const more = el('button', 'btn tonal', '追加・更新を保存');
+    more.onclick = () => openUrl(meta.url + '#nh-save');
+    const del = el('button', 'btn danger', '削除');
+    del.onclick = () => ask('「' + meta.title + '」を削除', '削除', () => { NH.off.remove(site, id); go('offline.html'); }, 'この作品の保存データを端末から消します。');
+    row.append(more);
+    EXT.tocButtons(site, id, meta.title).forEach((b) => row.appendChild(b));
+    row.appendChild(del);
+  } else {
+    EXT.remoteTocButtons(site, id, meta.title).forEach((b) => row.appendChild(b));
+  }
+  root.appendChild(row);
+
+  const g = addGroup(root, '保存した話');
+  eps.forEach((e, i) => {
+    const c = el('button', 'cell ep');
+    c.append(el('span', 'text ep-title', e.title || (i + 1) + '話'));
+    if (p && p.ep === e.ep) c.appendChild(el('span', 'state', p.done ? '読了' : Math.round(p.y * 100) + '%'));
+    c.onclick = () => (location.href = here(key, e.ep));
+    g.appendChild(c);
+  });
+}
+
+// ---- 本文 ----
+const FONTS = { gothic: '"Noto Sans CJK JP","Noto Sans JP",sans-serif', mincho: '"Noto Serif CJK JP","Noto Serif JP",serif' };
+async function reader(key, ep) {
+  const { site, id } = NH.splitKey(key);
+  let meta, rec, i;
+  try {
+    meta = await source.meta(site, id);
+    i = ((meta && meta.eps) || []).findIndex((e) => e.ep === ep);
+    rec = i >= 0 ? await source.episode(site, id, ep) : null;
+  } catch (e) { return showError(e.message); }
+  const eps = (meta && meta.eps) || [];
+  if (!rec) return go(here(key));
+  document.body.classList.add('reading');
+  document.documentElement.style.background = 'var(--surface)';
+  const S = settings();
+  const vertical = !!S.vertical;
+  const prev = eps[i - 1], next = eps[i + 1];
+
+  root.innerHTML = '';
+  const top = el('div', 'rbar top');
+  const bk = iconBtn('back', '目次', () => go(here(key)));
+  const st = iconBtn('text', '表示の設定', openSettings);
+  top.append(bk, el('div', 'name', meta.title), st);
+  const bottom = el('div', 'rbar bottom');
+  const pv = iconBtn('prev', '前の話', () => go(here(key, prev.ep))); pv.disabled = !prev;
+  const nx = iconBtn('next', '次の話', () => go(here(key, next.ep))); nx.disabled = !next;
+  const pos = el('div', 'pos', (i + 1) + ' / ' + eps.length);
+  bottom.append(pv, pos, nx);
+
+  const article = el('div'); article.id = 'text';
+  article.innerHTML = NH.cleanHtml(rec.html); // 保存した物でも、表示の前にもう一度安全な要素だけにする
+  // 挿絵: 保存した名前 (img/<名前>) を、アプリの配信の場所に書き換える。取れていなければ文字で知らせる
+  const imgAt = NH.splitKey(key);
+  article.querySelectorAll('img[src^="img/"]').forEach((img) => {
+    img.src = 'https://yomikura.local/offline-img/' + imgAt.site + '/' + imgAt.id + '/' + img.getAttribute('src').slice(4);
+    img.onerror = () => img.replaceWith(el('span', 'img-missing', '[挿絵が見つかりません]'));
+  });
+  article.classList.toggle('no-img', S.offlineImages === false); // 挿絵の表示 (既定は表示)
+  const h = el('h2', '', rec.title);
+  const fs = 17 * ((S.size || 100) / 100);
+  const css = 'font-size:' + fs + 'px;line-height:' + (S.lh || 1.9) + ';' + (FONTS[S.font] ? 'font-family:' + FONTS[S.font] + ';' : '');
+  let scroller;
+  if (vertical) {
+    scroller = el('div'); scroller.id = 'vwrap';
+    const inner = el('div'); inner.id = 'inner'; inner.style.cssText = css;
+    inner.append(h, article); scroller.appendChild(inner);
+    root.append(top, scroller, bottom);
+  } else {
+    const page = el('div'); page.id = 'page'; page.style.cssText = css;
+    page.append(h, article);
+    root.append(top, page, bottom);
+  }
+
+  // 読書位置: 本文の進み具合 (0〜1)。縦書きは右から左へ進む (scrollLeft は 0 から負へ)
+  // 1 画面に収まる短い話は、動かせないので「最後まで見た」(max が 0) として 1 にする
+  const metrics = () => vertical
+    ? { pos: -scroller.scrollLeft, max: scroller.scrollWidth - scroller.clientWidth }
+    : { pos: window.scrollY, max: document.documentElement.scrollHeight - window.innerHeight };
+  const seek = (y) => { const m = metrics(); if (vertical) scroller.scrollLeft = -y * m.max; else window.scrollTo(0, y * m.max); };
+  const ratio = (m) => (m.max <= 8 ? 1 : Math.max(0, Math.min(1, m.pos / m.max)));
+  let armed = false, timer = 0;
+  const write = () => {
+    if (!armed) return;
+    const m = metrics();
+    const y = ratio(m);
+    pos.textContent = (i + 1) + ' / ' + eps.length + ' ・ ' + Math.round(y * 100) + '%';
+    NH.update((d) => {
+      d.progress = d.progress || {};
+      const prev = d.progress[key]; // 同じ話なら、カクヨムの目次の番号 (no) を引き継ぐ (サイトで読んだときに控えたもの)
+      d.progress[key] = { url: rec.url, ep: ep, no: prev && prev.ep === ep && prev.no ? prev.no : undefined, y, done: y >= 0.98, next: next ? next.url : null, at: Date.now() };
+      NH.pruneProgress(d);
+    });
+  };
+  const target = vertical ? scroller : window;
+  // 進む向きへ動かすと上部バーを隠し、戻すと出す (サイトのページと同じ)。進む = 縦書きは左へ、横書きは下へ
+  let lastPos = metrics().pos, acc = 0, barHidden = false, mute = 0;
+  const setBar = (h) => { barHidden = h; acc = 0; mute = Date.now() + 450; NH.off.readerBar(h); }; // バーの出入りで画面の広さが変わり、スクロールの知らせが出るので、しばらく無視する
+  const barScroll = () => {
+    const p = metrics().pos, dy = p - lastPos; lastPos = p;
+    if (Date.now() < mute) return;
+    if (p <= 0) { acc = 0; if (barHidden) setBar(false); return; }
+    if (dy > 0) { acc = Math.max(0, acc) + dy; if (!barHidden && acc > 24 && p > 56) setBar(true); }
+    else if (dy < 0) { acc = Math.min(0, acc) + dy; if (barHidden && acc < -16) setBar(false); }
+  };
+  target.addEventListener('scroll', () => { barScroll(); clearTimeout(timer); timer = setTimeout(write, 600); }, { passive: true });
+  window.addEventListener('pagehide', write);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) write(); });
+  ['touchstart', 'wheel'].forEach((ev) => target.addEventListener(ev, () => { armed = true; }, { passive: true }));
+
+  const saved = (load().progress || {})[key];
+  if (saved && saved.ep === ep && !saved.done && saved.y > 0.005) {
+    [0, 200, 600].forEach((ms) => setTimeout(() => { if (!armed) seek(saved.y); }, ms));
+    setTimeout(() => { if (!armed) snack('前回の位置から再開'); }, 300);
+  }
+  setTimeout(() => { armed = true; write(); }, 1200);
+
+  // 表示の設定 (本文の文字は、サイトを読むときの設定と共通)
+  function openSettings() {
+    const sh = $('sheet'); sh.innerHTML = '';
+    sh.append(el('div', 'grip'), el('h2', '', '表示'));
+    const g = el('div', 'group');
+    const stepper = (label, k, def, min, max, stepBy, fmt) => {
+      const r = el('div', 'setrow');
+      const val = el('span', 'val');
+      const cur = () => { const v = settings()[k]; return v == null || v < min ? def : v; }; // 設定の画面の「標準」(行間 0) などは既定の値として扱う
+      const paint = () => (val.textContent = fmt(cur()));
+      const mk = (txt, dir) => { const b = el('button', 'step', txt); b.setAttribute('aria-label', label + (dir < 0 ? 'を小さく' : 'を大きく')); b.onclick = () => { setSetting(k, Math.round(Math.max(min, Math.min(max, cur() + dir * stepBy)) * 100) / 100); paint(); }; return b; };
+      r.append(el('span', 'lbl', label), mk('−', -1), val, mk('＋', 1)); paint();
+      return r;
+    };
+    const vr = el('label', 'setrow');
+    const sw = el('input', 'switch'); sw.type = 'checkbox'; sw.checked = vertical;
+    sw.onchange = () => setSetting('vertical', sw.checked);
+    vr.append(el('span', 'lbl', '縦書き'), sw);
+    const fr = el('div', 'setrow');
+    const seg = el('div', 'seg');
+    [['site', '標準'], ['gothic', 'ゴシック'], ['mincho', '明朝']].forEach(([v, t]) => {
+      const b = el('button', (S.font || 'site') === v ? 'on' : '', t);
+      b.onclick = () => { setSetting('font', v); seg.querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b)); };
+      seg.appendChild(b);
+    });
+    fr.append(el('span', 'lbl', '書体'), seg);
+    const ir = el('label', 'setrow');
+    const isw = el('input', 'switch'); isw.type = 'checkbox'; isw.checked = S.offlineImages !== false;
+    isw.onchange = () => setSetting('offlineImages', isw.checked);
+    ir.append(el('span', 'lbl', '挿絵を表示する'), isw);
+    g.append(vr, fr, stepper('文字の大きさ', 'size', 100, 80, 250, 10, (v) => v + '%'), stepper('行の間隔', 'lh', 1.9, 1.2, 3, 0.1, (v) => v.toFixed(1)), ir);
+    sh.append(g, el('p', 'hint', '閉じると反映します'));
+    sheetShow(sh, '表示', () => { sheetHide(sh); location.reload(); });
+  }
+}
+
+if (!NH.off.available()) {
+  root.append(el('div', 'empty', 'このページはアプリの中でだけ使えます'));
+} else if (!wkey) library();
+else if (q.get('ep') != null) reader(wkey, q.get('ep'));
+else work(wkey);
+EXT.onOpen();
+showFlash();
+</script>
+</body>
+</html>

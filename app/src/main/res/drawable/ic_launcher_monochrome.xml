@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- テーマ付きアイコン (Android 13 以降): 積んだ本の形だけ。色はシステムが付ける -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <group android:translateY="1.84" android:scaleX="0.92" android:scaleY="0.92" android:pivotX="54" android:pivotY="54">
+    <path android:fillColor="#FF000000" android:fillType="evenOdd" android:pathData="M34,28 h37 a2,2 0 0 1 2,2 v6 a2,2 0 0 1 -2,2 h-37 a2,2 0 0 1 -2,-2 v-6 a2,2 0 0 1 2,-2 z M39,28 h2 v10 h-2 z" />
+    <path android:fillColor="#73000000"  android:pathData="M74,29.5 h4 v7 h-4 z" />
+    <path android:fillColor="#FF000000" android:fillType="evenOdd" android:pathData="M28,40 h37 a2,2 0 0 1 2,2 v6 a2,2 0 0 1 -2,2 h-37 a2,2 0 0 1 -2,-2 v-6 a2,2 0 0 1 2,-2 z M33,40 h2 v10 h-2 z" />
+    <path android:fillColor="#73000000"  android:pathData="M68,41.5 h4 v7 h-4 z" />
+    <path android:fillColor="#FF000000" android:fillType="evenOdd" android:pathData="M36,52 h37 a2,2 0 0 1 2,2 v6 a2,2 0 0 1 -2,2 h-37 a2,2 0 0 1 -2,-2 v-6 a2,2 0 0 1 2,-2 z M41,52 h2 v10 h-2 z" />
+    <path android:fillColor="#73000000"  android:pathData="M76,53.5 h4 v7 h-4 z" />
+    <path android:fillColor="#FF000000" android:fillType="evenOdd" android:pathData="M30,64 h37 a2,2 0 0 1 2,2 v6 a2,2 0 0 1 -2,2 h-37 a2,2 0 0 1 -2,-2 v-6 a2,2 0 0 1 2,-2 z M35,64 h2 v10 h-2 z" />
+    <path android:fillColor="#73000000"  android:pathData="M70,65.5 h4 v7 h-4 z" />
+    </group>
+</vector>

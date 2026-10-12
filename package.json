@@ -1,0 +1,7 @@
+{
+  "name": "yomikura-js-tests",
+  "private": true,
+  "description": "assets/js の単体テスト用 (アプリには含まれない)。node_modules はコミットしない",
+  "scripts": { "test": "for f in app/src/test/js/*.mjs; do node $f || exit 1; done" },
+  "devDependencies": { "linkedom": "^0.18.0" }
+}

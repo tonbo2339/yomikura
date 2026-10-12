@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>保存キュー</title>
+<link rel="stylesheet" href="app.css">
+<style>
+  .now { padding: 14px 16px; }
+  .now .name { font-size: 16px; font-weight: 700; line-height: 1.45; word-break: break-all;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .now .state { font-size: 13px; color: var(--sub); margin-top: 4px; font-variant-numeric: tabular-nums; }
+  .now .state.warn { color: var(--warn); }
+  .meter { height: 6px; border-radius: 3px; background: var(--surface-2); margin: 12px 0 4px; overflow: hidden; }
+  .meter i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .3s; }
+  .meter.warn i { background: var(--warn); }
+  .now .btns { display: flex; gap: 8px; margin-top: 12px; }
+  .now .btns .btn { flex: 1; min-width: 0; padding: 0 10px; font-size: 14px; }
+  .row { display: flex; align-items: center; gap: 6px; padding: 12px 6px 12px 16px; }
+  .row .main { flex: 1; min-width: 0; }
+  .row .title { font-size: 15px; font-weight: 700; line-height: 1.45; word-break: break-all;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .row .meta { display: flex; flex-wrap: wrap; gap: 2px 10px; font-size: 12px; color: var(--sub); margin-top: 3px; }
+  .row .meta .st { color: var(--accent-text); font-weight: 600; }
+  .row .meta .st.warn { color: var(--warn); }
+  .row .meta .st.done { color: var(--sub); }
+  .row .acts { display: flex; align-items: center; flex: none; }
+  .row .acts button { width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; color: var(--accent-text); font-size: 17px; }
+  .row .acts button:disabled { opacity: .25; pointer-events: none; }
+  .row .acts button.txt { width: auto; padding: 0 8px; font-size: 13px; }
+  .row .acts button.x { color: var(--sub); }
+  .group > * + * { border-top: .5px solid var(--line); } /* 行は div で包んであるので、包みどうしの間に線を引く */
+  .note { padding: 0 16px 10px; font-size: 12px; color: var(--warn); line-height: 1.6; }
+  .empty { text-align: center; color: var(--sub); padding: 40px 20px; font-size: 13px; line-height: 1.7; }
+  .empty h2 { margin: 0 0 6px; color: var(--fg); font-size: 16px; }
+  .topnav { display: flex; align-items: center; height: 44px; margin: 0 -8px; }
+  .topnav button { display: flex; align-items: center; gap: 2px; color: var(--accent-text); font-size: 17px; height: 44px; padding: 0 8px; }
+  .topnav svg { width: 24px; height: 24px; fill: currentColor; }
+</style>
+</head>
+<body>
+<main>
+<div class="topnav"><button id="back"></button></div>
+<h1 class="page-head" style="margin:4px 0 12px;font-size:28px">保存キュー</h1>
+<div id="app"></div>
+</main>
+<div class="snack" id="snack" role="status" aria-live="polite"><span id="snackText"></span><button id="snackUndo">元に戻す</button></div>
+
+<script src="js/core.js"></script>
+<script src="app.js"></script>
+<script>
+// オフライン保存のキュー: いま保存している作品の進み (一時停止・再開・中止) と、順番待ちの作品 (並べ替え・外す・もう一度)。
+// 中身は端末の SaveQueue、進みは OfflineService が OfflineStatus に出したもの。1.5 秒おきに読み直す。
+const root = $('app');
+$('back').innerHTML = svg('back') + '<span>戻る</span>';
+$('back').onclick = () => (history.length > 1 ? history.back() : (location.href = 'list.html'));
+
+const STATUS = {
+  WAITING: ['順番待ち', ''], RUNNING: ['保存中', ''], WAIT_WIFI: ['Wi-Fi 待ち', 'warn'], PAUSED: ['一時停止', 'warn'],
+  DONE: ['完了', 'done'], STOPPED: ['止まった', 'warn'], NEEDS_CHECK: ['確認が必要', 'warn'],
+};
+const active = NH.queueActive;
+// 残り時間の目安: 1 話あたり約 3 秒 (1.5〜3 秒の間隔 + 取り込み)
+const eta = (n) => (n <= 0 ? '' : n * 3 < 60 ? 'あと 1 分以内' : 'あと約 ' + Math.ceil((n * 3) / 60) + ' 分');
+const btn = (cls, text, fn, label) => { const b = el('button', cls, text); if (label) b.setAttribute('aria-label', label); b.onclick = fn; return b; };
+const done = (msg) => { snack(msg); paint(); };
+
+// いま保存している作品のカード
+function nowCard(j, live) {
+  const g = el('div', 'group now');
+  const paused = !!live.paused, wifi = !!live.waitingWifi;
+  const total = live.total || 0, ok = live.ok || 0;
+  g.appendChild(el('div', 'name', live.title || j.title));
+  g.appendChild(el('div', 'state' + (paused || wifi ? ' warn' : ''),
+    (paused ? '一時停止中 ・ ' : wifi ? 'Wi-Fi を待っています ・ ' : '保存中 ・ ') + ok + ' / ' + total + ' 話'
+      + (total ? ' (' + Math.round((ok / total) * 100) + '%)' : '') + (paused || wifi ? '' : '　' + eta(total - ok))));
+  const m = el('div', 'meter' + (paused || wifi ? ' warn' : ''));
+  const i = el('i'); i.style.width = (total ? Math.round((ok / total) * 100) : 0) + '%';
+  m.appendChild(i); g.appendChild(m);
+  const row = el('div', 'btns');
+  row.appendChild(btn('btn tonal', paused ? '再開' : '一時停止', () => { NH.off.queueControl(paused ? 'resume' : 'pause'); setTimeout(paint, 400); }));
+  row.appendChild(btn('btn danger', '中止', () => { NH.off.queueControl('cancel'); setTimeout(paint, 800); }));
+  g.appendChild(row);
+  return g;
+}
+
+// 順番待ち・終わった作品の 1 行
+function jobRow(j, i, jobs, live) {
+  const r = el('div', 'row');
+  const main = el('div', 'main');
+  main.appendChild(el('div', 'title', j.title));
+  const meta = el('div', 'meta');
+  const [label, cls] = STATUS[j.status] || [j.status, ''];
+  meta.appendChild(el('span', 'st ' + cls, label));
+  meta.appendChild(el('span', '', (j.eps || []).length + ' 話'));
+  main.append(meta);
+  r.appendChild(main);
+  const acts = el('div', 'acts');
+  if (active(j)) {
+    const running = j.status === 'RUNNING' || (live && live.key === j.key);
+    const up = btn('', '▲', () => { NH.off.queueMove(j.key, -1); paint(); }, '「' + j.title + '」を前へ');
+    const down = btn('', '▼', () => { NH.off.queueMove(j.key, 1); paint(); }, '「' + j.title + '」を後ろへ');
+    const prev = jobs[i - 1], isNow = (x) => x && (x.status === 'RUNNING' || (live && live.key === x.key));
+    up.disabled = running || i === 0 || isNow(prev);
+    down.disabled = running || i === jobs.length - 1;
+    acts.append(up, down);
+  } else if (j.status === 'NEEDS_CHECK') {
+    acts.appendChild(btn('txt', 'サイトを開く', () => openUrl(j.url)));
+    acts.appendChild(btn('txt', 'もう一度', () => { NH.off.queueRetry(j.key); done('もう一度始めました'); }));
+  } else if (j.status === 'STOPPED') {
+    acts.appendChild(btn('txt', 'もう一度', () => { NH.off.queueRetry(j.key); done('もう一度始めました'); }));
+  }
+  acts.appendChild(btn('x', '✕', () => {
+    NH.off.queueRemove(j.key);
+    // 保存待ちを押し間違えても戻せるように (戻すとキューの末尾に入る。保存済みの話は飛ばすので、続きから)。
+    // 終わった作品は記録を消すだけなので戻さない (戻すと順番待ちとして保存し直してしまう)
+    if (active(j)) snack('キューから外しました', () => { NH.off.queueAdd(j); NH.off.queueStart(); paint(); });
+    else snack('消しました');
+    paint();
+  }, active(j) ? '「' + j.title + '」をキューから外す' : '「' + j.title + '」の記録を消す'));
+  r.appendChild(acts);
+  const wrap = el('div');
+  wrap.appendChild(r);
+  if (j.note && !active(j) && j.status !== 'DONE') wrap.appendChild(el('div', 'note', j.note));
+  return wrap;
+}
+
+let last = '';
+function paint() {
+  const d0 = NH.load();
+  const jobs = NH.off.queueList().filter((j) => !NH.nsfwHides(d0, j)); // NSFW モードがオンなら、R18 の作品は出さない
+  const live = NH.off.queueLive();
+  const sig = JSON.stringify([jobs, live]);
+  if (sig === last) return; // 変わっていなければ描き直さない (ボタンを押している途中で消えないように)
+  last = sig;
+  root.textContent = '';
+  if (!jobs.length) {
+    const e = el('div', 'empty');
+    e.append(el('h2', '', '保存キューは空です'), document.createTextNode('作品の ⋮ メニューの「この作品を端末に保存」から、保存を始められます。画面を消しても、ほかのアプリに移っても、保存は続きます'));
+    const b = el('button', 'btn block', '保存した作品を見る');
+    b.style.marginTop = '16px';
+    b.onclick = () => (location.href = 'offline.html');
+    e.appendChild(b);
+    root.appendChild(e);
+    return;
+  }
+  const cur = live.running && live.key ? jobs.find((j) => j.key === live.key) : null;
+  if (cur) { root.appendChild(el('div', 'section-label', 'いま保存している作品')); root.appendChild(nowCard(cur, live)); }
+  const rest = jobs.filter((j) => j !== cur);
+  const waiting = rest.filter(active);
+  const finished = rest.filter((j) => !active(j));
+  if (waiting.length) {
+    const g = addGroup(root, '順番待ち');
+    waiting.forEach((j) => g.appendChild(jobRow(j, jobs.indexOf(j), jobs, live)));
+  }
+  if (finished.length) {
+    const g = addGroup(root, '終わった作品');
+    finished.forEach((j) => g.appendChild(jobRow(j, jobs.indexOf(j), jobs, live)));
+    const b = el('button', 'btn block', '終わった作品を片付ける');
+    b.style.marginTop = '12px';
+    b.onclick = () => { NH.off.queueClearFinished(); done('片付けました'); };
+    root.appendChild(b);
+  }
+}
+paint();
+setInterval(paint, 1500);
+</script>
+</body>
+</html>

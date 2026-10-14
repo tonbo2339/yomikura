@@ -34,7 +34,14 @@ object Diag {
     private fun record(level: Char, tag: String, msg: String, tr: Throwable?) {
         val text = if (tr == null) msg else "$msg (${tr.javaClass.simpleName}: ${tr.message ?: ""})"
         buf.add(System.currentTimeMillis(), level, tag, text)
-        file?.let { f -> runCatching { f.writeText(buf.toText()) } }
+        // 一時ファイルに書いてから置き換える (書く途中で止まっても、前の記録が壊れないように)
+        file?.let { f ->
+            runCatching {
+                val tmp = File(f.parentFile, f.name + ".tmp")
+                tmp.writeText(buf.toText())
+                if (!tmp.renameTo(f)) { f.writeText(buf.toText()); tmp.delete() }
+            }
+        }
     }
 
     /** 古い順 */

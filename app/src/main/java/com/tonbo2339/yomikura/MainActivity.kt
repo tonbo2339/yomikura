@@ -153,7 +153,11 @@ class MainActivity : AppCompatActivity(), BridgeHost {
     /** 裏での確認の設定 (変わったらアラームを掛け直す) */
     private var bgJson = ""
     /** 裏での確認がデータを書き換えたときに呼ばれる (BgCheck.onDataChanged に登録する。自分のものだけ外すため保持する) */
-    private val bgListener: () -> Unit = { onDataChanged() }
+    // 画面の外 (裏の確認・保存のサービス) で保存データが変わった: バッジなどを直し、開いているリストにも描き直してもらう
+    private val bgListener: () -> Unit = {
+        onDataChanged()
+        if (onAppPage()) webView.evaluateJavascript("window.nhDataChanged && nhDataChanged()", null)
+    }
     /** 画面に出さない更新の確認 (「更新」ボタン / 起動時の自動確認)。確認中だけある */
     private var collector: Collector? = null
     @Volatile private var collecting = false
@@ -198,6 +202,8 @@ class MainActivity : AppCompatActivity(), BridgeHost {
             // 版によってだけある連携 (Edition.installExtras)。公開版は何もしない
             extras = Edition.installExtras(this@MainActivity, this, offline, ::emitJs) { appPageNow }
             webViewClient = NovelClient()
+            // ダウンロードになるリンク (アプリでは保存しない): ページは移らないので、窓口を今のページの扱いに戻す (NovelClient.cancelled と同じ)
+            setDownloadListener { _, _, _, _, _ -> gate = TrustGate.classify(url) }
             // WebChromeClient が無いと、サイトの確認ダイアログ (「本当に削除しますか？」など) が出ない。進み具合も受け取る
             webChromeClient = object : WebChromeClient() {
                 override fun onProgressChanged(view: WebView, newProgress: Int) = showLoadProgress(newProgress)
@@ -261,14 +267,14 @@ class MainActivity : AppCompatActivity(), BridgeHost {
             if (external) prefs.edit().putString(KEY_LAST_EXTERNAL_LINK, linked).apply()
             openLink(linked, coldStart = true, direct = intent?.action == Shortcuts.ACTION_RESUME)
         } else if (crashedAt != null) {
-            webView.loadUrl(crashedAt)
+            navigate(crashedAt)
         } else if (savedInstanceState != null) {
             webView.restoreState(savedInstanceState)
         } else if (welcome) {
             // 初めての起動: 使うサイトを選んでもらう (選び終わると起動ページへ進む)
-            webView.loadUrl(WELCOME_URL)
+            navigate(WELCOME_URL)
         } else {
-            webView.loadUrl(startUrl())
+            navigate(startUrl())
             // 起動時の自動チェック: 起動ページを開いたまま、画面に出さずに確認する。ログインしているサイトだけが対象なので、
             // 先にログインの控え (logins) を最新にする (無いと、ログインしていない初回の起動でも確認が始まってしまう)
             LoginCookies.sync(this)
@@ -312,6 +318,21 @@ class MainActivity : AppCompatActivity(), BridgeHost {
         linkFrom(intent)?.let { openLink(it, coldStart = false, direct = intent.action == Shortcuts.ACTION_RESUME) }
     }
 
+    /**
+     * WebView でページを開く。この画面から開くページは、すべてここを通す。
+     * 保存データ・設定・ほかのアプリから来た URL も混ざるので、SiteUrls.safeNavUrl で https のものだけ開き、
+     * `javascript:` などはアプリの画面の権限で動いてしまわないよう、開かずにリストへ行く。
+     */
+    private fun navigate(url: String) {
+        val safe = SiteUrls.safeNavUrl(url)
+        if (safe == null) {
+            Diag.w(TAG, "blocked url: ${url.take(60)}")
+            webView.loadUrl(LIST_URL)
+            return
+        }
+        webView.loadUrl(safe)
+    }
+
     /** 「後で読む」に追加してから戻る先 (#nh-later-back のページの JS が NHStore.laterBack で呼ぶ。1 回だけ使う) */
     private var laterBackUrl: String? = null
     /** いま出ている選択のシート (重ねて出さないため) */
@@ -325,11 +346,11 @@ class MainActivity : AppCompatActivity(), BridgeHost {
     private fun openLink(url: String, coldStart: Boolean, direct: Boolean = false) {
         if (nsfwOn() && SiteUrls.isR18Url(url)) { // NSFW モード中は R18 のリンクを開かず、後で読むに入れておく (サイトへはアクセスしない)
             addR18Later(url)
-            if (coldStart) webView.loadUrl(startUrl())
+            if (coldStart) navigate(startUrl())
             return
         }
         // direct = 「続きから読む」のショートカット。追加の確認は出さず、そのまま開く (すでに読んでいた作品)
-        if (direct || !isWorkUrl(url)) { webView.loadUrl(url); return }
+        if (direct || !isWorkUrl(url)) { navigate(url); return }
         val prev = readingNow()
         val base = url.substringBefore('#')
         openSheet?.dismiss() // 出ている途中に別のリンクが届いたら、前のシートは閉じる
@@ -337,12 +358,12 @@ class MainActivity : AppCompatActivity(), BridgeHost {
         sheet.header(siteOfWorkUrl(url), "後で読むに追加しますか？")
         if (prev != null) sheet.button("追加して、読んでいた作品に戻る", prev.second, BottomSheet.Style.PRIMARY) {
             laterBackUrl = prev.first
-            webView.loadUrl("$base#nh-later-back")
+            navigate("$base#nh-later-back")
         }
-        sheet.button("追加して、この作品を開く", null, if (prev == null) BottomSheet.Style.PRIMARY else BottomSheet.Style.TONAL) { webView.loadUrl("$base#nh-later") }
-        sheet.button("追加せずに開く", null, BottomSheet.Style.PLAIN) { webView.loadUrl(url) }
+        sheet.button("追加して、この作品を開く", null, if (prev == null) BottomSheet.Style.PRIMARY else BottomSheet.Style.TONAL) { navigate("$base#nh-later") }
+        sheet.button("追加せずに開く", null, BottomSheet.Style.PLAIN) { navigate(url) }
         // 閉じたら: 起動したばかりなら読んでいた作品 (無ければ起動ページ) を開き、使っている途中ならそのまま
-        sheet.show { if (coldStart) webView.loadUrl(prev?.first ?: startUrl()) }
+        sheet.show { if (coldStart) navigate(prev?.first ?: startUrl()) }
     }
 
     /**
@@ -400,7 +421,7 @@ class MainActivity : AppCompatActivity(), BridgeHost {
         if (intent?.action == BgCheck.ACTION_OPEN_LIST) return LIST_URL // 更新の通知・ショートカット「リストを開く」をタップした
         // ショートカット「続きから読む」: アプリで最後に読んだ作品の続き (読書位置は、開いたページが復元する)。まだ読んだ作品が無ければリスト
         if (intent?.action == Shortcuts.ACTION_RESUME) {
-            return Resume.latestUrl(dataObj(), nsfwOn())?.takeIf { SiteUrls.toSupportedLink(it) != null } ?: LIST_URL
+            return Resume.latestUrl(dataObj(), nsfwOn())?.let(SiteUrls::toSupportedLink) ?: LIST_URL
         }
         if (intent?.action == OfflineService.ACTION_OPEN_QUEUE) return QUEUE_URL // 保存の通知をタップした
         val raw = when (intent?.action) {
@@ -462,7 +483,7 @@ class MainActivity : AppCompatActivity(), BridgeHost {
         saveStrip = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             visibility = View.GONE
-            setOnClickListener { webView.loadUrl(QUEUE_URL) }
+            setOnClickListener { navigate(QUEUE_URL) }
             contentDescription = "保存キューを開く"
             background = obtainStyledAttributes(intArrayOf(android.R.attr.selectableItemBackground)).run { getDrawable(0).also { recycle() } }
             addView(saveText, LinearLayout.LayoutParams(MATCH_PARENT, (30 * dp).toInt()))
@@ -836,8 +857,8 @@ class MainActivity : AppCompatActivity(), BridgeHost {
             val weight = if (oneRow) 1f else tabNeed(sp.label, compact)
             tabs.addView(siteTab(texts[i], sp.color, weight, compact, tinted, fixedSp).also(sp.setup))
         }
-        bar.addView(iconButton(R.drawable.ic_book, "リスト", badge = true) { webView.loadUrl(LIST_URL) })
-        menuButton = iconButton(R.drawable.ic_more, "メニュー") { if (useGear()) webView.loadUrl(SETTINGS_URL) else showMainMenu(it) }.also { bar.addView(it) }
+        bar.addView(iconButton(R.drawable.ic_book, "リスト", badge = true) { navigate(LIST_URL) })
+        menuButton = iconButton(R.drawable.ic_more, "メニュー") { if (useGear()) navigate(SETTINGS_URL) else showMainMenu(it) }.also { bar.addView(it) }
         updateMenuButton()
         tabRow.visibility = if (twoRows) View.VISIBLE else View.GONE
         if (barHidden) showBarNow() // 段数が変わるかもしれないので、作り直したときは出して測り直す
@@ -851,7 +872,7 @@ class MainActivity : AppCompatActivity(), BridgeHost {
     /** サイトのランキングの行き先。設定があればそれ (そのサイトの URL のときだけ)、無ければ既定。 */
     private fun siteRanking(key: String): String {
         val url = settingsObj().optJSONObject("rankings")?.optJSONObject(key)?.optString("url").orEmpty()
-        return if (url.isNotEmpty() && siteKeyOf(url) == key) url else SITES.first { it.key == key }.ranking
+        return if (SiteUrls.safeNavUrl(url) != null && siteKeyOf(url) == key) url else SITES.first { it.key == key }.ranking
     }
 
     /** サイトのメニュー (タブから開く): 「ランキング」は設定の行き先へ差し替える。項目はどのサイトも同じ (トップページ / ランキング / 作品検索 / しおり・ブックマーク / マイページ)。 */
@@ -888,7 +909,7 @@ class MainActivity : AppCompatActivity(), BridgeHost {
             webView.evaluateJavascript("window.nhWorkState ? nhWorkState() : null") { r ->
                 val work = runCatching { JSONObject(r) }.getOrNull()
                 // 自動スクロール中か (メニューの項目名を「止める」にするため)
-                webView.evaluateJavascript("window.nhAutoScrollOn ? nhAutoScrollOn() : false") { a -> showMainMenu(anchor, work, a == "true") }
+                webView.evaluateJavascript("window.nhAutoScrollOn ? nhAutoScrollOn() : false") { a -> if (!isFinishing && !isDestroyed) showMainMenu(anchor, work, a == "true") } // 待つ間に画面が閉じていたら出さない (落ちないように)
             }
         } else showMainMenu(anchor, null)
     }
@@ -923,7 +944,7 @@ class MainActivity : AppCompatActivity(), BridgeHost {
                     // オフライン保存 (作品のページを #nh-save 付きで開くと、リストからの保存と同じ画面になる)
                     work?.optString("url")?.takeIf { shown(MenuItems.SAVE) && it.startsWith("https://") }?.let { workUrl ->
                         val label = if (work.optBoolean("saved")) "端末の保存を更新" else "この作品を端末に保存"
-                        add(action(R.drawable.ic_download, label) { webView.loadUrl("$workUrl#nh-save") })
+                        add(action(R.drawable.ic_download, label) { navigate("$workUrl#nh-save") })
                     }
                     // ランキングの行き先がこのページなら「初期設定に戻す」
                     if (rankKey != null && shown(MenuItems.RANKING)) {
@@ -945,7 +966,7 @@ class MainActivity : AppCompatActivity(), BridgeHost {
                 },
                 buildList {
                     if (shown(MenuItems.DIAGNOSE)) add(action(R.drawable.ic_bug, "このページの表示を診断", onSite) { pageActions.diagnose() })
-                    add(action(R.drawable.ic_settings, "設定") { webView.loadUrl(SETTINGS_URL) })
+                    add(action(R.drawable.ic_settings, "設定") { navigate(SETTINGS_URL) })
                 },
             ).filter { it.isNotEmpty() },
         )
@@ -1062,7 +1083,7 @@ class MainActivity : AppCompatActivity(), BridgeHost {
     /** サイトのタブのメニュー: 記号付きの項目を並べ、選んだ URL を開く。 */
     private fun siteMenu(anchor: View, entries: List<Pair<String, String>>) {
         val c = pal
-        val items = entries.map { (label, url) -> MainMenu.Action(menuIconFor(label), label) { webView.loadUrl(url) } }
+        val items = entries.map { (label, url) -> MainMenu.Action(menuIconFor(label), label) { navigate(url) } }
         MainMenu(this, dp, c.bg, c.text, c.subtext, c.divider, c.ripple).show(anchor, top = emptyList(), groups = listOf(items), alignEnd = false, widthDp = if (entries.size > 5) 320 else 260) // 3 サイト分まとめた R18 の一覧は、名前が長いので広めに
     }
 
@@ -1250,9 +1271,9 @@ class MainActivity : AppCompatActivity(), BridgeHost {
         // 文とボタンは CollectSummary が決める。開く先の URL はここで決める
         val sum = CollectSummary.of(BgCheck.parse(log), auto, onAppPage()) ?: return
         val action: Pair<String, () -> Unit>? = when (val act = sum.action) {
-            is CollectSummary.Action.OpenSite -> "開く" to { webView.loadUrl(COLLECT_PAGES[act.site] ?: LIST_URL) }
-            is CollectSummary.Action.Login -> "ログイン" to { webView.loadUrl(LOGIN_PAGES[act.site] ?: LIST_URL) }
-            CollectSummary.Action.List -> "リスト" to { webView.loadUrl(LIST_URL) }
+            is CollectSummary.Action.OpenSite -> "開く" to { navigate(COLLECT_PAGES[act.site] ?: LIST_URL) }
+            is CollectSummary.Action.Login -> "ログイン" to { navigate(LOGIN_PAGES[act.site] ?: LIST_URL) }
+            CollectSummary.Action.List -> "リスト" to { navigate(LIST_URL) }
             null -> null
         }
         showSnack(sum.text, action)
@@ -1273,7 +1294,7 @@ class MainActivity : AppCompatActivity(), BridgeHost {
         // 1 つ前のページがその作品なら戻る (スクロール位置もそのまま)。違えば (起動したばかり・ランキングにいた等) 開く
         val list = webView.copyBackForwardList()
         val prevUrl = if (list.currentIndex > 0) list.getItemAtIndex(list.currentIndex - 1)?.url else null
-        if (prevUrl == back) webView.goBack() else webView.loadUrl(back)
+        if (prevUrl == back) webView.goBack() else navigate(back)
     }
 
     override fun requestNotifyPermission() {
@@ -1286,10 +1307,18 @@ class MainActivity : AppCompatActivity(), BridgeHost {
     override fun wipeAll() {
         NHData.set(this, "")
         SettingsBackup.clear(this) // 設定の写しも消す (残すと、消したあとの再起動や入れ直しで設定が戻る)
-        dropOfflineAll()
+        // オフライン保存も消す。ファイルが多いと時間がかかるので、ファイルを消すのは裏のスレッドで (画面を止めない)
+        saveQueue.clearAll()
+        stopService(Intent(this, OfflineService::class.java))
+        queueChanged()
+        // 保存のサービスは止まるまで少しかかり、その間に話を書くことがあるので、少し待ってもう一度消す (書き残しを残さない)
+        Thread {
+            runCatching { offline.deleteAll() }
+            runCatching { Thread.sleep(2000); offline.deleteAll() }
+        }.start()
         prefs.edit().putBoolean(KEY_NEEDS_WELCOME, true).remove(KEY_LAST_EXTERNAL_LINK).apply()
         onDataChanged()
-        webView.loadUrl(WELCOME_URL)
+        navigate(WELCOME_URL)
     }
 
     /** 読書画面で、上部バーを隠す / 出す (「スクロールで隠す」がオフなら隠さない) */
@@ -1316,11 +1345,16 @@ class MainActivity : AppCompatActivity(), BridgeHost {
     /** ダウンロードした APK をパッケージインストーラーで開く (確認の画面は Android が出す)。 */
     override fun launchInstaller(apk: java.io.File) {
         val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", apk)
-        startActivity(
-            Intent(Intent.ACTION_VIEW)
-                .setDataAndType(uri, "application/vnd.android.package-archive")
-                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
-        )
+        try {
+            startActivity(
+                Intent(Intent.ACTION_VIEW)
+                    .setDataAndType(uri, "application/vnd.android.package-archive")
+                    .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+            )
+        } catch (e: android.content.ActivityNotFoundException) {
+            Diag.w(TAG, "no installer", e)
+            Toast.makeText(this, "インストールの画面を開けませんでした", Toast.LENGTH_LONG).show()
+        }
     }
 
     /** 旧版が控えたアプリ内ページの URL (旧ホスト名) を、今のホスト名に直す。旧版が無い版 (LEGACY_APP_HOST が空) では何もしない */
@@ -1387,6 +1421,10 @@ class MainActivity : AppCompatActivity(), BridgeHost {
             // 起動して最初のページは、onPageStarted (画面のスレッド) より先にページの JS が動くことがある (インストール直後など、画面のスレッドが混んでいるとき)。
             // そのままだと窓口が「信頼しないページ」として空を返し、リストが空で描かれる。まだ前のページが無いうちだけ、最初のページの URL で先に決める
             if (!pageStarted && request.isForMainFrame) gate = TrustGate.classify(request.url.toString())
+            // 信用しないページへ移るときは、読み込みの前 (転送の 1 回ごとにも呼ばれる) に、ここで窓口を閉じる。
+            // onPageStarted は画面のスレッドに遅れて届くので、それまでの間に新しいページの JS が、前のページ (アプリ内ページなど) の扱いで窓口を使えてしまうため。
+            // 開くのはここではしない (開くのは onPageStarted。読み込まれなかった移動で、窓口が開いたままにならないように)
+            if (pageStarted && request.isForMainFrame && !TrustGate.classify(request.url.toString()).trusted) gate = TrustGate.Page.NONE
             // アプリ内ページ (https://yomikura.local/xxx) は assets/web から、/js/xxx は assets/js から返す
             if (host == APP_HOST) {
                 val path = request.url.path.orEmpty()
@@ -1412,20 +1450,33 @@ class MainActivity : AppCompatActivity(), BridgeHost {
         // intent:// などの外部スキームは無視する
         override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
             val scheme = request.url.scheme
-            if (scheme != "http" && scheme != "https") return true
+            if (scheme != "http" && scheme != "https") return cancelled(view, request)
+            // アプリ内ページ (端末の操作の窓口を持つ) へは、アプリ内ページか対応サイトのページからだけ移れる (ほかのサイトのリンクから開かせない)
+            if (request.url.host == APP_HOST && !gate.trusted) return cancelled(view, request)
             // NSFW モード: R18 へのリンクは遷移せず、今のページに留まって下に小さく知らせる (専用の画面は出さない)
             if (nsfwOn() && SiteUrls.isR18Url(request.url.toString())) {
                 runOnUiThread { showSnack(Edition.R18_OFF_WHY + "開きません") }
-                return true
+                return cancelled(view, request)
             }
             return false
+        }
+
+        /**
+         * 移動をやめた (今のページに留まる)。shouldInterceptRequest で、信用しない移動先のために先に閉じた窓口を、
+         * 今のページの扱いに戻す (戻さないと、今のページで読書位置などが書けなくなる)。true を返す
+         */
+        private fun cancelled(view: WebView, request: WebResourceRequest): Boolean {
+            if (request.isForMainFrame) gate = TrustGate.classify(view.url)
+            return true
         }
 
         // 読み込みに失敗したとき (電波が無い・タイムアウトなど): 英語のエラー画面の代わりに、アプリの画面を出す
         override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
             if (!request.isForMainFrame || request.url.host == APP_HOST) return
             val why = error.description?.toString().orEmpty()
-            if ("ERR_ABORTED" in why) return // 読み込み中に別のページへ移ったときなど (失敗ではない)
+            // 読み込み中に別のページへ移ったとき・ダウンロードなど (失敗ではない)。
+            // 窓口はここでは戻さない (次の移動が先に窓口を閉じていたら、開け直してしまうため。ダウンロードは setDownloadListener が戻す)
+            if ("ERR_ABORTED" in why) return
             view.loadUrl("https://$APP_HOST/error.html?u=${Uri.encode(request.url.toString())}&m=${Uri.encode(why)}")
         }
 

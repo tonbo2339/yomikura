@@ -29,7 +29,8 @@ class OfflineStore(private val root: File) {
         return try {
             f.parentFile?.mkdirs()
             val tmp = File(f.parentFile, f.name + ".tmp")
-            tmp.writeBytes(encode(text, compress))
+            // 置き換える前にディスクへ書き切る (電源が切れても、空のファイルに置き換わらないように)
+            java.io.FileOutputStream(tmp).use { it.write(encode(text, compress)); it.fd.sync() }
             java.nio.file.Files.move(tmp.toPath(), f.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING)
             f.parentFile?.let { sizes.remove(it.absolutePath) }
             true
@@ -41,8 +42,27 @@ class OfflineStore(private val root: File) {
     fun putEpisode(site: String, id: String, ep: String, json: String): Boolean =
         epFile(site, id, ep)?.let { write(it, json, compress = true) } ?: false
 
-    fun putMeta(site: String, id: String, json: String): Boolean =
-        dir(site, id)?.let { write(File(it, "meta.json"), json) } ?: false
+    fun putMeta(site: String, id: String, json: String): Boolean {
+        val d = dir(site, id) ?: return false
+        val f = File(d, "meta.json")
+        // フォルダにあるのに目録に無い話は、目録の後ろに足す。前の目録が読めない (壊れた) と、JS は保存済みの話を知らないまま
+        // 今回の話だけの目録を書いてくるので、そのままだと前に保存した話が読めなくなる (直したあとの書き込みでも、毎回足す)
+        return write(f, withSavedEpisodes(d, json))
+    }
+
+    /** 目録 (json) に無い、フォルダにある話 (ep_<話>.json) を、目録の eps の後ろに足す。読めなければ json のまま */
+    private fun withSavedEpisodes(d: File, json: String): String = try {
+        val o = JSONObject(json)
+        val files = d.listFiles().orEmpty().map { it.name }.filter { it.startsWith("ep_") && it.endsWith(".json") }
+        val eps = o.optJSONArray("eps") ?: JSONArray().also { o.put("eps", it) }
+        val have = (0 until eps.length()).mapNotNull { eps.optJSONObject(it)?.optString("ep") }.toSet()
+        val missing = files.map { it.removePrefix("ep_").removeSuffix(".json") }.filter { it !in have }
+            .sortedWith(compareBy<String>({ it.toIntOrNull() ?: Int.MAX_VALUE }, { it })) // 話番号は数の順 (2 が 10 より前)
+        missing.forEach { ep -> eps.put(JSONObject().put("ep", ep).put("title", "第 $ep 話").put("url", "")) }
+        if (missing.isEmpty()) json else o.toString() // 足す話が無ければ、渡されたとおりに書く
+    } catch (e: Exception) {
+        json
+    }
 
     fun episode(site: String, id: String, ep: String): String =
         epFile(site, id, ep)?.takeIf { it.isFile }?.let { read(it) }.orEmpty()

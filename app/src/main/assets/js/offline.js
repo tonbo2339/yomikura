@@ -117,6 +117,8 @@
       } catch (err) {
         st.lastErr = (err && err.message) || '';
         if (st.lastErr === NH.CHALLENGE) { st.blocked = true; NH.markRest(adapter.id); break; }
+        // 回線が切れていた: 失敗に数えず、つながるのを待って (hooks.wait) 同じ話を取り直す
+        if (hooks.offline && hooks.offline()) { i--; continue; }
         st.failedTotal++;
         if (++st.fails >= 3) break; // 続けて失敗するなら、ログイン切れなどなのでやめる
       }

@@ -38,7 +38,9 @@ object AppAssets {
         val file = if (parts.size == 3) offline.imageFile(parts[0], parts[1], parts[2]) else null
         val mime = OfflineStore.mimeOf(parts.getOrElse(2) { "" })
         if (file == null || mime == null) return empty(404, "Not Found")
-        return WebResourceResponse(mime, null, FileInputStream(file))
+        // 確かめたあとに消されることもある (PC へ移した、など)。ここで例外を出すとアプリが落ちるので、404 にする
+        val input = try { FileInputStream(file) } catch (e: java.io.IOException) { return empty(404, "Not Found") }
+        return WebResourceResponse(mime, null, input)
     }
 
     /**

@@ -85,6 +85,14 @@ class StoreBridge(private val host: BridgeHost) {
     fun collectWaitMs(): Long =
         if (host.appPageNow) CollectCooldown.remainingMs(NHData.obj(ctx).optLong("lastCollect", 0L), System.currentTimeMillis()) else 0L
 
+    /** リスト (readLater) と閲覧履歴 (history) の、key の作品に name = value を書く */
+    private fun putOnWork(data: JSONObject, key: String, name: String, value: Any) {
+        for (list in listOf("readLater", "history")) {
+            val a = data.optJSONArray(list) ?: continue
+            for (i in 0 until a.length()) a.optJSONObject(i)?.takeIf { it.optString("key") == key }?.put(name, value)
+        }
+    }
+
     /**
      * ハーメルンの作品が R-18 かを、小説情報のページを読んで判別する (HamelnRating)。分かったら作品の r18 を書き、リスト画面を描き直す。
      * NSFW モード中は R18 のドメインへ行くおそれがあるので、通信しない。アプリ内ページからだけ。
@@ -95,10 +103,8 @@ class StoreBridge(private val host: BridgeHost) {
             if (!host.onAppPage() || host.nsfwOn()) return@runOnUiThread
             val ids = parseIds(idsJson) ?: return@runOnUiThread
             HamelnRating.fill(ids, host.userAgent(), { id, r18 ->
-                NHData.update(ctx) { data ->
-                    val a = data.optJSONArray("readLater") ?: return@update
-                    for (i in 0 until a.length()) a.optJSONObject(i)?.takeIf { it.optString("key") == "hameln:$id" }?.put("r18", r18)
-                }
+                // 閲覧履歴にも書く (リストから外したあとも、NSFW モードで履歴から隠せるように)
+                NHData.update(ctx) { data -> putOnWork(data, "hameln:$id", "r18", r18) }
             }, {
                 host.evalJs("window.nhSubsFilled && nhSubsFilled()")
             }, { SiteRest.isResting(ctx, "hameln", auto = true) }, { SiteRest.mark(ctx, "hameln") })
@@ -117,12 +123,7 @@ class StoreBridge(private val host: BridgeHost) {
             var found = 0
             R18Subs.fill(ids, host.userAgent(), { id, sub ->
                 val key = "narou18:$id"
-                NHData.update(ctx) { data ->
-                    for (name in listOf("readLater", "history")) {
-                        val a = data.optJSONArray(name) ?: continue
-                        for (i in 0 until a.length()) a.optJSONObject(i)?.takeIf { it.optString("key") == key }?.put("sub", sub)
-                    }
-                }
+                NHData.update(ctx) { data -> putOnWork(data, key, "sub", sub) }
                 found++
             }, {
                 if (found > 0) host.evalJs("window.nhSubsFilled && nhSubsFilled()")
@@ -206,6 +207,7 @@ class StoreBridge(private val host: BridgeHost) {
     /**
      * サイトの公式のログアウトを裏で行い、そのあとアプリの Cookie も消す。
      * 結果は nhLogoutResult({site, ok, message, page}) で画面へ。page = 失敗したときに画面で開く公式のページ (押すのは利用者)。
+     * 動いている途中か、終わってすぐ (OfficialLogout.waitSeconds) のときは始めず、nhLogoutResult({site, busy: true, wait}) を返す。
      * 公式の手順が無いサイトは、アプリの Cookie だけ消して成功を返す。
      */
     @JavascriptInterface
@@ -216,12 +218,18 @@ class StoreBridge(private val host: BridgeHost) {
             LoginCookies.expire(site)
             return host.emitJs("nhLogoutResult", JSONObject().put("site", site).put("ok", true).put("message", ""))
         }
-        OfficialLogout.run(ctx, site) { ok, msg ->
+        val started = OfficialLogout.run(ctx, site) { ok, msg ->
             // 公式の結果にかかわらず、アプリの Cookie は消す (待っている間にほかの画面へ移っていても消す)
             LoginCookies.expire(site)
             host.emitJs("nhLogoutResult", JSONObject().put("site", site).put("ok", ok).put("message", msg).put("page", page))
         }
+        // 動いている途中か、終わってすぐ: 始めずに、待つ秒数を返す (画面はボタンを押せないままにする)
+        if (!started) host.emitJs("nhLogoutResult", JSONObject().put("site", site).put("busy", true).put("wait", OfficialLogout.waitSeconds(site)))
     }
+
+    /** 次のログアウトを受け付けるまでの秒数 (0 = すぐできる、-1 = いま動いている)。設定のログインの画面が、ボタンを押せるかを決める */
+    @JavascriptInterface
+    fun logoutWait(site: String): Int = if (host.appPageNow) OfficialLogout.waitSeconds(site) else 0
 
     /** ログイン情報 (Cookie) をすべて消す。Cloudflare の確認を通した印 (cf_clearance) は残す。GitHub のログインも消える。 */
     @JavascriptInterface
@@ -319,7 +327,12 @@ class StoreBridge(private val host: BridgeHost) {
             // 「このアプリからのインストール」を許可していなければ、先にその設定画面へ (許可したらもう一度押してもらう)
             if (!ctx.packageManager.canRequestPackageInstalls()) {
                 emitUpdate(JSONObject().put("state", "permission"))
-                ctx.startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${ctx.packageName}")))
+                // その設定画面の無い端末もある (落ちないよう、開けなければ知らせるだけ)
+                try {
+                    ctx.startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${ctx.packageName}")))
+                } catch (e: android.content.ActivityNotFoundException) {
+                    emitUpdate(JSONObject().put("state", "error").put("message", "インストールの許可の画面を開けませんでした。Android の設定で、このアプリからのインストールを許可してください"))
+                }
                 return@runOnUiThread
             }
             if (!installing.compareAndSet(false, true)) return@runOnUiThread

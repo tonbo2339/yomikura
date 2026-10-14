@@ -131,4 +131,24 @@ class OfflineStoreTest {
         assertFalse(s.putMeta("..", "x", "{}"))
         assertFalse(s.putEpisode("narou", "n1234ab", "../x", "{}"))
     }
+
+    // 目録 (meta.json) が壊れていたら、書き直すときにフォルダにある話を足す (前に保存した話を読めなくしない)
+    @Test
+    fun brokenMetaKeepsSavedEpisodes() {
+        val s = store()
+        assertTrue(s.putEpisode("narou", "n1234ab", "1", "{\"html\":\"a\"}"))
+        assertTrue(s.putEpisode("narou", "n1234ab", "2", "{\"html\":\"b\"}"))
+        File(tmp.root, "offline/narou/n1234ab/meta.json").writeText("{\"eps\":[{\"ep\":\"1\"") // 途中で切れた
+        assertTrue(s.putMeta("narou", "n1234ab", "{\"title\":\"T\",\"eps\":[{\"ep\":\"3\"}]}"))
+        val eps = JSONObject(s.meta("narou", "n1234ab")).getJSONArray("eps")
+        assertEquals(listOf("3", "1", "2"), (0 until eps.length()).map { eps.getJSONObject(it).getString("ep") })
+        // 直したあとの書き込み (JS はまた今回の話だけを渡す) でも、フォルダにある話は残す
+        assertTrue(s.putMeta("narou", "n1234ab", "{\"title\":\"T\",\"eps\":[{\"ep\":\"3\"}]}"))
+        assertEquals(3, JSONObject(s.meta("narou", "n1234ab")).getJSONArray("eps").length())
+        // 話番号は数の順に足す
+        assertTrue(s.putEpisode("narou", "n1234ab", "10", "{\"html\":\"c\"}"))
+        assertTrue(s.putMeta("narou", "n1234ab", "{\"eps\":[]}"))
+        val all = JSONObject(s.meta("narou", "n1234ab")).getJSONArray("eps")
+        assertEquals(listOf("1", "2", "10"), (0 until all.length()).map { all.getJSONObject(it).getString("ep") })
+    }
 }

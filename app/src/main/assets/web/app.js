@@ -32,7 +32,7 @@ function addGroup(box, title) {
 const SAFE_URL = /^(https:\/\/|[a-z][a-z0-9-]*\.html([?#]|$))/i;
 function openUrl(url, replace) {
   const u = String(url || '');
-  if (!SAFE_URL.test(u)) return false;
+  if (!SAFE_URL.test(u) || /[\u0000-\u0020\u007f]/.test(u)) return false;
   if (replace) location.replace(u); else location.href = u;
   return true;
 }
@@ -204,6 +204,7 @@ function askChoice(title, text, a, b) {
 // 画面で使うアイコン (Material Icons の図形, Apache License 2.0)。svg('名前') で <svg> 文字列にする
 const ICON_PATHS = {
   play: 'M8 5v14l11-7z',
+  toc: 'M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z',
   more: 'M12 8a2 2 0 1 0 0-4 2 2 0 0 0 0 4zm0 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm0 6a2 2 0 1 0 0 4 2 2 0 0 0 0-4z',
   up: 'M7.41 15.41 12 10.83l4.59 4.58L18 14l-6-6-6 6z',
   down: 'M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6z',

@@ -64,7 +64,7 @@ window.nhImport = (json) => {
         if (k === 'settings') v = Object.assign({}, v, { welcomed: true }); // 初回の画面をもう一度出さない
         d[b[2]] = v;
       });
-    });
+    }, { force: true }); // 保存データが読めなくなっていても、バックアップで置き換えられるように (読めなかった中身は unreadableCopy に残る)
     flashNext(names + ' を読み込みました');
     location.replace('settings.html?page=data'); // 設定をメモリに持っているので、読み直す
   });

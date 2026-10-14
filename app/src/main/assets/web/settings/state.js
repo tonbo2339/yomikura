@@ -27,8 +27,9 @@ if (S.lh && !(S.lh >= 1.2 && S.lh <= 3)) {
   S.lh = S.lh > 3 ? 3 : 0;
   NH.update((d) => { if (d.settings) d.settings.lh = S.lh; });
 }
-// ランキングの行き先と連載状態の絞り込みは、アプリ (メニュー) やサイト上の画面からも書き換わるので S には持たず、毎回保存データを読み書きする
-const LIVE_KEYS = ['rankings', 'statusFilter'];
+// ランキングの行き先と連載状態の絞り込みは、アプリ (メニュー) やサイト上の画面からも書き換わるので S には持たず、毎回保存データを読み書きする。
+// アイコンの「後で」の予約 (launcherIconPending) も、この画面を開いている間にアプリが書くので同じ (S から書き戻すと、予約が消える)
+const LIVE_KEYS = ['rankings', 'statusFilter', 'launcherIconPending'];
 LIVE_KEYS.forEach((k) => delete S[k]);
 // 表示するサイト = 選んでいて、成人向けのサイトは使えるとき (18 歳以上で NSFW モードがオフ) だけ。上部バー・起動ページ・更新の確認と同じ判断 (Kotlin の siteOn)。
 // 選んだ値 (S.sites) は、NSFW モードをオンにしても消さない (オフに戻したら、また表示される)

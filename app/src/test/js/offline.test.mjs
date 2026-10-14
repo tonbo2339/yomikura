@@ -122,6 +122,27 @@ test('確認画面 (403) は休止して止める。確認画面の話は保存�
   assert.equal(log.fetched, 1); // 止まったら次の話は取りに行かない
 });
 
+test('回線が切れている間の失敗は数えず、つながってから同じ話を取り直す', async () => {
+  let down = 4; // はじめの 4 回は、回線が切れていて失敗する
+  let offline = false; // 窓口の offline() が返す値 (切れて失敗したあと、取り直す前に、つながったことにする)
+  const { NH, log } = makeEnv({ fetchFor: () => {
+    if (down > 0) { down--; offline = true; return { status: 500, ok: false, text: async () => '' }; }
+    return null;
+  } });
+  // つながったあとの取り込みは、本文のある話にする (この試験の DOMParser の代わりは本文を持たないため)
+  const fetchDoc = NH.fetchDoc;
+  NH.fetchDoc = async (url) => { await fetchDoc(url); return { querySelectorAll: () => [emptyBody()] }; };
+  const list = netEps(2);
+  const st = await NH.offlineRun(adapter, w, planOf(NH, list), list, {
+    offline: () => offline,
+    wait: async () => { offline = false; }, // つながるまで待つ
+  });
+  assert.equal(st.ok, 2);
+  assert.equal(st.failedTotal, 0);
+  assert.equal(log.fetched, 6);
+  assert.deepEqual(log.stored, ['1', '2']);
+});
+
 test('続けて 3 回失敗したら止める (1 回目の失敗では止まらない)', async () => {
   const { NH, log } = makeEnv({ status: 500 });
   const list = netEps(5);

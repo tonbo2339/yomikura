@@ -108,6 +108,17 @@ class SaveQueueTest {
     }
 
     @Test
+    // 一時停止したまま止まった作品も、順番待ちに戻す (PAUSED のままだと、選ばれず「もう一度」もできない)
+    fun recoverResetsPaused() {
+        val q = queue()
+        q.add(job("a1", "1"))
+        q.update("narou:a1") { it.copy(status = Status.PAUSED) }
+        q.recoverAfterRestart()
+        assertEquals(Status.WAITING, q.all().single().status)
+        assertEquals("narou:a1", q.next()?.key)
+    }
+
+    @Test
     // 終わった作品だけ消す
     fun clearFinishedKeepsActive() {
         val q = queue()
@@ -127,6 +138,8 @@ class SaveQueueTest {
         assertEquals(1, SaveQueue.decode(mixed).size)
         java.io.File(tmp.root, "queue.json").writeText("これは JSON ではない")
         assertTrue(queue().all().isEmpty())
+        // 読めないファイルは .bad に残す (次の書き込みで消えないように)
+        assertEquals("これは JSON ではない", java.io.File(tmp.root, "queue.json.bad").readText())
     }
 
     @Test

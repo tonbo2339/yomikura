@@ -53,7 +53,11 @@ class LauncherIcon(private val ctx: Context) {
             return false
         }
         // 今すぐ: ランチャーに反映するため、アプリを終了する
-        if (restartNow) android.os.Process.killProcess(android.os.Process.myPid())
+        // 止める前に、保存データの書きかけ (apply) を書き終える (直前に変えた設定が消えないように)
+        if (restartNow) {
+            NHData.flush(ctx)
+            android.os.Process.killProcess(android.os.Process.myPid())
+        }
         return true
     }
 

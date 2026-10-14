@@ -62,16 +62,26 @@
   }
   .hero:active { transform: scale(.985); }
   .hero .eyebrow { font-size: 12px; font-weight: 700; letter-spacing: .08em; opacity: .85; display: flex; align-items: center; gap: 6px; }
-  .hero .title { font-size: 18px; font-weight: 800; line-height: 1.4; margin: 6px 52px 10px 0;
+  .hero .title { font-size: 18px; font-weight: 800; line-height: 1.4; margin: 6px 0 10px;
     display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; word-break: break-all; }
   .hero .meta { font-size: 12px; opacity: .85; display: flex; flex-wrap: wrap; gap: 2px 0; }
   .hero .meta span { white-space: nowrap; }
   .hero .meta span:not(:last-child)::after { content: "・"; margin: 0 .3em; }
+  .hero:has(.play) .title { margin-right: 52px; } /* 短編は右の再生の印の分あける */
   .hero .play { position: absolute; right: 16px; top: 50%; transform: translateY(-50%); width: 44px; height: 44px; border-radius: 50%;
     background: rgba(255, 255, 255, .2); display: grid; place-items: center; }
   .hero .play svg { width: 24px; height: 24px; fill: #fff; }
-  .hero .bar { height: 4px; border-radius: 2px; background: rgba(255, 255, 255, .22); margin-top: 12px; overflow: hidden; }
-  .hero .bar i { display: block; height: 100%; background: #fff; border-radius: 2px; }
+  /* 上のカードの読み具合と、続きから / 目次 (緑の地の上なので白で) */
+  .hero .pg { margin: 0 0 10px; }
+  .hero .pg-main, .hero .pg-pct { color: #fff; }
+  .hero .pg-main.short { background: rgba(255, 255, 255, .2); color: #fff; }
+  .hero .pg-note { color: rgba(255, 255, 255, .85); }
+  .hero .pg-bar { background: rgba(255, 255, 255, .22); }
+  .hero .pg-bar i { background: #fff; }
+  .hero .meta { margin-bottom: 2px; }
+  .hero .go { margin-top: 12px; }
+  .hero .go-btn { border-color: rgba(255, 255, 255, .7); color: #fff; }
+  .hero .go-btn.primary { background: #fff; border-color: #fff; color: #1b5c3b; }
 
   /* 作品カード */
   .list { display: flex; flex-direction: column; gap: 10px; }
@@ -86,8 +96,24 @@
   .item .title { font-size: 15px; font-weight: 700; line-height: 1.45; word-break: break-all;
     display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   .item .memo { font-size: 13px; color: var(--sub); margin-top: 4px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; word-break: break-all; }
-  .item .resume { font-size: 12px; font-weight: 700; color: var(--accent-strong); margin-top: 6px; }
-  .item .prog { position: absolute; left: 0; bottom: 0; height: 3px; background: var(--accent); border-radius: 0 2px 0 0; opacity: .9; }
+  /* 読み具合: 「第 12 話 / 全 120 話」と割合、その下に作品全体の進みの棒 (短編は「短編」とその話の割合) */
+  .pg { margin-top: 10px; }
+  .pg-row { display: flex; align-items: baseline; gap: 8px; font-size: 13px; line-height: 1.4; }
+  .pg-main { font-weight: 800; color: var(--fg); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .pg-main.short { display: inline-block; font-size: 11px; padding: 1px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--accent-strong); }
+  .pg-note { font-size: 12px; color: var(--sub); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pg-pct { margin-left: auto; font-size: 12px; font-weight: 800; color: var(--accent-text); font-variant-numeric: tabular-nums; }
+  .pg-bar { height: 6px; border-radius: 3px; background: var(--surface-2); margin-top: 6px; overflow: hidden; }
+  .pg-bar i { display: block; height: 100%; min-width: 3px; border-radius: 3px; background: var(--accent); }
+  /* 続きから / 目次 */
+  .go { display: flex; gap: 8px; margin-top: 10px; }
+  .go-btn { display: inline-flex; align-items: center; gap: 4px; min-height: 34px; padding: 0 14px 0 10px; border-radius: 999px; border: 1.5px solid var(--accent-text);
+    background: transparent; color: var(--accent-text); font: 700 13px "Noto Sans JP", sans-serif; cursor: pointer; }
+  .go-btn svg { width: 18px; height: 18px; fill: currentColor; }
+  .go-btn.primary { background: var(--accent-fill); border-color: var(--accent-fill); color: var(--on-accent, #fff); }
+  .go-btn:active { transform: scale(.97); }
+  .badge.status { background: var(--surface-2); color: var(--sub); }
+  .badge.status.complete { background: var(--accent-soft); color: var(--accent-strong); }
   .item.done { opacity: .6; }
   .item.done .title { text-decoration: line-through; text-decoration-color: var(--muted); }
 
@@ -198,29 +224,80 @@ try { ui.tab = localStorage.getItem('nh-tab'); } catch (e) {}
 if (location.hash === '#history') ui.tab = 'history'; // 設定の「閲覧履歴」からは履歴のタブを開く
 
 
-// ---- 読書位置 ----
-function progressOf(d, it) {
-  const p = (d.progress || {})[it.key];
-  if (!p || (it.urlAt && p.at < it.urlAt)) return null; // 更新取得のあとに読んでいなければ使わない
-  return p;
+// ---- 読書位置と読み具合 ----
+const progressOf = NH.progressOf; // 更新取得のあとに読んでいなければ使わない
+const pctText = (x) => Math.floor(x * 100) + '%'; // 99.6% を 100% と出さない (読み終えていないのに 100% にしない)
+// 読み具合の表示 (カード・上のカード共通)。NH.readState から、主な文 (main)・添える文 (note)・割合 (pct: 0〜1 | null) を作る
+//   連載: 「第 12 話 / 全 120 話」と作品全体の割合。短編: 「短編」と、その話の割合
+function stateView(st) {
+  if (st.short) {
+    if (!st.started) return { main: '短編', note: 'まだ読んでいません', pct: null };
+    return { main: '短編', note: st.epPct >= 1 ? '読了' : '読みかけ', pct: st.epPct };
+  }
+  const tot = st.total ? '全 ' + st.total + ' 話' : '';
+  if (!st.started) return { main: tot || '連載', note: 'まだ読んでいません', pct: null }; // 0% の棒は出さない (読んでいないことは文で分かる)
+  if (st.finished) return { main: tot ? tot + ' 読了' : '最新話まで読了', note: '新しい話を待っています', pct: 1 };
+  const ep = st.ep ? '第 ' + st.ep + ' 話' : '';
+  const main = ep && tot ? ep + ' / ' + tot : ep || tot || '読みかけ';
+  // 全話数が分からないときは、その話の中の割合を添える (作品全体の割合は出せない)
+  const note = st.fromSite ? 'サイトのしおりから' : st.workPct == null && st.epPct > 0 ? 'この話 ' + pctText(st.epPct) : '';
+  return { main, note, pct: st.workPct };
 }
-// 作品の全話数: 作品ページで覚えた全話数 (total) と、更新の確認で分かった最終話 (lastEp) の大きいほう (どちらも無ければ 0)
-const totalOf = (it) => Math.max(Number(it.total) || 0, Number(it.lastEp) || 0);
-function resumeText(p, total) {
-  if (!p) return total ? '全' + total + '話' : ''; // まだ読んでいない作品も、全話数は出す
-  const n = NH.epNumber(p); // カクヨムは話 ID が連番でないので、読書位置の no (目次の並びの番号)。'0' は短編で番号なし
-  const ep = n ? '第' + n + '話' + (total ? '/' + total : '') : ''; // total = 全何話 (分かるとき)
-  if (!p.done) return '続きから ' + (ep ? ep + ' ' : '') + Math.round(p.y * 100) + '%';
-  return p.next ? (ep ? ep + 'まで読了 ・ 次の話から' : '次の話から') : '';
+// 読み具合の欄: 文と割合の行、その下に進みの棒
+function progressBlock(st, cls) {
+  const v = stateView(st);
+  const box = el('div', cls || 'pg');
+  const row = el('div', 'pg-row');
+  row.appendChild(el('span', 'pg-main' + (st.short ? ' short' : ''), v.main));
+  if (v.note) row.appendChild(el('span', 'pg-note', v.note));
+  if (v.pct != null) row.appendChild(el('span', 'pg-pct', pctText(v.pct)));
+  box.appendChild(row);
+  if (v.pct != null) {
+    const bar = el('div', 'pg-bar'); const fill = el('i'); fill.style.width = Math.round(v.pct * 1000) / 10 + '%';
+    bar.setAttribute('role', 'progressbar'); bar.setAttribute('aria-label', '読んだ割合');
+    bar.setAttribute('aria-valuemin', '0'); bar.setAttribute('aria-valuemax', '100'); bar.setAttribute('aria-valuenow', String(Math.floor(v.pct * 100)));
+    bar.appendChild(fill); box.appendChild(bar);
+  }
+  return box;
+}
+// 連載の作品で「続きから」と「目次」を選ぶボタン (短編は目次が無いので出さない)
+function goButtons(d, it, list, st) {
+  const row = el('div', 'go');
+  const resume = el('button', 'go-btn primary');
+  resume.innerHTML = svg('play');
+  // 押したときに開く先と合わせる (1 話目の URL が分からないサイトは、作品のページを開くので「読みはじめる」)
+  const label = st.started ? (st.finished ? '最新話を開く' : '続きから') : NH.firstEpUrl(it.site, it.id) ? '1 話から読む' : '読みはじめる';
+  resume.appendChild(el('span', '', label));
+  resume.onclick = (e) => { e.stopPropagation(); openWork(d, it, list); };
+  const toc = el('button', 'go-btn');
+  toc.innerHTML = svg('toc');
+  toc.appendChild(el('span', '', '目次'));
+  toc.onclick = (e) => { e.stopPropagation(); openWork(d, it, list, true); };
+  row.append(resume, toc);
+  return row;
 }
 
 // 絞り込み (サイト・タグ・連載状態) か検索をしているか
 const isNarrowed = () => !!(ui.site || ui.tag || ui.status || queryTerms().length);
 
-// 作品を開く。絞り込み・検索中なら、いま並んでいる順を控えて、読了のあとはその続きを次の作品にする (絞り込みなしなら控えを消す)
-function openWork(d, it, list) {
-  NH.update((x) => NH.setReadSeq(x, isNarrowed() && list ? list.map((y) => y.key) : null));
-  openUrl(openTarget(d, it));
+// 作品を開く。絞り込み・検索中か、自分で並べた順以外で並べているなら、いま並んでいる順を控えて、読了のあとはその続きを次の作品にする
+// (どちらでもなければ控えを消す。次の作品はリストの順になる)
+// toc = 目次 (作品のトップ) を開く。まだ読み始めていない連載は 1 話目から (1 話目の URL が分かるサイトだけ)
+function openWork(d, it, list, toc) {
+  const keep = (isNarrowed() || sortMode(d) !== 'manual') && list;
+  NH.update((x) => NH.setReadSeq(x, keep ? list.map((y) => y.key) : null));
+  openUrl(toc ? tocTarget(it) : startTarget(d, it) || openTarget(d, it));
+}
+function startTarget(d, it) {
+  const st = NH.readState(d, it);
+  if (st.started || st.short || navigator.onLine === false) return null;
+  return NH.firstEpUrl(it.site, it.id, it.url);
+}
+// 目次の開く先。通信できないとき、オフライン保存のある作品は保存した目次
+function tocTarget(it) {
+  const online = NH.workUrl(it.site, it.id, it.url) || it.url;
+  if (navigator.onLine !== false || !NH.off.available() || !NH.off.meta(it.site, it.id)) return online;
+  return 'offline.html?w=' + encodeURIComponent(it.key);
 }
 
 // 開く先。通信できないとき、オフライン保存のある作品は保存した本文で開く (続きの話が保存してあればそこから)
@@ -247,13 +324,17 @@ function card(d, it, isActive, visible) {
   const site = el('span', 'site');
   site.append(el('span', 'dot ' + it.site), document.createTextNode(NH.siteLabel(it)));
   meta.appendChild(site);
-  if (isActive && it.unread) meta.appendChild(el('span', 'badge unread', '未読 ' + it.unread + '話'));
+  const st = NH.readState(d, it);
+  // 連載状態 (分かるときだけ)。短編は読み具合の欄に出すので、ここでは連載中・完結だけ
+  if (STATUS_NAME[it.status] && it.status !== 'short') meta.appendChild(el('span', 'badge status ' + it.status, STATUS_NAME[it.status]));
+  if (isActive && st.unread && !st.short) meta.appendChild(el('span', 'badge unread', '未読 ' + st.unread + ' 話'));
   if (it.tag) meta.appendChild(el('span', 'badge tag', it.tag));
   main.append(meta, el('div', 'title', it.title));
   if (it.memo) main.appendChild(el('div', 'memo', it.memo));
-  const p = isActive ? progressOf(d, it) : null;
-  const rt = resumeText(p, totalOf(it));
-  if (rt) main.appendChild(el('div', 'resume', rt));
+  if (isActive) {
+    main.appendChild(progressBlock(st));
+    if (!st.short) main.appendChild(goButtons(d, it, visible, st));
+  }
   c.appendChild(main);
 
   if (isActive) {
@@ -264,6 +345,7 @@ function card(d, it, isActive, visible) {
       const up = iconBtn('up', '上へ', () => move(it.key, -1, visible));
       const down = iconBtn('down', '下へ', () => move(it.key, 1, visible));
       up.disabled = i === 0; down.disabled = i === visible.length - 1;
+      up.dataset.move = 'up'; down.dataset.move = 'down'; up.dataset.key = down.dataset.key = it.key; // 動かしたあと、同じボタンへフォーカスを戻す
       mv.append(up, down);
       c.appendChild(mv);
     }
@@ -272,9 +354,6 @@ function card(d, it, isActive, visible) {
     c.appendChild(more);
   } else {
     c.appendChild(iconBtn('undo', '未読に戻す', () => restore(it.key)));
-  }
-  if (p && !p.done && p.y > 0) {
-    const bar = el('div', 'prog'); bar.style.width = Math.min(100, Math.round(p.y * 100)) + '%'; c.appendChild(bar);
   }
   return c;
 }
@@ -297,9 +376,7 @@ const chipAdder = (fl) => (label, on, fn, dot) => {
 // ---- 描画 ----
 function render() {
   const d = load();
-  // 前回の確認の時刻 (確認していないときだけ。確認中は「確認中」と進み具合になる)
-  $('checkLast').textContent = !checking && d.lastCollect ? '前回の確認 ' + new Date(d.lastCollect).toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
-  paintCollectWait();
+  paintCheckRow(d);
   const shown = d.readLater.filter((x) => !NH.nsfwHides(d, x)); // NSFW モードがオンなら R18 の作品は出さない (データは消さない)
   const active = shown.filter((x) => !x.done);
   const done = shown.filter((x) => x.done);
@@ -311,7 +388,6 @@ function render() {
     const other = ui.tab === 'update' ? 'later' : 'update';
     if (ui.tab !== 'history' && !cnt[ui.tab] && cnt[other]) ui.tab = other;
   }
-  const unreadEps = active.reduce((n, x) => n + (x.unread || 0), 0);
   // 更新を確認するサイトが 1 つも無いとき、またはその (対象の) どのサイトにもログインしていないときは、
   // 更新アイコンと、(更新の作品が無ければ)「未読の更新」の欄を出さない (ログインの有無は d.logins。Kotlin が写している)
   const canCollect = NH.collectAnyActive(d);
@@ -415,7 +491,7 @@ function historyOpenUrl(d, e) {
 }
 function historyRow(d, e, inList) {
   const r = el('div', 'card hrow');
-  asButton(r, () => openUrl(historyOpenUrl(d, e)));
+  asButton(r, () => { NH.update((x) => NH.setReadSeq(x, null)); openUrl(historyOpenUrl(d, e)); }); // 履歴から開いたら、前の絞り込みの読む順は使わない
   const main = el('div', 'main');
   main.appendChild(el('div', 'title', e.title || '(作品名不明)'));
   const meta = el('div', 'meta');
@@ -470,6 +546,7 @@ function renderHistory(d) {
 
   const root = $('active'); root.innerHTML = '';
   if (!NH.historyOn(d)) {
+    $('qCount').textContent = ''; // 前のタブの検索の件数を残さない
     root.appendChild(emptyState('book', '履歴の記録はオフです', '設定の「閲覧履歴を記録する」で切り替えられます'));
   } else {
     const shown = h.filter((e) => H_MATCH[ui.src || 'all'](e) && (!ui.site || NH.siteKey(e) === ui.site) && matchQuery(e, terms));
@@ -508,7 +585,7 @@ const arrowsOn = (d) => !(d.settings && d.settings.listArrows === false);
 const SORTS = [['manual', '自分で並べた順'], ['updated', '更新が新しい順'], ['unread', '未読が多い順'], ['title', '名前順'], ['site', 'サイト順']];
 const SORT_KEY = {
   updated: (x) => -(x.urlAt || x.addedAt || 0),
-  unread: (x) => -(x.unread || 0),
+  unread: (x) => -(NH.readState(load(), x).unread || 0), // アプリで読んだ分も引いた未読の話数
   title: (x) => x.title || '',
   site: (x) => NH.siteLabel(x),
 };
@@ -535,21 +612,24 @@ function lastRead(d, items) {
 }
 
 // others = このカードの作品のほかに、リストにある作品の数
+// カードの地をタップすると続きから。連載なら「続きから」と「目次」のボタンも出す (ボタンを入れるので、カード自体は button 要素にしない)
 function heroCard(d, it, others, list) {
-  const p = progressOf(d, it);
-  const h = el('button', 'hero');
+  const st = NH.readState(d, it);
+  const h = el('div', 'hero');
+  asButton(h, () => openWork(d, it, list));
+  h.setAttribute('aria-label', (st.started ? '続きから読む: ' : '次に読む: ') + it.title);
   const eyebrow = el('div', 'eyebrow');
-  const resuming = !!p && (!p.done || !!p.next);
-  eyebrow.append(el('span', 'dot ' + it.site), document.createTextNode((resuming ? '続きから読む' : '次に読む') + ' ・ ' + NH.siteLabel(it)));
-  const meta = [resumeText(p, totalOf(it)), it.unread ? '未読 ' + it.unread + '話' : '', others > 0 ? 'ほか ' + others + ' 件' : ''].filter(Boolean);
-  const metaBox = el('div', 'meta');
-  meta.forEach((t) => metaBox.appendChild(el('span', '', t))); // 区切りの「・」は CSS。折り返しは項目の切れ目でだけ起きる
-  h.append(eyebrow, el('div', 'title', it.title), metaBox);
-  const play = el('div', 'play'); play.innerHTML = svg('play'); h.appendChild(play);
-  if (p && !p.done && p.y > 0) {
-    const bar = el('div', 'bar'); const i = el('i'); i.style.width = Math.round(p.y * 100) + '%'; bar.appendChild(i); h.appendChild(bar);
+  eyebrow.append(el('span', 'dot ' + it.site), document.createTextNode((st.started && !st.finished ? '続きから読む' : '次に読む') + ' ・ ' + NH.siteLabel(it)));
+  h.append(eyebrow, el('div', 'title', it.title));
+  h.appendChild(progressBlock(st, 'pg hero-pg'));
+  const extra = [st.unread && !st.short ? '未読 ' + st.unread + ' 話' : '', STATUS_NAME[it.status] && it.status !== 'short' ? STATUS_NAME[it.status] : '', others > 0 ? 'ほか ' + others + ' 件' : ''].filter(Boolean);
+  if (extra.length) {
+    const metaBox = el('div', 'meta');
+    extra.forEach((t) => metaBox.appendChild(el('span', '', t))); // 区切りの「・」は CSS。折り返しは項目の切れ目でだけ起きる
+    h.appendChild(metaBox);
   }
-  h.onclick = () => openWork(d, it, list);
+  if (!st.short) h.appendChild(goButtons(d, it, list, st));
+  else { const play = el('div', 'play'); play.innerHTML = svg('play'); h.appendChild(play); }
   return h;
 }
 
@@ -579,7 +659,7 @@ function openSheet(key) {
   sh.appendChild(acts);
 
   // オフライン保存: 保存してあれば「オフラインで読む」、無ければ「オフラインに保存」。どちらも追加・更新の保存ができる
-  const workUrl = NH.workUrl(it.site, it.id);
+  const workUrl = NH.workUrl(it.site, it.id, it.url);
   if (NH.off.available() && workUrl) {
     // 話が 1 つも無い (保存が途中で止まった・空の) ときは、読むボタンを出さず「オフラインに保存」にする
     const savedEps = ((NH.off.meta(it.site, it.id) || {}).eps || []).length;
@@ -638,26 +718,56 @@ window.addEventListener('popstate', hideSheet);
 
 // ---- データ操作 (変更前の状態を取っておき、元に戻せるようにする) ----
 function mutate(fn, message) {
-  let before = null; // 変更前の写し
-  NH.update((d) => { before = JSON.parse(JSON.stringify({ readLater: d.readLater, progress: d.progress })); fn(d); });
+  let before = null, after = null; // 変更前と変更後の写し
+  const copy = (d) => JSON.parse(JSON.stringify({ readLater: d.readLater, progress: d.progress || {} }));
+  NH.update((d) => { before = copy(d); fn(d); after = copy(d); });
+  if (!after) { snack('保存データを読めないため、変更できませんでした'); return; } // NH.update が書かなかった (NH.unreadable)
   render();
-  if (message) snack(message, () => { NH.update((x) => { x.readLater = before.readLater; x.progress = before.progress; }); render(); });
+  if (message) snack(message, () => { NH.update((x) => undoChange(x, before, after)); render(); });
   else hideSnack(); // 別の操作をしたら、前の「元に戻す」は使えなくする (その操作まで戻ってしまうため)
+}
+// この操作で変わった作品と読書位置だけを、変更前に戻す。丸ごと書き戻すと、元に戻すまでの間に
+// 更新の確認が足した作品や、ほかで書いた読書位置まで消えてしまうため
+function undoChange(x, before, after) {
+  const js = (o) => JSON.stringify(o);
+  const was = new Map(before.readLater.map((e, i) => [e.key, [e, i]]));
+  const now = new Map(after.readLater.map((e) => [e.key, e]));
+  const keys = new Set([...was.keys(), ...now.keys()].filter((k) => js(was.get(k)?.[0]) !== js(now.get(k))));
+  const list = x.readLater.filter((e) => !keys.has(e.key));
+  // 前にあった作品は、前の位置へ戻す (前から順に入れると、ほかが変わっていなければ元の並びになる)
+  [...keys].map((k) => was.get(k)).filter(Boolean).sort((p, q) => p[1] - q[1])
+    .forEach(([e, i]) => list.splice(Math.min(i, list.length), 0, e));
+  x.readLater = list;
+  const bp = before.progress, ap = after.progress;
+  x.progress = x.progress || {};
+  new Set([...Object.keys(bp), ...Object.keys(ap)]).forEach((k) => {
+    if (js(bp[k]) === js(ap[k])) return;
+    if (k in bp) x.progress[k] = bp[k]; else delete x.progress[k];
+  });
 }
 function patch(key, fn) { mutate((d) => { const x = d.readLater.find((y) => y.key === key); if (x) fn(x); }); }
 function remove(key) { mutate((d) => { d.readLater = d.readLater.filter((x) => x.key !== key); NH.dropProgress(d, [key]); }, 'リストから削除しました'); }
 function markDone(key) { mutate((d) => { const x = d.readLater.find((y) => y.key === key); if (x) NH.setDone(x, true); }, '読了にしました'); }
-function restore(key) { mutate((d) => { const x = d.readLater.find((y) => y.key === key); if (x) NH.setDone(x, false); }); }
+function restore(key) { mutate((d) => { const x = d.readLater.find((y) => y.key === key); if (x) NH.setDone(x, false); }, '未読に戻しました'); }
 function clearDone() {
-  const keys = load().readLater.filter((x) => x.done).map((x) => x.key);
+  // 画面に出ている読了の作品だけ (NSFW モードで隠れている作品・検索で外れている作品は消さない)
+  const d = load(), terms = queryTerms();
+  const keys = d.readLater.filter((x) => x.done && !NH.nsfwHides(d, x) && (!terms.length || kindOf(x) === ui.tab) && matchQuery(x, terms)).map((x) => x.key); // render の doneShown と同じ
   if (!keys.length) return;
-  mutate((d) => { d.readLater = d.readLater.filter((x) => !x.done); NH.dropProgress(d, keys); }, '読了 ' + keys.length + ' 作品を削除しました');
+  const gone = new Set(keys);
+  mutate((x) => { x.readLater = x.readLater.filter((y) => !gone.has(y.key)); NH.dropProgress(x, keys); }, '読了 ' + keys.length + ' 作品を削除しました');
 }
 function switchKind(key) {
   const it = load().readLater.find((y) => y.key === key);
   if (!it) return;
   const to = kindOf(it) === 'update' ? 'later' : 'update';
-  mutate((d) => { const x = d.readLater.find((y) => y.key === key); if (x) x.kind = to; }, '「' + (to === 'later' ? '後で読む' : '未読の更新') + '」へ移しました');
+  // 手で「未読の更新」へ移した作品は、サイトの一覧に無くても読了にしない (manualKind。サイトの一覧に出たら外す)
+  mutate((d) => {
+    const x = d.readLater.find((y) => y.key === key);
+    if (!x) return;
+    x.kind = to;
+    if (to === 'update') x.manualKind = true; else delete x.manualKind;
+  }, '「' + (to === 'later' ? '後で読む' : '未読の更新') + '」へ移しました');
 }
 function toTop(key) {
   mutate((d) => {
@@ -675,6 +785,11 @@ function move(key, delta, visible) {
     const b = d.readLater.findIndex((x) => x.key === visible[to].key);
     [d.readLater[a], d.readLater[b]] = [d.readLater[b], d.readLater[a]];
   });
+  // 描き直すとボタンが作り直されるので、動かした作品の同じ向きのボタンへフォーカスを戻す (端に着いたら反対の向き。TalkBack・キーボードで続けて動かせるように)
+  const btns = [...document.querySelectorAll('[data-move]')].filter((b) => b.dataset.key === key);
+  const want = delta < 0 ? 'up' : 'down';
+  const b = btns.find((x) => x.dataset.move === want && !x.disabled) || btns.find((x) => !x.disabled);
+  if (b) b.focus({ preventScroll: false });
 }
 
 // ---- 検索 (虫眼鏡で開く。閉じると、言葉を消して元の表示に戻る) ----
@@ -726,9 +841,24 @@ function paintCollectWait() {
   $('collect').disabled = checking || ms > 0;
   if (ms > 0) {
     $('checkLast').textContent += ' ・ あと ' + Math.ceil(ms / 60000) + ' 分';
-    waitTimer = setTimeout(render, Math.min(ms, 60000) + 200); // 1 分ごとに「あと N 分」を進める
+    waitTimer = setTimeout(paintCheckRow, Math.min(ms, 60000) + 200); // 1 分ごとに「あと N 分」を進める (一覧は描き直さない。操作中のフォーカスや持ち上げを崩さないため)
   }
 }
+// 前回の確認の時刻 (確認していないときだけ。確認中は「確認中」と進み具合になる) と、次に押せるまでの時間
+function paintCheckRow(d = load()) {
+  $('checkLast').textContent = !checking && d.lastCollect ? '前回の確認 ' + new Date(d.lastCollect).toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+  paintCollectWait();
+}
+// 画面の外 (裏の確認・保存) で保存データが変わったとき (MainActivity が呼ぶ)。続けて来るのでまとめて描き直す。
+// 作品を持ち上げている間・メニューのシートを開いている間は待つ (シートを閉じると描き直す)
+let dataTimer = 0;
+window.nhDataChanged = () => {
+  clearTimeout(dataTimer);
+  dataTimer = setTimeout(() => {
+    if (document.querySelector('.item.dragging') || $('sheet').classList.contains('show')) { window.nhDataChanged(); return; }
+    render();
+  }, 400);
+};
 window.nhProgress = (i, n) => { if (checking) $('checkProg').textContent = i + ' / ' + n; };
 $('collect').onclick = collect;
 // サイト (ノクターンなど) が分からない R18 の作品は、アプリが作品ページを読んで判別する。分かったら描き直す
@@ -858,7 +988,8 @@ function enableDrag(c, it, visible, reorder) {
     endSwipe(false);
     sx = e.touches[0].clientX; sy = e.touches[0].clientY;
     clearTimeout(timer);
-    timer = setTimeout(() => { timer = 0; if (reorder) start(); }, LONG_PRESS_MS);
+    // 並べ替えられないとき (自分で並べた順以外) は長押しを待たない。待つと、ゆっくり横に動かしたときにスワイプにならない (-1 = 指が触れている印)
+    timer = reorder ? setTimeout(() => { timer = 0; start(); }, LONG_PRESS_MS) : -1;
   }, { passive: true });
   c.addEventListener('touchmove', (e) => {
     const t = e.touches[0];
@@ -882,14 +1013,17 @@ $('clearDone').onclick = clearDone;
 // ジャンルの候補 (既定 + これまで使ったもの)
 (() => {
   const dl = $('tagList');
-  [...new Set([...PRESET_TAGS, ...load().readLater.map((x) => x.tag).filter(Boolean)])].forEach((t) => { const o = el('option'); o.value = t; dl.appendChild(o); });
+  const d = load();
+  // NSFW モードで隠れている作品のジャンルは候補に出さない
+  [...new Set([...PRESET_TAGS, ...d.readLater.filter((x) => !NH.nsfwHides(d, x)).map((x) => x.tag).filter(Boolean)])].forEach((t) => { const o = el('option'); o.value = t; dl.appendChild(o); });
 })();
 // 開いたときに、読了から一定日数たった作品を片付ける (設定で切り替え)
 (() => {
   let n = 0;
   NH.update((d) => { n = NH.pruneDone(d); NH.pruneProgress(d); NH.pruneHistory(d); });
   render();
-  if (n) snack('読了から日数のたった ' + n + ' 作品を削除しました');
+  if (NH.unreadable) snack('保存データを読めませんでした。消さないよう、書き込みを止めています。設定 → データの管理 で、バックアップから読み込めます');
+  else if (n) snack('読了から日数のたった ' + n + ' 作品を削除しました');
   // 版ごとに足される、開いたときの処理 (差し込み口。<!--#include--> は MainActivity の expandIncludes が展開する)
 })();
 </script>

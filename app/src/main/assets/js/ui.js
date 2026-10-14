@@ -195,7 +195,7 @@
           return go(2500);
         }
         // 「後で読む」に置いた作品は数えない (未読の更新には出さない)
-        const { added, updates, fresh } = NH.mergeUpdates(adapter.id, r.items);
+        const { added, updates, fresh } = NH.mergeUpdates(adapter.id, r.items, { truncated: !!r.truncated, readIds: r.readIds, cats: r.cats });
         NH.update((d) => {
           d.collectLog = d.collectLog || {};
           d.collectLog[adapter.id] = { n: updates, added, fresh };
@@ -266,7 +266,7 @@
   // このページは読んでいないので、閲覧履歴や読書位置には残さずに移る。次の話が無ければ、印だけ外してこのページを出す
   if (cur && location.hash === '#nh-next') {
     const n = adapter.nextUrl ? adapter.nextUrl() : null;
-    if (n) { location.replace(n); return; }
+    if (n) { NH.go(n, true); return; }
     history.replaceState(null, '', location.pathname + location.search);
   }
 
@@ -289,10 +289,12 @@
     if (!t && !(adapter.bodySel && document.querySelector(adapter.bodySel))) return 'failed';
     const title = t || document.title.replace(/ - (ハーメルン|カクヨム|小説家になろう)$/, '').trim();
     const status = pageStatus();
-    let result = 'exists';
+    let result = 'failed'; // 保存データを読めず NH.update が書かなかったときは failed のまま
     NH.update((d) => {
       result = 'exists'; // NH.update がやり直したときのために、ここで決め直す
-      if (NH.findItem(d, w)) return;
+      const it = NH.findItem(d, w);
+      if (it && it.done) { NH.setDone(it, false); result = 'added'; return; } // 読了の作品は、読了を外してリストに戻す
+      if (it) return;
       d.readLater.push(NH.withSub({ key: NH.workKey(w), site: w.site, id: w.id, url: w.url, title, addedAt: Date.now(), done: false, kind: 'later', ...(status ? { status } : {}) }));
       result = 'added';
     });
@@ -302,7 +304,8 @@
   // ⋮ メニューのための今の作品の状態。{inList, saved (端末に保存してある), url (作品のページ。保存は ここ + #nh-save で始める)}。作品のページでなければ null
   window.nhWorkState = () => {
     const w = NH.parseWork(location.href);
-    return w ? { inList: !!NH.findItem(NH.load(), w), saved: !!NH.off.meta(w.site, w.id), url: w.url } : null;
+    const it = w && NH.findItem(NH.load(), w);
+    return w ? { inList: !!it && !it.done, saved: !!NH.off.meta(w.site, w.id), url: w.url } : null;
   };
   // 今の作品をリストから外す (⋮ メニューの「リストから削除」)。結果: removed / '' (作品のページではない・リストに無い)
   window.nhRemoveCurrent = () => {
@@ -527,16 +530,37 @@
     flushPos = write;
 
     const saved = (NH.load().progress || {})[key];
-    if (saved && saved.url === epUrl && saved.y > 0.005 && !location.hash) { // 読了の位置を過ぎていても、その話を開き直したときは前回の位置から
-      const restore = () => {
-        if (touched) return;
-        const b = bodyBox();
-        if (b) window.scrollTo(0, b.top + saved.y * b.h);
-      };
+    const restoring = saved && saved.url === epUrl && saved.y > 0.005 && !location.hash; // 読了の位置を過ぎていても、その話を開き直したときは前回の位置から
+    let restoredAt = -1; // 最後に戻した scrollY (そこから動いていれば、音量キーなどで利用者が動かした)
+    const restore = () => {
+      if (touched) return;
+      const b = bodyBox();
+      if (b) { window.scrollTo(0, b.top + saved.y * b.h); restoredAt = window.scrollY; }
+    };
+    // 前回の位置まで戻せたか (本文の描画が遅いと、まだ戻せていないことがある)
+    const restored = () => {
+      const b = bodyBox();
+      return !!b && NH.scrollState(window.scrollY, b.top, b.h, window.innerHeight).y >= saved.y - 0.02;
+    };
+    if (restoring) {
       [0, 300, 900, 2000].forEach((ms) => setTimeout(restore, ms));
       setTimeout(() => { if (!touched) NH.toast('前回の位置から再開'); }, 400);
     }
-    setTimeout(() => { armed = true; write(); }, 2300);
+    // 記録を始める。前回の位置へまだ戻せていなければ、もう少し待って戻し直す (先頭の位置で前回の位置を上書きしないため)。
+    // 戻し直すのは、戻した位置から動いていないときだけ (音量キー・自動スクロールで読み進めた位置を引き戻さない)。
+    // 何度か待っても戻せなければ (文字の大きさを変えて、前の位置まで届かないなど)、そのまま記録を始める
+    const arm = (tries) => {
+      if (armed) return;
+      const userMoved = restoredAt >= 0 && Math.abs(window.scrollY - restoredAt) > 2;
+      if (restoring && !touched && !userMoved && !restored() && tries > 0) {
+        restore();
+        setTimeout(() => arm(tries - 1), 1500);
+        return;
+      }
+      armed = true;
+      write();
+    };
+    setTimeout(() => arm(5), 2300);
   }
 
   // ---- 話ページ最下部の「読了 → 次の小説へ」 ----
@@ -545,12 +569,13 @@
     const it = NH.findItem(d, cur);
     // 出すのは「読み終わり」のページだけ:
     //  - 話ページ: 次の話が無い (最新話) か、更新取得で分かった最終話 (lastEp) に着いた
-    //    (lastEp との比較は話番号が連番のサイト = seqEpisodes だけ。カクヨムの話 ID は連番でない)
+    //    (lastEp との比較は話番号が連番のサイト = seqEpisodes だけ。カクヨムの話 ID は連番でない。
+    //     ハーメルンの lastEp は全話数で、話番号が飛ぶ作品では最後の話より手前で着いたことになるので比べない = lastEpIsCount)
     //  - 話番号の無いページ: 本文があるもの (短編) だけ。目次ページには出さない
     const hasNext = adapter.nextUrl ? !!adapter.nextUrl() : false;
     const atEnd = cur.episode == null
       ? !!(adapter.bodySel && document.querySelector(adapter.bodySel))
-      : !hasNext || (!!adapter.seqEpisodes && !!it && !!it.lastEp && Number(cur.episode) >= it.lastEp);
+      : !hasNext || (!!adapter.seqEpisodes && !adapter.lastEpIsCount && !!it && !!it.lastEp && Number(cur.episode) >= it.lastEp);
     if (it && atEnd) {
       // 次の小説: リストで絞り込んで開いたときは、その並びの続き (並びの最後なら、それで終わり)。
       // そうでなければ、同じ種類 (未読 / 後で読む) の先頭、無ければ残り全体の先頭
@@ -559,17 +584,17 @@
       wrap.appendChild(mk('div', 'nh-next-cap', 'ここまで読みました'));
       const b = mk('button', 'nh-next-btn' + (next ? '' : ' last'));
       if (next) {
-        const t1 = seq ? '読了して、絞り込みの次の作品へ' : '読了して、次の小説へ';
+        const t1 = seq ? '読了して、リストの並びの次へ' : '読了して、次の小説へ'; // seq = 絞り込み・並べ替えたリストの並びの続き
         b.append(mk('span', 't1', t1), mk('span', 't2', next.title), mk('span', 't3', '残り ' + remaining + ' 作品'));
       } else if (seq) {
-        b.append(mk('span', 't1', '読み切りました'), mk('span', 't2', '絞り込みの最後です'), mk('span', 't3', 'リストに戻ります'));
+        b.append(mk('span', 't1', '読み切りました'), mk('span', 't2', 'リストの並びの最後です'), mk('span', 't3', 'リストに戻ります'));
       } else {
         b.append(mk('span', 't1', '読み切りました'), mk('span', 't2', 'これで最後です'), mk('span', 't3', 'リストに戻ります'));
       }
       const markRead = () => NH.update((dd) => { const x = NH.findItem(dd, cur); if (x) NH.setDone(x, true); });
       b.addEventListener('click', () => {
         markRead();
-        location.href = next ? NH.resumeUrl(NH.load(), next) : NH.LIST_URL;
+        NH.go(next ? NH.resumeUrl(NH.load(), next) : NH.LIST_URL);
       });
       // 左: 読了してリストへ戻る (次の作品はそのまま残る)。右: 次の作品。
       // 次の作品が無いときは、右のボタン (読み切り) もリストへ戻るので、左は出さない

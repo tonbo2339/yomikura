@@ -78,6 +78,7 @@ class PageActions(
             val pad = (16 * dp).toInt()
             setPadding(pad, pad / 2, pad, pad / 2)
         }
+        if (activity.isFinishing || activity.isDestroyed) return // ページの答えを待つ間に画面が閉じていたら出さない (落ちないように)
         AlertDialog.Builder(activity)
             .setTitle(title)
             .setView(ScrollView(activity).apply { addView(body) })

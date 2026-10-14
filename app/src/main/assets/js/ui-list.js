@@ -11,7 +11,8 @@ window.NH_UI_LIST = function (ctx) {
     btn.classList.toggle('on', on);
   };
   const refresh = (work) => {
-    const on = !!NH.findItem(NH.load(), work);
+    const it = NH.findItem(NH.load(), work);
+    const on = !!it && !it.done; // 読了にした作品は「追加済み」にしない (押すと、読了を外してリストに戻す)
     (btnsOf.get(NH.workKey(work)) || []).forEach((b) => { if (b.isConnected) paintBtn(b, on); });
   };
   // 1 作品の囲み: タイトル (data-nh-title) を 1 つだけ含む、いちばん外側の要素。
@@ -51,7 +52,9 @@ window.NH_UI_LIST = function (ctx) {
     });
     // 新しい作品が無ければ何もしない (カクヨムはページが何度も書き換わる。作品の無い話ページでも、広告などで何度も呼ばれる)
     if (!todo.length) { if (!viewed) applyView(); sweepBlocked(); return; }
-    const inList = new Set(NH.load().readLater.map((x) => x.key));
+    const listed = NH.load().readLater;
+    const inList = new Set(listed.map((x) => x.key));
+    const activeKeys = new Set(listed.filter((x) => !x.done).map((x) => x.key)); // 「追加済み」と出す作品 (読了は除く)
     // リストにある作品は、一覧に出ている連載状態で更新する (リストの絞り込み用。状態が変わったときだけ書く)
     const known = todo.filter(({ entry }) => entry.status && inList.has(entry.key));
     if (known.length) {
@@ -65,18 +68,36 @@ window.NH_UI_LIST = function (ctx) {
       btn.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        let added;
+        let added, removed = null, revived = false; // removed = 外した作品と、元の位置・読書位置 (元に戻すため)。revived = 読了を外した
         NH.update((d) => {
           const it = NH.findItem(d, work);
-          if (it) d.readLater = d.readLater.filter((x) => x !== it);
-          else d.readLater.push(NH.withSub({ key: NH.workKey(work), site: work.site, id: work.id, url: work.url, title: item.title, addedAt: Date.now(), done: false, kind: 'later', ...(entry.status ? { status: entry.status } : {}) }));
+          removed = null; revived = false;
+          if (it && it.done) { NH.setDone(it, false); revived = true; added = true; return; } // 読了の作品は、消さずに読了を外して戻す
+          if (it) {
+            removed = { item: it, at: d.readLater.indexOf(it), progress: (d.progress || {})[it.key] };
+            d.readLater = d.readLater.filter((x) => x !== it);
+            NH.dropProgress(d, [it.key]); // リストの「削除」と同じく、読書位置も外す
+          } else d.readLater.push(NH.withSub({ key: NH.workKey(work), site: work.site, id: work.id, url: work.url, title: item.title, addedAt: Date.now(), done: false, kind: 'later', ...(entry.status ? { status: entry.status } : {}) }));
           added = !it;
         });
-        NH.toast(added ? '後で読むに追加しました' : 'リストから外しました');
+        // 外したときは「元に戻す」を出す (メモ・タグ・読了などもそのまま戻す)
+        const undo = removed && {
+          label: '元に戻す',
+          fn: () => {
+            NH.update((d) => {
+              if (d.readLater.some((x) => x.key === removed.item.key)) return;
+              d.readLater.splice(Math.min(removed.at, d.readLater.length), 0, removed.item);
+              if (removed.progress) { d.progress = d.progress || {}; if (!d.progress[removed.item.key]) d.progress[removed.item.key] = removed.progress; }
+            });
+            refresh(work);
+          },
+        };
+        if (added === undefined) { NH.toast('保存データを読めないため、変更できませんでした'); return; } // NH.update が書かなかった
+        NH.toast(revived ? 'リストに戻しました (読了を外しました)' : added ? '後で読むに追加しました' : 'リストから外しました', undo || undefined);
         refresh(work);
       });
       btnsOf.set(entry.key, (btnsOf.get(entry.key) || []).filter((b) => b.isConnected).concat(btn));
-      paintBtn(btn, inList.has(entry.key));
+      paintBtn(btn, activeKeys.has(entry.key));
       entries.push(entry);
       const muteBtn = mk('button', 'nh-chip nh-chip-mute', 'ミュート');
       muteBtn.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); openMuteSheet(entry); });

@@ -124,6 +124,8 @@
     async collectUpdates() {
       const items = [];
       let sawList = false;
+      let truncated = false; // ページの上限で打ち切った (続きのページがある)
+      const readIds = []; // 見たページにあった、未読の無い作品 (打ち切ったときも、これらは読了にしてよい)
       for (let page = 1; page <= 10; page++) {
         const doc = await NH.fetchListDoc(page === 1 ? this.collectUrl : this.collectUrl + '?page=' + page, page - 1);
         if (doc.querySelector('.widget-antennaList-item') || doc.querySelector('.widget-antennaList')) sawList = true;
@@ -137,9 +139,17 @@
           const tot = [...li.querySelectorAll('.widget-antennaList-event li')].map((e) => e.textContent.match(/(\d+)話/)).find((m) => m && !/未読/.test(m.input));
           items.push({ id: w.id, title: t ? t.textContent.trim() : '', url: location.origin + '/works/' + w.id + '/resume_reading', unread, lastEp: tot ? Number(tot[1]) : null });
         }
-        if (!lis.length || !doc.querySelector('a[href*="page=' + (page + 1) + '"]')) break;
+        doc.querySelectorAll('li.widget-antennaList-item:not([data-is-unread="1"]) a.widget-antennaList-workInfo').forEach((a) => {
+          const w = this.parseWork(a.getAttribute('href'));
+          if (w) readIds.push(w.id);
+        });
+        const more = !!doc.querySelector('a[href*="page=' + (page + 1) + '"]');
+        // 未読の行が無いページで止める (後ろのページまで取りに行くと、サイトへのアクセスが増えるため)。
+        // まだ続きのページがあるときは、見ていない作品を「今回の取得に無い」として読了にしないよう truncated にする
+        if (!lis.length || !more) { if (more) truncated = true; break; }
+        if (page === 10) truncated = true;
       }
-      return { ok: sawList, items };
+      return { ok: sawList, items, truncated, readIds };
     },
 
     // ランキング・検索結果: 作品タイトルの見出しリンク (クラス名はハッシュ付きなので見出し要素で拾う)

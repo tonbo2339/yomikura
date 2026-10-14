@@ -27,6 +27,12 @@ window.nhLogoutResult = (json) => {
   const r = JSON.parse(json);
   const name = ACCOUNTS.find((a) => a[0] === r.site)?.[1] || r.site;
   loggingOut.delete(r.site);
+  if (r.busy) { // 動いている途中か、終わってすぐ (アプリが受け付けなかった)
+    snack(r.wait > 0 ? name + 'のログアウトは、あと ' + r.wait + ' 秒たってから押せます'
+      : r.wait < 0 ? name + 'からログアウトしています…' : 'もう一度押してください');
+    paintAccounts();
+    return;
+  }
   dropLogins();
   refreshLogins();
   if (r.ok || !r.page) { snack(name + 'からログアウトしました'); return; }
@@ -34,7 +40,10 @@ window.nhLogoutResult = (json) => {
   setTimeout(() => openUrl(r.page), 1500);
 };
 
+// 押せるまでの秒数を数えるタイマー (サイトがいくつあっても 1 つだけ)
+let countdownTimer = 0;
 function paintAccounts() {
+  let countdown = false;
   const logins = siteLogins(), log = load().collectLog || {};
   const box = $('accountList');
   box.innerHTML = '';
@@ -52,9 +61,14 @@ function paintAccounts() {
     actions.style.cssText = 'gap:10px;justify-content:center;padding:12px 16px';
     const login = el('button', 'btn tonal block', 'ログインする'); login.style.flex = '1'; login.onclick = () => { location.href = a[3]; };
     actions.appendChild(login);
-    const busy = loggingOut.has(a[0]);
-    const logout = el('button', 'btn danger block', busy ? 'ログアウト中…' : 'ログアウト'); logout.style.flex = '1';
-    login.disabled = logout.disabled = busy;
+    // 押したあとは、終わるまでと終わってから少しの間 (アプリが決める。logoutWait) は押せなくする。画面を開き直しても同じ
+    const wait = window.NHStore && NHStore.logoutWait ? NHStore.logoutWait(a[0]) : 0;
+    const running = loggingOut.has(a[0]) || wait < 0;
+    const busy = running || wait > 0;
+    const logout = el('button', 'btn danger block', running ? 'ログアウト中…' : wait > 0 ? 'ログアウト (あと ' + wait + ' 秒)' : 'ログアウト'); logout.style.flex = '1';
+    if (wait > 0 && !running) countdown = true;
+    login.disabled = running;
+    logout.disabled = busy;
     logout.onclick = () => ask(a[1] + 'からログアウトします。' + (a[2] ? a[2] + '。' : '') + 'リストや読書位置は消えません。', 'ログアウト', () => {
       if (!window.NHStore) return;
       // サイト側のログアウトも裏で行う (結果は nhLogoutResult)。古い版はアプリの Cookie だけ消す
@@ -71,4 +85,6 @@ function paintAccounts() {
     if (a[2]) box.appendChild(el('div', 'hint', a[2] + '。'));
   });
   $('v-accounts').textContent = nAll ? nIn + ' / ' + nAll + ' ログイン済み' : '';
+  clearTimeout(countdownTimer);
+  if (countdown) countdownTimer = setTimeout(paintAccounts, 1000); // 残りの秒数を数え、押せるようになったら戻す
 }

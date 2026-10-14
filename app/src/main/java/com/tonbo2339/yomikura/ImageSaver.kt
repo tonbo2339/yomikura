@@ -17,6 +17,7 @@ import java.net.URL
  */
 object ImageSaver {
     private const val TIMEOUT_MS = 20_000
+    private const val MAX_REDIRECTS = 5
 
     /** 挿絵の名前 (JS の imgName と同じ。FNV-1a 32bit の 8 桁 + 拡張子) */
     fun nameFor(url: String, ext: String): String {
@@ -46,32 +47,43 @@ object ImageSaver {
     /**
      * 取って保存する。referer = 挿絵を載せている話のページ。blocked(host) が true の配信元は取らない。
      * 同じサイトの Cookie を付ける (ログインが要る画像のため)。
+     * 転送 (3xx) は自分でたどる: HttpURLConnection に任せると、手で付けた Cookie が転送先の別のホストへもそのまま送られるため。
+     * 1 回ごとに https と blocked を確かめ直し、Cookie はその URL のものを付け直す。
      */
     fun save(store: OfflineStore, site: String, id: String, url: String, referer: String, blocked: (String) -> Boolean = { false }): String {
-        if (!url.startsWith("https://")) return "{}" // 平文の通信は使わない (アプリの方針)
-        val u = try { URL(url) } catch (e: Exception) { return "{}" }
-        if (blocked(u.host)) return "{}"
-        val conn = try { u.openConnection() as HttpURLConnection } catch (e: Exception) { return "{}" }
-        return try {
-            conn.connectTimeout = TIMEOUT_MS
-            conn.readTimeout = TIMEOUT_MS
-            conn.instanceFollowRedirects = true
-            conn.setRequestProperty("Referer", referer)
-            CookieManager.getInstance().getCookie(url)?.let { conn.setRequestProperty("Cookie", it) }
-            val code = conn.responseCode
-            if (code == 403 || code == 429 || code == 503) return """{"error":"challenge"}"""
-            if (code !in 200..299) return "{}"
-            if (conn.contentLengthLong > OfflineStore.MAX_IMAGE_BYTES) return "{}"
-            val bytes = readLimited(conn.inputStream, OfflineStore.MAX_IMAGE_BYTES) ?: return "{}"
-            val ext = kindOf(bytes) ?: return "{}"
-            val name = nameFor(url, ext)
-            val b64 = java.util.Base64.getEncoder().encodeToString(bytes)
-            if (store.putImage(site, id, name, b64)) """{"name":"$name","bytes":${bytes.size}}""" else "{}"
-        } catch (e: Exception) {
-            "{}"
-        } finally {
-            conn.disconnect()
+        var cur = url
+        repeat(MAX_REDIRECTS + 1) {
+            if (!cur.startsWith("https://")) return "{}" // 平文の通信は使わない (アプリの方針)
+            val u = try { URL(cur) } catch (e: Exception) { return "{}" }
+            if (blocked(u.host)) return "{}"
+            val conn = try { u.openConnection() as HttpURLConnection } catch (e: Exception) { return "{}" }
+            try {
+                conn.connectTimeout = TIMEOUT_MS
+                conn.readTimeout = TIMEOUT_MS
+                conn.instanceFollowRedirects = false
+                conn.setRequestProperty("Referer", referer)
+                CookieManager.getInstance().getCookie(cur)?.let { conn.setRequestProperty("Cookie", it) }
+                val code = conn.responseCode
+                if (code in 300..399) {
+                    val loc = conn.getHeaderField("Location") ?: return "{}"
+                    cur = try { URL(u, loc).toString() } catch (e: Exception) { return "{}" }
+                    return@repeat
+                }
+                if (code == 403 || code == 429 || code == 503) return """{"error":"challenge"}"""
+                if (code !in 200..299) return "{}"
+                if (conn.contentLengthLong > OfflineStore.MAX_IMAGE_BYTES) return "{}"
+                val bytes = readLimited(conn.inputStream, OfflineStore.MAX_IMAGE_BYTES) ?: return "{}"
+                val ext = kindOf(bytes) ?: return "{}"
+                val name = nameFor(url, ext) // 名前は元の URL で決める (話の本文の img と対応させるため)
+                val b64 = java.util.Base64.getEncoder().encodeToString(bytes)
+                return if (store.putImage(site, id, name, b64)) """{"name":"$name","bytes":${bytes.size}}""" else "{}"
+            } catch (e: Exception) {
+                return "{}"
+            } finally {
+                conn.disconnect()
+            }
         }
+        return "{}" // 転送が多すぎる
     }
 
     /** 上限を超えたら null (大きすぎる物は読み切らない) */

@@ -17,6 +17,7 @@
     const plan = NH.offlinePlanFrom(adapter, w, job.eps, job.title, job.total, job.images);
     const st = await NH.offlineRun(adapter, w, plan, plan.todo, {
       shouldStop: () => native.stopRequested(T),
+      offline: () => !!(native.offline && native.offline(T)),
       wait: async () => { while (native.waiting(T) && !native.stopRequested(T)) await NH.sleep(2000); },
       onEpisode: (e, s) => native.progress(JSON.stringify({ ok: s.ok, total: plan.todo.length, title: e.title }), T),
     });

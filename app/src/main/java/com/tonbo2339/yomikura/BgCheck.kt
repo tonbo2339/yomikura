@@ -290,8 +290,10 @@ class BgCheckJob : JobService() {
 
     override fun onStopJob(p: JobParameters): Boolean {
         Diag.w(BgCheck.TAG, "stopped by system")
+        val running = collector != null
         collector?.cancel()
         collector = null
-        return false
+        // 確認の途中で止められたら、あとでやり直してもらう (true)。やり直しでは、最近確認していれば何もせずに終わる (recentlyChecked)
+        return running
     }
 }

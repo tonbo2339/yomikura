@@ -13,6 +13,7 @@
     // ページの下の畳む欄 (セレクターは sites.js)
     foldGroups: ((window.NH_SITES || {}).hameln || {}).fold,
     seqEpisodes: true, // 話番号が 1, 2, 3... の連番
+    lastEpIsCount: true, // 更新の確認で分かる最終話 (lastEp) は全話数。話番号が飛ぶ作品があるので、話番号とは比べない
     // 「次の話 >>」 (最終話には無い)
     nextUrl() {
       const a = [...document.querySelectorAll('a')].find((x) => /次の話/.test(x.textContent));
@@ -81,7 +82,9 @@
     parseWork(url) {
       const u = NH.parseUrl(url);
       if (!u) return null;
-      if (u.hostname !== 'syosetu.org') return null;
+      // R-18 の作品は h.syosetu.org にある。作品の ID は同じなので、キーは hameln:ID のまま。
+      // 作品の URL はそのホストのまま (保存の作業は作品のページのホストで話を取るので、ホストを変えると取れない)
+      if (u.hostname !== 'syosetu.org' && u.hostname !== 'h.syosetu.org') return null;
       const m = u.pathname.match(WORK_RE);
       if (!m) return null;
       return { id: m[1], url: u.origin + '/novel/' + m[1] + '/', episode: m[2] ? Number(m[2]) : null };
@@ -93,6 +96,7 @@
     async collectUpdates() {
       const items = [];
       let sawList = false;
+      let truncated = false; // ページの上限で打ち切った (続きのページがある)
       for (let page = 1; page <= 10; page++) {
         const doc = await NH.fetchListDoc(page === 1 ? this.collectUrl : this.collectUrl + '&page=' + page, page - 1);
         if (/しおり一覧\(/.test(doc.body.textContent)) sawList = true;
@@ -110,8 +114,9 @@
           items.push({ id: w.id, title, url: a.href.split('#')[0] + '#nh-next', unread: total - read, lastEp: total });
         }
         if (!lis.length || !doc.querySelector('a[href*="page=' + (page + 1) + '"]')) break;
+        if (page === 10) truncated = true;
       }
-      return { ok: sawList, items };
+      return { ok: sawList, items, truncated };
     },
 
     rankingItems() {

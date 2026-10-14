@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.webkit.RenderProcessGoneDetail
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -19,6 +20,7 @@ import org.json.JSONObject
  *  - Gone(selector): そのページに selector の要素が無ければ成功 (ログアウトしたので、ログアウトのボタンが消えた、など)
  * 確認画面 (Cloudflare) が出たら、通過させずに止める。全体で 45 秒を超えたら打ち切る。
  * 失敗したら done(false, …) を返す。呼び出し側は、サイトのページを画面で開いて、利用者に押してもらう。
+ * 同じサイトのログアウトは、動いている間と、終わってから COOLDOWN_MS の間は始めない (続けて押しても、裏の WebView を重ねて動かさない)。
  */
 object OfficialLogout {
     private sealed class Step {
@@ -49,12 +51,34 @@ object OfficialLogout {
         ),
     )
 
+    /** 終わってから次のログアウトを受け付けるまでの時間 */
+    private const val COOLDOWN_MS = 30_000L
+    /** サイト → 次のログアウトを受け付ける時刻 (elapsedRealtime)。動いている間は Long.MAX_VALUE */
+    private val busyUntil = HashMap<String, Long>()
+
+    /** 次のログアウトを受け付けるまでの秒数。0 = すぐできる、-1 = いま動いている */
+    fun waitSeconds(site: String): Int {
+        val until = synchronized(busyUntil) { busyUntil[site] } ?: return 0
+        if (until == Long.MAX_VALUE) return -1
+        val left = until - SystemClock.elapsedRealtime()
+        return if (left <= 0) 0 else ((left + 999) / 1000).toInt()
+    }
+
     /** サイトの公式のページ (自動で失敗したときに、利用者に押してもらうため)。対応していないサイトは null */
     fun pageOf(site: String): String? = (PLANS[site]?.firstOrNull() as? Step.Go)?.url
 
+    /**
+     * ログアウトを始める。動いている途中か、終わってすぐ (waitSeconds が 0 でない) なら始めずに false を返す (done は呼ばない)。
+     * どのスレッドから呼んでもよい (受け付けの判定は、呼んだその場で行う)。
+     */
     @SuppressLint("SetJavaScriptEnabled")
-    fun run(ctx: Context, site: String, done: (Boolean, String) -> Unit) {
-        val plan = PLANS[site] ?: return done(false, "このサイトは自動では出せません")
+    fun run(ctx: Context, site: String, done: (Boolean, String) -> Unit): Boolean {
+        val plan = PLANS[site]
+        if (plan == null) { done(false, "このサイトは自動では出せません"); return true }
+        synchronized(busyUntil) {
+            if (waitSeconds(site) != 0) return false
+            busyUntil[site] = Long.MAX_VALUE
+        }
         val main = Handler(Looper.getMainLooper())
         main.post {
             val wv = WebView(ctx.applicationContext)
@@ -70,6 +94,7 @@ object OfficialLogout {
                 main.removeCallbacks(timeout)
                 wv.stopLoading()
                 wv.destroy()
+                synchronized(busyUntil) { busyUntil[site] = SystemClock.elapsedRealtime() + COOLDOWN_MS }
                 done(ok, msg)
             }
             // 次の手順へ進む。手順が終わったら、成功か失敗かを返す
@@ -116,6 +141,7 @@ object OfficialLogout {
             main.postDelayed(timeout, 45_000)
             advance(wv)
         }
+        return true
     }
 
     // フォームの送信ボタンを 1 回だけ押す。押せたら "clicked"、無ければ "none"

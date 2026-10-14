@@ -48,13 +48,18 @@ class SaveQueue(private val file: File) {
         val key: String get() = "$site:$id"
     }
 
-    /** 全部の作品 (順番どおり)。読めないファイルなら空。同じファイルは、書き込みのあとまで読み込んだ内容を使い回す */
+    /**
+     * 全部の作品 (順番どおり)。読めないファイルなら空。同じファイルは、書き込みのあとまで読み込んだ内容を使い回す。
+     * 読めないファイルは .bad に名前を変えて残す (次の書き込みで、何も残らずに上書きされないように)
+     */
     fun all(): List<Job> = synchronized(LOCK) {
         val path = file.absolutePath
         cache[path]?.let { return@synchronized it }
         try {
             (if (file.isFile) decode(file.readText()) else emptyList()).also { cache[path] = it }
         } catch (e: Exception) {
+            runCatching { Diag.e("Yomikura.queue", "queue file unreadable", e) } // 単体テスト (Log が無い) でも動くように
+            runCatching { file.renameTo(File(file.parentFile, file.name + ".bad")) }
             emptyList()
         }
     }
@@ -84,7 +89,9 @@ class SaveQueue(private val file: File) {
         val jobs = all().toMutableList()
         val i = jobs.indexOfFirst { it.key == key }
         if (i < 0) return@synchronized false
-        jobs[i] = change(jobs[i])
+        val next = change(jobs[i])
+        if (next == jobs[i]) return@synchronized true // 変わらなければ書かない (回線の知らせのたびに、ファイルを書き直さない)
+        jobs[i] = next
         write(jobs)
     }
 
@@ -118,11 +125,16 @@ class SaveQueue(private val file: File) {
     /** 終わった作品をキューから消す */
     fun clearFinished(): Boolean = synchronized(LOCK) { write(all().filter { it.status.active }) }
 
-    /** アプリが止まったあとの立て直し: 保存中だった作品は、順番待ちに戻す */
+    /**
+     * アプリが止まったあとの立て直し: 保存中だった作品と、一時停止していた作品は、順番待ちに戻す。
+     * 一時停止は保存の窓口 (OfflineService) のメモリにだけあり、止まると消える。PAUSED のまま残すと、
+     * next() は選ばず、「もう一度」も受け付けない (まだ動いている扱い) ので、消すしかなくなるため。
+     */
     fun recoverAfterRestart() {
         synchronized(LOCK) {
-            if (all().none { it.status == Status.RUNNING }) return
-            write(all().map { if (it.status == Status.RUNNING) it.copy(status = Status.WAITING) else it })
+            val stale = setOf(Status.RUNNING, Status.PAUSED)
+            if (all().none { it.status in stale }) return
+            write(all().map { if (it.status in stale) it.copy(status = Status.WAITING) else it })
         }
     }
 
@@ -135,7 +147,8 @@ class SaveQueue(private val file: File) {
         return try {
             file.parentFile?.mkdirs()
             val tmp = File(file.parentFile, file.name + ".tmp")
-            tmp.writeText(encode(jobs))
+            // 置き換える前にディスクへ書き切る (電源が切れても、空のファイルに置き換わらないように)
+            java.io.FileOutputStream(tmp).use { it.write(encode(jobs).toByteArray()); it.fd.sync() }
             java.nio.file.Files.move(tmp.toPath(), file.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING)
             cache[path] = jobs
             true

@@ -12,6 +12,7 @@ class SiteUrlsTest {
         assertTrue(SiteUrls.isWorkUrl("https://ncode.syosetu.com/n1234ab/12/"))
         assertTrue(SiteUrls.isWorkUrl("https://novel18.syosetu.com/n1234ab"))
         assertTrue(SiteUrls.isWorkUrl("https://syosetu.org/novel/12345/3.html"))
+        assertTrue(SiteUrls.isWorkUrl("https://h.syosetu.org/novel/12345/3.html")) // ハーメルンの R-18
         assertTrue(SiteUrls.isWorkUrl("https://kakuyomu.jp/works/1177354054/episodes/1"))
         assertFalse(SiteUrls.isWorkUrl("https://yomou.syosetu.com/rank/top/"))
         assertFalse(SiteUrls.isWorkUrl("https://kakuyomu.jp/rankings/all/daily"))
@@ -91,5 +92,26 @@ class SiteUrlsTest {
         assertTrue(SiteUrls.hasQueryParam("https://yomikura.local/offline.html?a=1&ep=", "ep"))
         assertFalse(SiteUrls.hasQueryParam("https://yomikura.local/offline.html?site=1", "ep"))
         assertFalse(SiteUrls.hasQueryParam(null, "ep"))
+    }
+
+    @Test
+    // WebView で開く前の共通の確認: https だけ通し、javascript: などや、空白・制御文字を含む URL は落とす
+    fun safeNavUrl() {
+        assertEquals("https://ncode.syosetu.com/n1234ab/1/", SiteUrls.safeNavUrl("https://ncode.syosetu.com/n1234ab/1/"))
+        assertEquals("https://yomikura.local/list.html#history", SiteUrls.safeNavUrl("https://yomikura.local/list.html#history"))
+        assertEquals("HTTPS://kakuyomu.jp/works/1", SiteUrls.safeNavUrl("HTTPS://kakuyomu.jp/works/1"))
+        assertEquals("https://syosetu.org/?mode=search&word=a|b", SiteUrls.safeNavUrl("https://syosetu.org/?mode=search&word=a|b"))
+        assertNull(SiteUrls.safeNavUrl("javascript://yomou.syosetu.com/%0Aalert(1)"))
+        assertNull(SiteUrls.safeNavUrl("javascript:alert(1)"))
+        assertNull(SiteUrls.safeNavUrl("JavaScript:alert(1)"))
+        assertNull(SiteUrls.safeNavUrl("http://syosetu.org/"))
+        assertNull(SiteUrls.safeNavUrl("data:text/html,<script>1</script>"))
+        assertNull(SiteUrls.safeNavUrl("file:///sdcard/a.html"))
+        assertNull(SiteUrls.safeNavUrl("intent://x#Intent;end"))
+        assertNull(SiteUrls.safeNavUrl("https:///path"))
+        assertNull(SiteUrls.safeNavUrl("https://syosetu.org/\na"))
+        assertNull(SiteUrls.safeNavUrl(" https://syosetu.org/"))
+        assertNull(SiteUrls.safeNavUrl(""))
+        assertNull(SiteUrls.safeNavUrl(null))
     }
 }

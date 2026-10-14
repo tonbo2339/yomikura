@@ -96,6 +96,158 @@ test('mergeUpdates: 「後で読む」の作品は未読にしない・今回無
   assert.equal(d.readLater[1].done, true);
 });
 
+test('mergeUpdates: 行き先も話数も変わらなければ urlAt を変えない (アプリで読んだ位置を捨てない)', () => {
+  const st = makeStore({ readLater: [
+    { key: 'narou:n1', site: 'narou', id: 'n1', title: 'A', done: false, kind: 'update', url: 'u10', unread: 3, lastEp: 12, urlAt: 100 },
+    { key: 'narou:n2', site: 'narou', id: 'n2', title: 'B', done: false, kind: 'later', url: 'v', lastEp: 5, urlAt: 100 },
+  ] });
+  const NH = loadCore(st);
+  NH.mergeUpdates('narou', [{ id: 'n1', title: 'A', url: 'u10', unread: 3, lastEp: 12 }, { id: 'n2', title: 'B', url: 'v', lastEp: 5 }]);
+  let d = JSON.parse(st.raw);
+  assert.equal(d.readLater[0].urlAt, 100);
+  assert.equal(d.readLater[1].urlAt, 100);
+  // 話が増えた・行き先が変わったときは新しくする
+  NH.mergeUpdates('narou', [{ id: 'n1', title: 'A', url: 'u10', unread: 4, lastEp: 13 }, { id: 'n2', title: 'B', url: 'w', lastEp: 5 }]);
+  d = JSON.parse(st.raw);
+  assert.ok(d.readLater[0].urlAt > 100);
+  assert.ok(d.readLater[1].urlAt > 100);
+});
+
+test('mergeUpdates: 一覧を最後まで見ていない (truncated) ときは、今回無い作品を読了にしない', () => {
+  const st = makeStore({ readLater: [
+    { key: 'kakuyomu:2', site: 'kakuyomu', id: '2', title: 'U', done: false, kind: 'update', unread: 1, lastEp: 3 },
+  ] });
+  const NH = loadCore(st);
+  NH.mergeUpdates('kakuyomu', [], { truncated: true });
+  assert.equal(JSON.parse(st.raw).readLater[0].done, false);
+  NH.mergeUpdates('kakuyomu', [], { truncated: true, readIds: ['2'] }); // 見たページで未読が無かった作品は、打ち切っても読了にする
+  assert.equal(JSON.parse(st.raw).readLater[0].done, true);
+});
+
+test('mergeUpdates: カテゴリを絞って確認したときは、ほかのカテゴリ・カテゴリの分からない作品を読了にしない', () => {
+  const st = makeStore({ readLater: [
+    { key: 'narou:a', site: 'narou', id: 'a', title: 'A', done: false, kind: 'update', cat: 1 },
+    { key: 'narou:b', site: 'narou', id: 'b', title: 'B', done: false, kind: 'update', cat: 2 },
+    { key: 'narou:c', site: 'narou', id: 'c', title: 'C', done: false, kind: 'update' },
+    { key: 'narou:d', site: 'narou', id: 'd', title: 'D', done: false, kind: 'update' },
+  ] });
+  const NH = loadCore(st);
+  NH.mergeUpdates('narou', [{ id: 'd', title: 'D', url: 'u', unread: 1, lastEp: 2, cat: 1 }], { cats: [1] });
+  const by = (k) => JSON.parse(st.raw).readLater.find((x) => x.key === k);
+  assert.equal(by('narou:a').done, true); // 見たカテゴリにあって、今回無い
+  assert.equal(by('narou:b').done, false); // 見ていないカテゴリ
+  assert.equal(by('narou:c').done, false); // カテゴリが分からない
+  assert.equal(by('narou:d').cat, 1); // カテゴリを覚える
+});
+
+test('sanitize: ミュート・ブロック・履歴の中の形をそろえる (壊れたバックアップで例外にしない)', () => {
+  const st = makeStore({ readLater: [], mute: { authors: 'foo', words: ['a', 1], block: { works: [null, { key: 'narou:n1' }], authors: 'x' } }, history: [{ key: 'narou:n1' }, 'bad', { title: 'no key' }] });
+  const NH = loadCore(st);
+  const d = NH.load();
+  assert.deepEqual([...d.mute.authors], []);
+  assert.deepEqual([...d.mute.words], ['a']);
+  assert.deepEqual([...d.mute.block.works.map((w) => w.key)], ['narou:n1']);
+  assert.deepEqual([...d.mute.block.authors], []);
+  assert.equal(d.history.length, 1);
+  assert.equal(d.history[0].at, 0);
+  assert.equal(NH.muteReason(d, { author: 'foo', title: 't', tags: [] }), null);
+});
+
+test('update: 保存データが読めないときは書かない (空のデータで上書きしない)。force なら、読めなかった中身を残して書く', () => {
+  const st = makeStore({});
+  st.raw = '{"readLater":[{"key":"narou:a"'; // 途中で切れた
+  const NH = loadCore(st);
+  NH.update((d) => { d.settings = { theme: 'dark' }; });
+  assert.equal(st.raw, '{"readLater":[{"key":"narou:a"');
+  assert.equal(NH.unreadable, true);
+  NH.update((d) => { d.settings = { theme: 'dark' }; }, { force: true });
+  const d = JSON.parse(st.raw);
+  assert.equal(d.settings.theme, 'dark');
+  assert.equal(d.unreadableCopy, '{"readLater":[{"key":"narou:a"');
+});
+
+test('nextPool: NSFW モードで隠れている作品は、次の作品に選ばない (並びの続きでも)', () => {
+  const d = { settings: { nsfw: true }, readLater: [
+    { key: 'narou:a', site: 'narou', title: 'A' },
+    { key: 'narou18:r', site: 'narou18', title: 'R' },
+    { key: 'narou:b', site: 'narou', title: 'B' },
+  ], readSeq: { keys: ['narou:a', 'narou18:r', 'narou:b'], at: Date.now() } };
+  const NH = loadCore(makeStore(d));
+  const r = NH.nextPool(d, d.readLater[0]);
+  assert.equal(r.next.key, 'narou:b');
+  assert.equal(r.remaining, 1);
+  d.readSeq = null;
+  assert.equal(NH.nextPool(d, d.readLater[0]).next.key, 'narou:b');
+});
+
+test('mergeUpdates: 手で「未読の更新」へ移した作品は、サイトの一覧に無くても読了にしない', () => {
+  const st = makeStore({ readLater: [{ key: 'narou:m', site: 'narou', id: 'm', title: 'M', done: false, kind: 'update', manualKind: true }] });
+  const NH = loadCore(st);
+  NH.mergeUpdates('narou', []);
+  assert.equal(JSON.parse(st.raw).readLater[0].done, false);
+  NH.mergeUpdates('narou', [{ id: 'm', title: 'M', url: 'u', unread: 1, lastEp: 3 }]); // 一覧に出たら、ふつうの更新の作品になる
+  assert.equal(JSON.parse(st.raw).readLater[0].manualKind, undefined);
+});
+
+test('recordVisit: 作品名の分からないまま入れた作品 (ID が仮の名前) は、開いたときの作品名に直す', () => {
+  const st = makeStore({ readLater: [{ key: 'narou18:n1234ab', site: 'narou18', id: 'n1234ab', title: 'n1234ab' }, { key: 'narou:x', site: 'narou', id: 'x', title: '元の名前' }] });
+  const NH = loadCore(st);
+  NH.recordVisit({ site: 'narou18', id: 'n1234ab', episode: 1 }, '本当の作品名', 'u', false);
+  NH.recordVisit({ site: 'narou', id: 'x', episode: 1 }, '別の名前', 'u', false);
+  const d = JSON.parse(st.raw);
+  assert.equal(d.readLater[0].title, '本当の作品名');
+  assert.equal(d.readLater[1].title, '元の名前'); // 名前のある作品は変えない
+});
+
+test('readState: 話数・全話数・割合・短編を、読書位置とサイトのしおりから求める', () => {
+  const NH = loadCore(makeStore({}));
+  const now = Date.now();
+  const d = { readLater: [], progress: {
+    'narou:a': { ep: '12', y: 0.5, done: false, at: now },
+    'narou:s': { ep: '0', y: 0.62, done: false, at: now },
+    'narou:f': { ep: '30', y: 1, done: true, at: now },
+    'narou:n': { ep: '5', y: 1, done: true, next: 'u6', at: now },
+    'narou:old': { ep: '3', y: 0.2, done: false, at: now - 1000 },
+  } };
+  const a = NH.readState(d, { key: 'narou:a', site: 'narou', total: 120, unread: 3 });
+  assert.equal(a.ep, 12); assert.equal(a.total, 120); assert.ok(Math.abs(a.workPct - 11.5 / 120) < 1e-9);
+  assert.equal(a.unread, 3); // サイトの未読と、アプリで読んだ分から求めた数 (109) の小さいほう
+  const s = NH.readState(d, { key: 'narou:s', site: 'narou' });
+  assert.equal(s.short, true); assert.equal(s.total, 1); assert.equal(s.workPct, 0.62);
+  const f = NH.readState(d, { key: 'narou:f', site: 'narou', total: 30 });
+  assert.equal(f.finished, true); assert.equal(f.unread, 0); assert.equal(f.workPct, 1);
+  const n = NH.readState(d, { key: 'narou:n', site: 'narou', lastEp: 10 });
+  assert.equal(n.ep, 6); assert.equal(n.workPct, 0.5); assert.equal(n.unread, 5);
+  // 更新の確認のあと (urlAt) に読んでいなければ、サイトのしおり (行き先の話) から
+  const o = NH.readState(d, { key: 'narou:old', site: 'narou', url: 'https://ncode.syosetu.com/n1234ab/8/', urlAt: now, lastEp: 20 });
+  assert.equal(o.ep, 8); assert.equal(o.fromSite, true); assert.equal(o.unread, 13);
+  const h = NH.readState(d, { key: 'hameln:1', site: 'hameln', url: 'https://syosetu.org/novel/1/12.html#nh-next' });
+  assert.equal(h.ep, 13); assert.equal(h.workPct, null); // 全話数が分からなければ、全体の割合は出さない
+  const z = NH.readState(d, { key: 'kakuyomu:1', site: 'kakuyomu', url: 'https://kakuyomu.jp/works/1', total: 48 });
+  assert.equal(z.started, false); assert.equal(z.total, 48);
+  // 未読の話数から位置を求める (カクヨムの続きの URL は話番号が無い)
+  const k = NH.readState(d, { key: 'kakuyomu:2', site: 'kakuyomu', url: 'https://kakuyomu.jp/works/2/resume_reading', lastEp: 20, unread: 3 });
+  assert.equal(k.ep, 18); assert.equal(k.fromSite, true); assert.equal(k.unread, 3);
+  // 全話数より先の話を読んでいて、まだ終わっていない (話番号が飛ぶ・全話数が古い): 読了にせず、全話数を出さない
+  d.progress['hameln:9'] = { ep: '52', y: 0.3, done: false, at: now };
+  const g = NH.readState(d, { key: 'hameln:9', site: 'hameln', lastEp: 50, unread: 4 });
+  assert.equal(g.finished, false); assert.equal(g.total, 0); assert.equal(g.ep, 52); assert.equal(g.unread, 4);
+  d.progress['narou:z'] = { ep: '30', y: 1, done: true, next: 'u31', at: now };
+  assert.equal(NH.readState(d, { key: 'narou:z', site: 'narou', total: 30 }).finished, false); // 次の話がある
+});
+
+test('safeUrl: https だけ通し、javascript: や空白・制御文字を含む URL は通さない', () => {
+  const NH = loadCore(makeStore({}));
+  assert.equal(NH.safeUrl('https://ncode.syosetu.com/n1234ab/1/'), true);
+  assert.equal(NH.safeUrl('HTTPS://kakuyomu.jp/works/1'), true);
+  assert.equal(NH.safeUrl('javascript://yomou.syosetu.com/%0Aalert(1)'), false);
+  assert.equal(NH.safeUrl('javascript:alert(1)'), false);
+  assert.equal(NH.safeUrl('http://syosetu.org/'), false);
+  assert.equal(NH.safeUrl('https://syosetu.org/\nx'), false);
+  assert.equal(NH.safeUrl('https:///path'), false);
+  assert.equal(NH.safeUrl(null), false);
+});
+
 test('mergeUpdates: 読了にした作品は、新しい話が来たら未読に戻す (最終話が分からなくても、未読が増えれば)', () => {
   const st = makeStore({ readLater: [
     { key: 'kakuyomu:1', site: 'kakuyomu', id: '1', title: 'A', done: true, doneAt: 1, kind: 'update', unread: 0, lastEp: null },
@@ -286,11 +438,11 @@ test('scrollState: 本文の位置と、読み終えた判定', () => {
 test('sanitize: 型が違う項目と、壊れた作品を捨てて、画面が白くならないようにする', () => {
   const st = makeStore({ readLater: [] });
   const NH = loadCore(st);
-  const d = NH.sanitize({ readLater: [null, 5, {}, { key: 'narou:a1', url: 'u' }], settings: 'x', progress: null, history: [1] });
+  const d = NH.sanitize({ readLater: [null, 5, {}, { key: 'narou:a1', url: 'u' }], settings: 'x', progress: null, history: [1, { key: 'narou:a1', at: 5 }] });
   assert.deepEqual(d.readLater.map((e) => e.key), ['narou:a1']);
   assert.equal('settings' in d, false);
   assert.equal('progress' in d, false);
-  assert.equal(JSON.stringify(d.history), '[1]'); // 閲覧履歴は配列なので残す (オブジェクト扱いで消した不具合の再発防止)
+  assert.equal(JSON.stringify(d.history), '[{"key":"narou:a1","at":5}]'); // 閲覧履歴は配列なので残す (オブジェクト扱いで消した不具合の再発防止)。壊れた行だけ捨てる
   assert.equal('history' in NH.sanitize({ readLater: [], history: {} }), false);
   assert.equal(JSON.stringify(NH.sanitize('5')), '{"readLater":[]}'); // 数字や文字なら空のデータ (vm の別の環境のオブジェクトなので JSON で比べる)
   assert.equal(JSON.stringify(NH.sanitize(null)), '{"readLater":[]}');

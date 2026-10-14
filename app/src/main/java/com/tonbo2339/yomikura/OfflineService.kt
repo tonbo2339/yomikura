@@ -49,8 +49,9 @@ class OfflineService : Service() {
     private var ok = 0                         // その作品で保存できた話の数
     private var total = 0                      // その作品で保存する話の数 (通知の分母)
     private var title = ""                     // その作品で保存中の話の題名 (通知に出す)
-    private var userPaused = false             // 利用者が一時停止した
-    private var cancelRequested = false        // 利用者が中止した
+    @Volatile private var userPaused = false   // 利用者が一時停止した (JS の窓口のスレッドからも読む)
+    @Volatile private var cancelRequested = false // 利用者が中止した (同上)
+    @Volatile private var online = true        // 回線につながっているか (切れている間は、失敗にせず待つ)
     private var metered = false                // いまの回線が従量課金か
     private var netCallback: ConnectivityManager.NetworkCallback? = null
     private var foreground = false             // 前景サービスに入ったあと (入る前に pump すると、startForeground の前に閉じてしまう)
@@ -65,6 +66,7 @@ class OfflineService : Service() {
         queue.recoverAfterRestart() // 前回の実行が途中で止まっていたら、その作品は順番待ちに戻す
         // 最初のページを読む前に、いまの回線を調べておく (回線の知らせが届くまで metered = false のままだと、Wi-Fi のときだけの設定でも最初のページをモバイルで読んでしまう)
         metered = runCatching { !unmetered(this) }.getOrDefault(false)
+        online = hasNetwork(getSystemService(ConnectivityManager::class.java))
         OfflineStatus.publish(null, true)
         createChannels()
         watchNetwork()
@@ -149,7 +151,17 @@ class OfflineService : Service() {
         cancelRequested = false
         queue.update(j.key) { it.copy(status = SaveQueue.Status.RUNNING, note = "") }
         syncStatus()
-        web = makeRunner(j)
+        web = try {
+            makeRunner(j)
+        } catch (e: Exception) {
+            // WebView を作れない (更新の途中・無効にされているなど)。落ちないよう、順番待ちに戻して止める (あとで「再開」すれば続きから)
+            Diag.e(TAG, "webview unavailable", e)
+            queue.update(j.key) { it.copy(status = SaveQueue.Status.WAITING, note = "ブラウザの部品 (WebView) を使えなかったので止めました") }
+            job = null
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            stopSelf()
+            return
+        }
         main.postDelayed(stall, STALL_MS)
     }
 
@@ -163,7 +175,7 @@ class OfflineService : Service() {
             settings.domStorageEnabled = true
             settings.loadsImagesAutomatically = false
             addJavascriptInterface(BgStore(this@OfflineService) { main.post { BgCheck.onDataChanged?.invoke() } }, "NHStore")
-            addJavascriptInterface(Bridge(), "NHOffline")
+            addJavascriptInterface(Bridge(j), "NHOffline")
             webViewClient = object : WebViewClient() {
                 private var injected = false
                 private var failed = false // 読み込みに失敗して、やり直しを待っている
@@ -209,7 +221,13 @@ class OfflineService : Service() {
                     else if (web === view) finishJob(JSONObject().put("error", "ページを開けませんでした").toString())
                 }
             }
-            loadUrl(j.url)
+            // 対応サイトの URL だけ開く (javascript: などは shouldInterceptRequest を通らないので、ここで落とす)
+            val url = SiteUrls.safeNavUrl(j.url)?.takeIf { SiteUrls.isSupportedHost(SiteUrls.hostOf(it)) }
+            if (url == null) {
+                main.post { if (web === this) finishJob(JSONObject().put("error", "対応していない URL です").toString()) }
+                return@apply
+            }
+            loadUrl(url)
         }
     }
 
@@ -284,9 +302,17 @@ class OfflineService : Service() {
     private fun watchNetwork() {
         val cm = getSystemService(ConnectivityManager::class.java)
         val cb = object : ConnectivityManager.NetworkCallback() {
+            // 回線が切れた / つながった: 切れている間は waiting() が true になり、JS は失敗にせず待つ (短い途切れで止めないため)
+            // 知らせの順番 (前の回線の onLost が、次の回線の onAvailable より後に届くことがある) に頼らず、いまの回線を調べ直す
+            override fun onLost(network: Network) { online = hasNetwork(cm); main.post { refreshNotice() } }
+            override fun onAvailable(network: Network) { online = hasNetwork(cm); main.post { refreshNotice(); if (foreground) pump() } }
+
             override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) {
                 main.post {
-                    metered = !caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)
+                    // 電波の強さなどでも何度も届くので、従量課金かどうかが変わったときだけ動く
+                    val now = !caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)
+                    if (now == metered) return@post
+                    metered = now
                     syncStatus()
                     if (foreground) pump()
                 }
@@ -295,6 +321,9 @@ class OfflineService : Service() {
         netCallback = cb
         runCatching { cm.registerDefaultNetworkCallback(cb) }
     }
+
+    /** いま使える回線があるか。調べられなければ、ある扱い (待ち続けないように) */
+    private fun hasNetwork(cm: ConnectivityManager?): Boolean = runCatching { cm?.activeNetwork != null }.getOrDefault(true)
 
     /** 前景サービスとして始める。始められなかったら false */
     private fun goForeground(): Boolean = try {
@@ -373,8 +402,9 @@ class OfflineService : Service() {
      * 作品の JS から見える窓口 (NHOffline)。書き込みは OfflineStore、止める・待つ・進みは、この中の状態で答える。
      * 引数の数は core.js の NH.off と合わせてある (合わないと JS 側で「Method not found」になる)。
      * 合言葉 (t) は、保存のページ本体 (メインフレーム) にだけ渡す。広告の iframe などから呼ばれても、合言葉が無いので何もしない。
+     * forJob = この WebView が保存している作品。前の作品の遅れて届いた知らせ (進み・終わり) で、次の作品を動かさないため。
      */
-    private inner class Bridge {
+    private inner class Bridge(private val forJob: SaveQueue.Job) {
         private fun authed(t: String?) = t != null && t == NHData.token
 
         /** いま保存している作品の話・目録だけ書ける (保存を消された作品を、書き戻さない) */
@@ -409,15 +439,20 @@ class OfflineService : Service() {
         @JavascriptInterface
         fun waiting(t: String?): Boolean {
             if (!authed(t)) return false
-            main.post { main.removeCallbacks(stall); main.postDelayed(stall, STALL_MS) }
-            return userPaused || waitingWifi()
+            main.post { if (job === forJob) { main.removeCallbacks(stall); main.postDelayed(stall, STALL_MS) } }
+            return userPaused || waitingWifi() || !online
         }
+
+        /** 回線が切れているか。JS は、切れている間の失敗を数えず、つながってから同じ話を取り直す */
+        @JavascriptInterface
+        fun offline(t: String?): Boolean = authed(t) && !online
 
         /** 1 話ごと。json = {ok, total, title} */
         @JavascriptInterface
         fun progress(json: String, t: String?) {
             if (!authed(t)) return
             main.post {
+                if (job !== forJob) return@post // 前の作品の知らせ (もう終わっている)
                 val r = try { JSONObject(json) } catch (e: Exception) { return@post }
                 ok = r.optInt("ok", ok)
                 title = r.optString("title", title)
@@ -433,7 +468,7 @@ class OfflineService : Service() {
         @JavascriptInterface
         fun finished(json: String, t: String?) {
             if (!authed(t)) return
-            main.post { finishJob(json) }
+            main.post { if (job === forJob) finishJob(json) }
         }
     }
 

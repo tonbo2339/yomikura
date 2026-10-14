@@ -11,6 +11,15 @@
   NH.HISTORY_URL = 'https://yomikura.local/list.html#history';
   NH.SETTINGS_URL = 'https://yomikura.local/settings.html';
 
+  // 保存データなど、データから来た URL を開いてよいか (https で空白・制御文字を含まないものだけ)。
+  // javascript: などを location に渡さないための共通の確認 (Kotlin の SiteUrls.safeNavUrl と同じ規則)
+  NH.safeUrl = (u) => typeof u === 'string' && /^https:\/\/[^\/?#\s]+/i.test(u) && !/[\u0000-\u0020\u007f]/.test(u);
+  // 確かめてから開く。開けない URL ならリストへ
+  NH.go = (u, replace) => {
+    const url = NH.safeUrl(u) ? u : NH.LIST_URL;
+    if (replace) location.replace(url); else location.href = url;
+  };
+
   // 同じ id は一度だけ (onPageFinished が 1 ページで複数回来ても重複させない)
   NH.register = function (adapter) {
     if (!NH.adapters.some((a) => a.id === adapter.id)) NH.adapters.push(adapter);
@@ -42,6 +51,8 @@
   //   settings.menuItems: {項目: true/false}  ⋮ メニューに出す項目 (項目と初期値は Kotlin の MenuItems。未設定は初期値。診断だけ初期値オフ)
   //   readLater: [{key, site, id, url, title, addedAt, done, kind('update'|'later'), unread, lastEp, total, totalAt, totalTry, r18, urlAt, memo, tag, sub, status}]  (total = 全話数、作品ページを開いたときに覚える。totalAt は覚えた時刻、totalTry は全話数を読みにいった時刻 = 読めなかったときも 1 日は読み直さない)
   //              status: 連載状態 serial | complete | short (分かったときだけ。ランキング・検索の一覧と作品ページから。リストの絞り込み用)
+  //              cat: なろうのブックマークのカテゴリ番号 (更新の確認で取り込んだ作品。カテゴリを絞って確認したとき、ほかのカテゴリの作品を読了にしないため)
+  //              manualKind: 手で「未読の更新」へ移した作品 (更新の確認で、サイトの一覧に無くても読了にしない。サイトの一覧に出たら外す)
   //              sub: R18 (site narou18) のサイト noc | mnlt | mid (NH.r18Sub。分かったときだけ。history とオフラインの meta にも)
   //   logins:    {narou, hameln, kakuyomu: bool}   各サイトのログインの印 (Cookie) の有無。Kotlin が写す (NH.collectActive)
   //   progress:  {key: {url, ep, no, y, done, next, at}}   話ごとの読書位置。no = 何話目か (カクヨムなど話 ID が連番でないサイトだけ。目次の並びから数える。NH.epNumber)
@@ -60,11 +71,16 @@
   //   bookmarkCatInfo:{narou|narou18: [{id, name, n}]} (ブックマークのカテゴリ名と件数。更新の確認のときに控える)
   const EMPTY = () => ({ readLater: [] });
 
-  const loadFresh = function () {
+  // strict = 書き込みのために読む。保存データを読めなかった (窓口が例外・中身が壊れている) ときは、空のデータを返さずに例外にする
+  // (空のデータに手を加えて書くと、保存データ全体が消えてしまうため)。例外の raw は読めなかった中身
+  const loadFresh = function (strict) {
+    let raw = null;
     try {
-      const raw = window.NHStore ? window.NHStore.get(T) : localStorage.getItem('nh-data');
+      raw = window.NHStore ? window.NHStore.get(T) : localStorage.getItem('nh-data');
       return NH.sanitize(raw ? JSON.parse(raw) : EMPTY());
     } catch (e) {
+      if (raw !== '') NH.unreadable = true; // 読めなかった (画面で知らせる。書き込みは NH.update が止める)
+      if (strict && raw !== '') throw Object.assign(new Error('unreadable'), { raw: raw || '' });
       return EMPTY();
     }
   };
@@ -100,6 +116,21 @@
     d.readLater = d.readLater.filter((e) => isObj(e) && typeof e.key === 'string');
     OBJECT_KEYS.forEach((k) => { if (k in d && !isObj(d[k])) delete d[k]; });
     ARRAY_KEYS.forEach((k) => { if (k in d && !Array.isArray(d[k])) delete d[k]; });
+    // 中の形もそろえる (手で直したバックアップや古い版のデータで、配列のはずの所が文字列などだと、ミュートや履歴の並べ替えが例外で止まる)
+    if (d.history) {
+      d.history = d.history.filter((e) => isObj(e) && typeof e.key === 'string');
+      d.history.forEach((e) => { if (typeof e.at !== 'number' || !isFinite(e.at)) e.at = 0; });
+    }
+    const strings = (a) => (Array.isArray(a) ? a.filter((x) => typeof x === 'string') : []);
+    if (d.mute) {
+      ['authors', 'words'].forEach((k) => { if (k in d.mute) d.mute[k] = strings(d.mute[k]); });
+      if ('block' in d.mute) {
+        const b = isObj(d.mute.block) ? d.mute.block : {};
+        ['authors', 'words'].forEach((k) => { if (k in b) b[k] = strings(b[k]); });
+        if ('works' in b) b.works = Array.isArray(b.works) ? b.works.filter((w) => isObj(w) && typeof w.key === 'string') : [];
+        d.mute.block = b;
+      }
+    }
     return d;
   };
 
@@ -112,17 +143,31 @@
   // 読み込み → fn で変更 → 保存。画面と画面外の巡回 (Collector) は同時に書くことがあるので、
   // 読んだときの版のままなら書き (setIf)、ほかが先に書いていたら読み直して fn をやり直す (片方の書き込みが消えないように)。
   // fn は何度か呼ばれることがあるので、fn の外の変数に数を足していくような書き方はしない (fn の中で数え直す)
-  NH.update = function (fn) {
+  // opts.force = 保存データが読めなくても書く (バックアップの読み込みなど、置き換えるとき)。読めなかった中身は unreadableCopy に残す。
+  // force でなければ、読めないときは何も書かない (NH.unreadable を立てる)
+  NH.unreadable = false;
+  NH.update = function (fn, opts = {}) {
+    const fresh = () => {
+      try { return loadFresh(true); } catch (e) {
+        NH.unreadable = true;
+        if (!opts.force) return null;
+        const d = EMPTY();
+        if (e.raw) d.unreadableCopy = e.raw;
+        return d;
+      }
+    };
     const s = window.NHStore;
     if (s && s.setIf) {
       for (let i = 0; i < 8; i++) {
         const v = s.version();
-        const d = loadFresh();
+        const d = fresh();
+        if (!d) return loadFresh();
         fn(d);
         if (s.setIf(JSON.stringify(d), v, T)) return d;
       }
     }
-    const d = loadFresh();
+    const d = fresh();
+    if (!d) return loadFresh();
     fn(d);
     NH.save(d);
     return d;
@@ -324,12 +369,17 @@
   NH.collectActive = (d, id) => NH.collectOn(d, id) && NH.loginOf(d, id);
   NH.collectAnyActive = (d) => NH.COLLECT_IDS.some((id) => NH.collectActive(d, id));
 
+  // リストの作品の読書位置。更新の確認のあと (urlAt) に読んだものだけ (それより古いものは、サイトのしおりのほうが新しい)。無ければ null
+  NH.progressOf = (d, it) => {
+    const p = (d.progress || {})[it.key];
+    return p && (!it.urlAt || p.at >= it.urlAt) ? p : null;
+  };
   // 続きから開く URL。読書位置 (d.progress) が、更新取得で得た url より新しければそれを優先する。
   //  - 途中までなら、その話をそのまま開く (位置は話ページ側で復元)
   //  - 読み終えた話なら、次の話 (記録してあれば) を開く
   NH.resumeUrl = function (d, it) {
-    const p = (d.progress || {})[it.key];
-    if (p && (!it.urlAt || p.at >= it.urlAt)) {
+    const p = NH.progressOf(d, it);
+    if (p) {
       if (!p.done) return p.url;
       if (p.next) return p.next;
     }
@@ -355,6 +405,56 @@
     if (Number.isInteger(p.no) && p.no >= 1 && p.no <= 99999) return p.no;
     return /^[1-9]\d{0,4}$/.test(String(p.ep)) ? Number(p.ep) : null;
   };
+  // サイトの行き先の URL (更新の確認で入った、しおり・次の未読の話) から話番号を読む。分からなければ null。
+  // ハーメルンの #nh-next は「しおりの話の次」なので 1 足す。カクヨムの続き (resume_reading) は番号が分からない
+  NH.epFromUrl = (site, url) => {
+    const u = NH.parseUrl(url);
+    if (!u) return null;
+    let m;
+    if ((site === 'narou' || site === 'narou18') && (m = u.pathname.match(/^\/n\d{4}[a-z]+\/(\d+)\/?$/i))) return Number(m[1]);
+    if (site === 'hameln' && (m = u.pathname.match(/^\/novel\/\d+\/(\d+)\.html$/))) return Number(m[1]) + (u.hash === '#nh-next' ? 1 : 0);
+    return null;
+  };
+  // リストの作品の読み具合 (リストのカード・上の「続きから読む」で使う)。
+  //   short: 短編か / total: 全話数 (分からなければ 0) / ep: いま読んでいる (次に読む) 話の番号 (分からなければ null)
+  //   epPct: その話の中の進み (0〜1) / workPct: 作品全体の進み (0〜1。全話数が分からなければ null)
+  //   started: 読み始めているか / finished: 最後の話まで読み終えたか / fromSite: 位置はサイトのしおりから (アプリでは読んでいない)
+  //   unread: 未読の話数 (分からなければ null)
+  // 読書位置は NH.progressOf (更新の確認のあとに読んだものだけ)
+  NH.readState = (d, it) => {
+    const p = NH.progressOf(d, it);
+    const short = it.status === 'short' || (!!p && String(p.ep) === '0');
+    let total = short ? 1 : Math.max(Number(it.total) || 0, Number(it.lastEp) || 0);
+    let ep = null, epPct = 0, readEps = null, started = false, fromSite = false;
+    if (p) {
+      started = true;
+      const n = short ? 1 : NH.epNumber(p);
+      if (p.done && p.next && n) { ep = n + 1; readEps = n; } // その話を読み終えて、次の話から
+      else if (n) { ep = n; epPct = p.done ? 1 : Math.max(0, Math.min(1, p.y || 0)); readEps = n - 1 + epPct; }
+      else epPct = p.done ? 1 : Math.max(0, Math.min(1, p.y || 0)); // 話番号の分からない話 (カクヨムで目次を読めていない)
+    } else {
+      // アプリで読んでいなければ、サイトの行き先の話番号か、未読の話数 (全話数 - 未読 = 読んだ話数。カクヨムの続きの URL は番号が無い) から
+      const n = NH.epFromUrl(it.site, it.url) || (total && it.unread != null && it.unread < total ? total - it.unread + 1 : null);
+      if (n && n > 1) { ep = n; readEps = n - 1; started = true; fromSite = true; }
+    }
+    // 読み終えたのは、全話数まで読んで、その話で終わっている (次の話が無い) とき
+    const finished = !!total && readEps != null && readEps >= total && (!p || (!!p.done && !p.next));
+    // 全話数より先を読んでいるのに終わっていない: 全話数が古い (新しい話が出た) か、話番号が飛ぶ作品 (ハーメルン)。全話数は使わない
+    if (!finished && total && !short && readEps != null && (readEps >= total || (ep && ep > total))) total = 0;
+    if (total && ep && ep > total) ep = total;
+    const workPct = total && readEps != null ? Math.max(0, Math.min(1, readEps / total)) : short ? epPct : null;
+    const calc = total && readEps != null ? Math.max(0, total - Math.floor(readEps)) : null;
+    const unread = calc != null && it.unread != null ? Math.min(calc, it.unread) : calc != null ? calc : it.unread != null ? it.unread : null;
+    return { short, total, ep, epPct, workPct, started, finished, fromSite, unread };
+  };
+  // hint = 作品の URL (リストの url など)。ハーメルンの R-18 (h.syosetu.org) は、そのホストの作品ページにする
+  const hamelnBase = (hint) => ((NH.parseUrl(hint) || {}).hostname === 'h.syosetu.org' ? 'https://h.syosetu.org' : 'https://syosetu.org');
+  // 1 話目の URL (「1 話から読む」)。話の URL が作品の ID から作れないサイト (カクヨム) は null
+  NH.firstEpUrl = (site, id, hint) => ({
+    narou: 'https://ncode.syosetu.com/' + id + '/1/',
+    narou18: 'https://novel18.syosetu.com/' + id + '/1/',
+    hameln: hamelnBase(hint) + '/novel/' + id + '/1.html',
+  }[site] || null);
   // リストから外した作品の、話ごとの読書位置の記録も消す
   NH.dropProgress = (d, keys) => { if (d.progress) keys.forEach((k) => delete d.progress[k]); };
   // 読了から一定日数 (settings.pruneDays、既定 30 日) たった作品を消す。settings.pruneDone === false なら消さない。
@@ -374,10 +474,10 @@
   };
 
   // 作品トップの URL (アダプターを読み込んでいないアプリ内ページでも使えるよう、サイトごとの形をここに持つ)
-  NH.workUrl = (site, id) => ({
+  NH.workUrl = (site, id, hint) => ({
     narou: 'https://ncode.syosetu.com/' + id + '/',
     narou18: 'https://novel18.syosetu.com/' + id + '/',
-    hameln: 'https://syosetu.org/novel/' + id + '/',
+    hameln: hamelnBase(hint) + '/novel/' + id + '/',
     kakuyomu: 'https://kakuyomu.jp/works/' + id,
   }[site] || null);
   // 作品を読んだことがあるか (ランキング・検索で薄くする目印): 'done' 読了 / 'reading' 読みかけ / 'seen' 開いたことがある / null
@@ -429,14 +529,14 @@
     if (!it || !s || !Array.isArray(s.keys) || Date.now() - s.at > NH.READ_SEQ_TTL) return null;
     const i = s.keys.indexOf(it.key);
     if (i < 0) return null;
-    return s.keys.slice(i + 1).map((k) => d.readLater.find((x) => x.key === k)).filter((x) => x && !x.done);
+    return s.keys.slice(i + 1).map((k) => d.readLater.find((x) => x.key === k)).filter((x) => x && !x.done && !NH.nsfwHides(d, x));
   };
 
   // 読了のあとに開く「次の小説」。絞り込みの並び (seqRest) があればその続き、無ければ同じ種類 (未読 / 後で読む) の先頭、それも無ければ残り全体。
   // 戻り値: {seq: 並びの続きか (並びの最後なら pool が空でも true), pool: 候補, next: 次の作品 | undefined, remaining: 残りの作品数}
   NH.nextPool = function (d, it) {
     const seq = NH.seqRest(d, it);
-    const active = d.readLater.filter((x) => !x.done && x !== it);
+    const active = d.readLater.filter((x) => !x.done && x !== it && !NH.nsfwHides(d, x)); // NSFW モードで隠れている作品は、次に選ばない
     const same = active.filter((x) => NH.kindOf(x) === NH.kindOf(it));
     const pool = seq || (same.length ? same : active);
     return { seq: !!seq, pool, next: pool[0], remaining: pool.length };
@@ -462,7 +562,13 @@
   //  - 今回の取得に含まれない「更新由来」の項目は、他で読み終えたとみなして読了にする
   // 戻り値: {added: 新しくリストに入った数, updates: 未読のある作品の数, fresh: 前回から話が増えた作品の名前}
   //   fresh は裏での確認の通知に使う (同じ未読で何度も知らせないよう、増えたものだけ)
-  NH.mergeUpdates = function (site, items) {
+  // opts (どこまで見たか。今回無い作品を読了にしてよいかを決める):
+  //   truncated = 一覧を最後まで見ていない (ページの上限で打ち切った)。そのときは、今回無い作品を読了にしない
+  //   readIds = 見たページで未読が無かった作品の ID。打ち切ったときも、これらは読了にする
+  //   cats = 見たカテゴリ (なろうで、確認するカテゴリを絞ったとき)。ほかのカテゴリの作品・カテゴリの分からない作品は読了にしない
+  //   items の cat (カテゴリ) は作品に覚えておく
+  NH.mergeUpdates = function (site, items, opts = {}) {
+    const { truncated, readIds, cats } = opts;
     let added = 0;
     let updates = 0;
     let fresh = [];
@@ -473,8 +579,18 @@
         const key = site + ':' + u.id;
         seen.add(key);
         const it = d.readLater.find((x) => x.key === key);
+        // 行き先 (url) が変わったか、話が増えたときだけ urlAt を新しくする。毎回新しくすると、アプリで読んだ位置
+        // (progress。urlAt より古いものは使わない) が、確認のたびに捨てられてサイトのしおりの位置へ戻ってしまう
+        // ただし、アプリで読んだ位置がサイトの行き先と同じか先 (話番号で比べられるとき) なら、アプリの位置を残す
+        // (サイトのしおりを更新していないと、新しい話が出るたびに、しおりの古い位置へ戻ってしまうため)
+        const siteEp = (NH.parseWork(u.url) || {}).episode;
+        const appAhead = (x) => {
+          const n = NH.epNumber(NH.progressOf(d, x));
+          return siteEp != null && n != null && n >= Number(siteEp);
+        };
+        const moved = (x) => !appAhead(x) && (x.url !== u.url || (u.lastEp != null && (x.lastEp == null || u.lastEp > x.lastEp)));
         if (it && NH.kindOf(it) === 'later') {
-          Object.assign(it, { url: u.url, lastEp: u.lastEp, urlAt: Date.now(), kind: 'later' });
+          Object.assign(it, { url: u.url, lastEp: u.lastEp, urlAt: moved(it) ? Date.now() : it.urlAt, kind: 'later' });
           delete it.unread;
           return;
         }
@@ -485,15 +601,20 @@
           if (grew) fresh.push(it.title || u.title);
           // 読了にした作品でも、新しい話が来たら未読に戻す (最終話が分からないサイト = カクヨムで取れなかったときは、未読が増えたことで判断)
           if (it.done && (grew || u.lastEp > (it.lastEp || 0))) NH.setDone(it, false);
-          Object.assign(it, { url: u.url, unread: u.unread, lastEp: u.lastEp, urlAt: Date.now() });
+          Object.assign(it, { url: u.url, unread: u.unread, lastEp: u.lastEp, urlAt: moved(it) || (grew && !appAhead(it)) ? Date.now() : it.urlAt });
+          if (u.cat != null) it.cat = u.cat;
+          delete it.manualKind; // サイトの一覧に出たので、ふつうの更新の作品として扱う
         } else {
-          d.readLater.push({ key, site, id: u.id, url: u.url, title: u.title, addedAt: Date.now(), done: false, kind: 'update', unread: u.unread, lastEp: u.lastEp, urlAt: Date.now() });
+          d.readLater.push({ key, site, id: u.id, url: u.url, title: u.title, addedAt: Date.now(), done: false, kind: 'update', unread: u.unread, lastEp: u.lastEp, urlAt: Date.now(), ...(u.cat != null ? { cat: u.cat } : {}) });
           added++;
           fresh.push(u.title);
         }
       });
+      const readKeys = new Set((readIds || []).map((id) => site + ':' + id));
+      const scanned = (x) => !cats || (x.cat != null && cats.includes(x.cat));
       d.readLater.forEach((x) => {
-        if (x.site === site && x.kind === 'update' && !seen.has(x.key)) NH.setDone(x, true);
+        if (x.site !== site || x.kind !== 'update' || seen.has(x.key) || x.manualKind) return; // 手で移した作品は、サイトの一覧に無くて当然
+        if (truncated ? readKeys.has(x.key) : scanned(x)) NH.setDone(x, true);
       });
     });
     return { added, updates, fresh };
@@ -681,13 +802,17 @@
     const sub = w.site === 'narou18' ? NH.r18Sub() : '';
     const d = NH.load();
     const fixSub = !!sub && d.readLater.some((x) => x.key === key && x.sub !== sub);
+    // 作品名の分からないまま入れた作品 (外から来た R18 のリンクなど。ID を仮の名前にしている) は、開いたときの作品名に直す
+    const pageTitle = title;
+    const fixTitle = !!pageTitle && d.readLater.some((x) => x.key === key && (!x.title || x.title === x.id));
     const h = d.history || [];
     const i = h.findIndex((x) => x.key === key);
     title = title || (i >= 0 && h[i].title) || (NH.findItem(d, w) || {}).title || '';
     const track = NH.historyOn(d) && !!title;
-    if (!fixSub && !track) return;
+    if (!fixSub && !fixTitle && !track) return;
     NH.update((d) => {
       if (fixSub) d.readLater.forEach((x) => { if (x.key === key) x.sub = sub; });
+      if (fixTitle) d.readLater.forEach((x) => { if (x.key === key && (!x.title || x.title === x.id)) x.title = pageTitle; });
       if (!track || !NH.historyOn(d)) return;
       const h = (d.history = d.history || []);
       const i = h.findIndex((x) => x.key === key);
@@ -696,6 +821,8 @@
       if (w.episode != null || short || !e.url) { e.url = url; e.ep = w.episode != null ? String(w.episode) : null; } // 目次を開いただけなら、読んだ話は残す
       e.at = e.appAt = Date.now();
       if (sub) e.sub = sub;
+      const listed = d.readLater.find((x) => x.key === key);
+      if (listed && listed.r18 !== undefined) e.r18 = listed.r18; // ハーメルンの R-18 (リストで調べた結果)。NSFW モードで履歴から隠すため
       h.unshift(e);
       NH.pruneHistory(d);
     });

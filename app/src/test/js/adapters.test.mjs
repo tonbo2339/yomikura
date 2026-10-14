@@ -38,6 +38,10 @@ test('parseWork: なろう (作品トップ・話・R18)', () => {
 test('parseWork: ハーメルン・カクヨム', () => {
   const NH = load('https://syosetu.org/');
   eq(NH.parseWork('https://syosetu.org/novel/12345/7.html'), { site: 'hameln', id: '12345', url: 'https://syosetu.org/novel/12345/', episode: 7 });
+  // R-18 の作品のページ (h.syosetu.org) も同じ作品 (キー hameln:ID) として扱う。作品の URL はそのホストのまま (保存の作業がそのホストで話を取るため)
+  eq(NH.parseWork('https://h.syosetu.org/novel/12345/7.html'), { site: 'hameln', id: '12345', url: 'https://h.syosetu.org/novel/12345/', episode: 7 });
+  assert.equal(NH.workUrl('hameln', '12345', 'https://h.syosetu.org/novel/12345/7.html'), 'https://h.syosetu.org/novel/12345/');
+  assert.equal(NH.workUrl('hameln', '12345'), 'https://syosetu.org/novel/12345/');
   eq(NH.parseWork('https://kakuyomu.jp/works/99/episodes/5'), { site: 'kakuyomu', id: '99', url: 'https://kakuyomu.jp/works/99', episode: '5' });
   assert.equal(NH.parseWork('https://kakuyomu.jp/rankings/all/daily'), null);
   assert.equal(NH.parseWork('::::'), null);

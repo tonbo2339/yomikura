@@ -26,6 +26,9 @@ class BackupFiles(
     private var pending: List<Pair<String, String>> = emptyList()
     private val pendingFile by lazy { File(activity.cacheDir, PENDING_FILE) }
     private val resolver get() = activity.contentResolver
+    /** 控えの番号。take で進める (控えを書く途中で take されたら、書き終えた控えをすぐ消すため) */
+    private val stashGen = java.util.concurrent.atomic.AtomicInteger()
+    private val fileLock = Any()
 
     /** 書き出しの控え: 保存先の画面を開いたままプロセスが終わって作り直されたとき (saved に印がある) だけ残す。それ以外の古い控えは消す */
     fun restore(saved: Bundle?) {
@@ -56,25 +59,32 @@ class BackupFiles(
     private fun take(): List<Pair<String, String>>? {
         val inMemory = pending
         pending = emptyList()
+        stashGen.incrementAndGet()
         val file = pendingFile
-        try {
-            if (inMemory.isNotEmpty()) return inMemory
-            if (!file.isFile) return null
-            val arr = JSONArray(file.readText(Charsets.UTF_8))
-            return List(arr.length()) { arr.getJSONObject(it).let { o -> o.getString("name") to o.getString("text") } }.takeIf { it.isNotEmpty() }
-        } catch (e: Exception) {
-            return null
-        } finally {
-            file.delete()
+        synchronized(fileLock) {
+            try {
+                if (inMemory.isNotEmpty()) return inMemory
+                if (!file.isFile) return null
+                val arr = JSONArray(file.readText(Charsets.UTF_8))
+                return List(arr.length()) { arr.getJSONObject(it).let { o -> o.getString("name") to o.getString("text") } }.takeIf { it.isNotEmpty() }
+            } catch (e: Exception) {
+                return null
+            } finally {
+                file.delete()
+            }
         }
     }
 
     private fun stash(files: List<Pair<String, String>>) {
+        val gen = stashGen.get()
         Thread {
             try {
                 val arr = JSONArray()
                 for ((name, text) in files) arr.put(JSONObject().put("name", name).put("text", text))
-                pendingFile.writeText(arr.toString(), Charsets.UTF_8)
+                synchronized(fileLock) {
+                    // 書き終える前に取り出された (保存し終えた・やめた) なら、控えは残さない (書き出した中身の写しがキャッシュに残らないように)
+                    if (stashGen.get() == gen) pendingFile.writeText(arr.toString(), Charsets.UTF_8)
+                }
             } catch (e: Exception) {
                 Diag.w(TAG, "pending export not saved", e)
             }

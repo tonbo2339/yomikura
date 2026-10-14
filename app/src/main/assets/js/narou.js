@@ -148,7 +148,9 @@
         const items = [];
         let sawList = false;
         let fetched = 0; // 取ったページの通し番号 (2 ページ目以降は間をあける)
-        for (const cat of NH.bookmarkCats(NH.load(), v.id)) {
+        let truncated = false; // ページの上限で打ち切った (続きのページがある)
+        const cats = NH.bookmarkCats(NH.load(), v.id);
+        for (const cat of cats) {
           let next = v.collectUrl.replace(/nowcategory=\d+/, 'nowcategory=' + cat);
           for (let page = 0; next && page < 10; page++, fetched++) {
             const doc = await NH.fetchListDoc(next, fetched);
@@ -165,13 +167,18 @@
               if (!w || !ep || !n) continue;
               const title = [...a.childNodes].filter((x) => x.nodeType === 3).map((x) => x.textContent).join('').replace(/\s+/g, ' ').trim()
                 || a.textContent.replace(/^\s*(連載|短編)\s*/, '').trim();
-              items.push({ id: w.id, title, url: new URL(p.getAttribute('href'), location.href).href, unread: n, lastEp: Number(ep[1]) + n - 1 });
+              items.push({ id: w.id, title, url: new URL(p.getAttribute('href'), location.href).href, unread: n, lastEp: Number(ep[1]) + n - 1, cat });
             }
             const nx = doc.querySelector('.c-pager__item--next a, a[rel=next]');
             next = nx ? nx.getAttribute('href') : null;
           }
+          if (next) truncated = true;
         }
-        return { ok: sawList, items };
+        // 作品の入ったカテゴリのうち、見ていないものがある (確認するカテゴリを絞った) ときは、見たカテゴリ (cats) を返す。
+        // 見ていないカテゴリの作品を「今回の取得に無い」として読了にしないため (読了から日がたつと、リストから消えてしまう)
+        const info = (NH.load().bookmarkCatInfo || {})[v.id] || [];
+        const partial = info.some((c) => c.n > 0 && !cats.includes(Number(c.id)));
+        return { ok: sawList, items, truncated, cats: partial ? cats : null };
       },
 
       // ランキング / 検索結果の作品: [{title, href, anchor}] (anchor の親ブロックの直後にボタンを付ける)

@@ -57,7 +57,7 @@ object SiteUrls {
         val path = pathOf(url)
         return when (hostOf(url)) {
             "ncode.syosetu.com", "novel18.syosetu.com" -> NCODE_PATH.containsMatchIn(path)
-            "syosetu.org" -> HAMELN_PATH.containsMatchIn(path)
+            "syosetu.org", "h.syosetu.org" -> HAMELN_PATH.containsMatchIn(path)
             "kakuyomu.jp" -> KAKUYOMU_PATH.containsMatchIn(path)
             else -> false
         }
@@ -105,6 +105,20 @@ object SiteUrls {
         if (!raw.regionMatches(scheme.length, "://", 0, 3)) return null
         if (!isSupportedHost(hostOf(raw))) return null
         return "https" + raw.substring(scheme.length)
+    }
+
+    /**
+     * WebView で開いてよい URL か (保存データ・設定・ほかのアプリなど、外から来た URL を loadUrl に渡す前の共通の確認)。
+     * https で、ホストがあり、空白や制御文字を含まないものだけ通す。`javascript:` `data:` `file:` `intent:` などは null。
+     * (`javascript://yomou.syosetu.com/%0A…` のように、ホストだけ対応サイトに見せた URL も、スキームで落とす)
+     */
+    fun safeNavUrl(raw: String?): String? {
+        if (raw == null || !raw.startsWith("https://", ignoreCase = true)) return null
+        if (raw.any { it <= ' ' || it == '\u007f' }) return null
+        // ホストは自分で切り出す (java.net.URI は `|` などを含む URL を読めず、開ける URL まで落としてしまうため)
+        val authority = raw.substring(8).substringBefore('/').substringBefore('?').substringBefore('#')
+        val host = authority.substringAfterLast('@').substringBefore(':')
+        return if (host.isEmpty()) null else raw
     }
 
     /** URL のクエリに name があるか (値が空でもよい)。 */

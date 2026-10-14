@@ -134,11 +134,13 @@ $('nsfw').onchange = (e) => {
 
 // アイコンの選択 (切り替えは Kotlin 側: ランチャーの別名を有効にする)
 let currentIcon = (window.NHStore && NHStore.launcherIcon) ? NHStore.launcherIcon() : 'paper';
+const ICON_LABEL = { paper: '紙', green: '緑', ocean: '海', purple: '紫', sakura: '桜', aigold: '藍と金', yuyake: '夕焼け', matcha: '抹茶', night: '夜', dusk: '夕暮れ', wood: '木', sea: '海辺' };
 function paintIcons() {
   const g = $('iconGrid'); g.innerHTML = '';
   LAUNCHER.forEach((k) => {
     const b = el('button', 'icon-opt' + (k === currentIcon ? ' on' : ''));
     b.setAttribute('aria-pressed', k === currentIcon ? 'true' : 'false');
+    b.setAttribute('aria-label', 'アイコン「' + (ICON_LABEL[k] || k) + '」'); // 絵だけのボタンなので、読み上げ用の名前を付ける
     const img = el('img'); img.src = 'icons/' + k + '.svg'; img.alt = '';
     b.append(img);
     b.onclick = () => {

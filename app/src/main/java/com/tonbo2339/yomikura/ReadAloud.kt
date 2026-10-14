@@ -24,14 +24,15 @@ class ReadAloud(
     private var ready = false
     private var unavailable: String? = null
     private var pending: Pair<List<TtsChunker.Chunk>, Float>? = null
-    private var chunks: List<TtsChunker.Chunk> = emptyList()
+    @Volatile private var chunks: List<TtsChunker.Chunk> = emptyList() // 音声合成の知らせ (別のスレッド) からも読む
     @Volatile private var gen = 0 // 読み始めるたびに増やす。止めた前の読み上げの終了通知を、今のものと取り違えない
-    @Volatile var speaking = false
-        private set
+    private val speakingFlag = java.util.concurrent.atomic.AtomicBoolean(false)
+    val speaking: Boolean get() = speakingFlag.get()
 
     /** 読み始める。始められないときは理由 (画面に出す文) を返す。rate = 速さ (1.0 が標準) */
     fun start(paragraphs: List<String>, rate: Float): String? {
-        unavailable?.let { return it }
+        // 前に使えなかったときも、押されたらもう一度準備から試す (あとから日本語の声を入れた、など)。使えなければ onProblem で知らせる
+        unavailable = null
         val list = TtsChunker.chunk(paragraphs)
         if (list.isEmpty()) return "読み上げられる本文がありません"
         stop()
@@ -74,7 +75,7 @@ class ReadAloud(
         chunks = list
         gen++
         t.setSpeechRate(rate.coerceIn(0.5f, 3.0f))
-        speaking = true
+        speakingFlag.set(true)
         post { onState(true) }
         list.forEachIndexed { i, c -> t.speak(c.text, if (i == 0) TextToSpeech.QUEUE_FLUSH else TextToSpeech.QUEUE_ADD, null, "g$gen-c$i") }
     }
@@ -90,15 +91,13 @@ class ReadAloud(
         unavailable = message
         pending = null
         tts?.shutdown(); tts = null; ready = false
-        // 理由は、次に start したときにも返る
         post { onProblem(message) }
         finish()
     }
 
     /** 読み終わった・止めた・エラー: 色を消して、読んでいない状態に */
     private fun finish() {
-        if (!speaking) return
-        speaking = false
+        if (!speakingFlag.compareAndSet(true, false)) return // 読み終わりとエラーが重なっても、1 回だけ
         post { run("window.nhTtsMark && nhTtsMark(-1)"); onState(false) }
     }
 

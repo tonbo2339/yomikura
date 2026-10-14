@@ -48,7 +48,7 @@ function paintUpdate() {
   st.textContent = CAN_UPDATE ? text : 'この版では更新を確認できません';
   st.className = 'status' + (upd.state === 'latest' || upd.state === 'available' ? ' good' : upd.state === 'error' || upd.state === 'login' ? ' bad' : '');
   $('u-current').textContent = CURRENT;
-  $('u-latest').textContent = avail || (upd.state === 'latest' ? CURRENT : '—');
+  $('u-latest').textContent = avail || (upd.state === 'latest' ? (upd.latest || CURRENT) : '—'); // latest は GitHub 側の最新の番号 (今の版とは限らない)
   $('u-progress').hidden = upd.state !== 'progress';
   $('u-bar').style.width = (upd.pct || 0) + '%';
   $('updInstall').hidden = !avail || busy;

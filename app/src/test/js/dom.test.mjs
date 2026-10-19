@@ -7,6 +7,7 @@ import vm from 'node:vm';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
+import { runGroup } from './scripts.mjs';
 
 const JS = (name) => fileURLToPath(new URL('../../main/assets/js/' + name, import.meta.url));
 const FIX = (name) => fs.readFileSync(fileURLToPath(new URL('./fixtures/' + name, import.meta.url)), 'utf8');
@@ -41,7 +42,7 @@ function page(href, html) {
   };
   ctx.window = ctx;
   vm.createContext(ctx);
-  for (const f of ['sites.js', 'core.js', 'narou.js', 'hameln.js', 'kakuyomu.js']) vm.runInContext(fs.readFileSync(JS(f), 'utf8'), ctx);
+  runGroup(vm, ctx, 'adapters');
   return { NH: ctx.NH, adapter: ctx.NH.adapter(), document };
 }
 const docOf = (html) => linkedom.parseHTML(html).document;
@@ -77,6 +78,36 @@ test('なろう rankingItems: 検索結果 (smpnovel_list) はタイトルをリ
   assert.equal(document.querySelectorAll('.novel_h a').length, 1);
 });
 
+test('なろう rankingItems: トップのカード (a.c-novel-item)・作者ページの一覧・横の一覧。ボタンはカードの中に置く', () => {
+  const { adapter, document } = page('https://syosetu.com/', FIX('narou_top.html'));
+  const items = adapter.rankingItems();
+  eq(items.map((i) => [i.title, i.href]), [
+    ['トップのランキングの作品', 'https://ncode.syosetu.com/n1111aa/'],
+    ['新着の作品', 'https://ncode.syosetu.com/n2222bb/'],
+    ['作者ページの作品', 'https://ncode.syosetu.com/n3333cc/'],
+    ['横の一覧の作品', 'https://ncode.syosetu.com/n4444dd/'], // 「[全9エピソード] 作者名」は題名に入れない
+  ]); // 作品でないカード (n.syosetu.com/info/) は拾わない
+  // カード全体がリンクの 2 種類は、ボタンをリンクの中 (anchor の子孫) に置く。置き場所が外だと、ミュートでカードを隠してもボタンが残る
+  items.filter((i) => i.after).forEach((i) => assert.ok(i.anchor.contains(i.after), i.title));
+  assert.equal(items[0].after.className, 'c-novel-item__title');
+  assert.equal(items[2].after, undefined); // 作者ページの一覧は見出しの親ブロックの後ろ (既定)
+  assert.equal(adapter.authorOf(document.getElementById('t1')), '作者 甲');
+  assert.equal(adapter.authorOf(document.getElementById('t2')), '作者 乙');
+});
+
+test('なろう (R18) rankingItems: 古い作りのトップの PickUp・イチオシレビュー。メニュー・話・小説情報のリンクは除く', () => {
+  const { adapter, document } = page('https://noc.syosetu.com/top/top/', FIX('narou_r18_top.html'));
+  const items = adapter.rankingItems();
+  eq(items.map((i) => [i.title, i.href]), [
+    ['ピックアップの作品', 'https://novel18.syosetu.com/n1111aa/'],
+    ['題名に「・」が付く作品', 'https://novel18.syosetu.com/n2222bb/'], // 題名の前の「・」は除く
+    ['ミッドナイトの作品', 'https://novel18.syosetu.com/n4444dd/'],
+    ['レビューされた作品', 'https://novel18.syosetu.com/n5555ee/'],
+  ]);
+  items.forEach((i) => assert.equal(i.after, i.anchor)); // ボタンはリンクのすぐ後ろ = 囲みの中 (ミュートで一緒に隠れる)
+  assert.equal(document.getElementById('menu1') && items.some((i) => i.anchor.id === 'menu1'), false);
+});
+
 test('なろう parseHistory: 続きのリンクと全エピソード数。作品でないカードは除く', () => {
   const { adapter } = page('https://yomou.syosetu.com/rireki/list/', FIX('narou_history.html'));
   const items = adapter.parseHistory(adapter && docOf(FIX('narou_history.html')));
@@ -104,6 +135,13 @@ test('なろう workTitle: 話ページは上の作品リンク、目次はタ�
   assert.equal(page('https://ncode.syosetu.com/n1234ab/', '<html><head><title>エラー</title></head><body></body></html>').adapter.workTitle(), '');
 });
 
+test('なろう workTitle: ログインしていない話ページ (上の案内が「ログイン」のリンク) でも、作品名を返す', () => {
+  const html = '<html><head><title>無職転生　- 異世界行ったら本気だす -</title></head><body>'
+    + '<div class="c-announce c-announce--note">ブックマーク機能を使うには<a href="https://syosetu.com/login/input/?redirectlink=x" class="c-announce__emphasis">ログイン</a>してください。</div>'
+    + '<div class="p-novel"><a href="/n1234ab/">無職転生　- 異世界行ったら本気だす -</a><h1 class="p-novel__title">第二話</h1></div></body></html>';
+  assert.equal(page('https://ncode.syosetu.com/n1234ab/3/', html).adapter.workTitle(), '無職転生 - 異世界行ったら本気だす -');
+});
+
 test('ハーメルン rankingItems / authorOf / tagsOf / statusOf: 検索結果', () => {
   const { adapter, document } = page('https://syosetu.org/search/', FIX('hameln_search.html'));
   const items = adapter.rankingItems();
@@ -116,6 +154,22 @@ test('ハーメルン rankingItems / authorOf / tagsOf / statusOf: 検索結果'
   assert.equal(adapter.statusOf(b2), 'complete');
 });
 
+test('ハーメルン rankingItems / authorOf / tagsOf / statusOf: トップ・作者ページ (ul.entry > li > a)。話・お知らせのリンクは除く', () => {
+  const { adapter, document } = page('https://syosetu.org/', FIX('hameln_top.html'));
+  const items = adapter.rankingItems();
+  eq(items.map((i) => [i.title, i.href]), [
+    ['トップの作品', 'https://syosetu.org/novel/405603/'], // 題名のあとの .date の欄は入れない
+    ['特殊タグの例', 'https://syosetu.org/novel/94624/'],
+  ]);
+  items.forEach((i) => assert.ok(i.anchor.contains(i.after) && i.after.className === 'date', i.title)); // ボタンはカードの中 (.date の後ろ)
+  const h1 = document.getElementById('h1'), h2 = document.getElementById('h2');
+  assert.equal(adapter.authorOf(h1), '作者 甲'); // 「連載：117話　作：作者 甲」
+  assert.equal(adapter.authorOf(h2), ''); // 作者名の無いカード。「原作：」を作者にしない
+  eq(adapter.tagsOf(h2), ['ポケットモンスター']);
+  assert.equal(adapter.statusOf(h1), 'serial');
+  assert.equal(adapter.statusOf(h2), 'short');
+});
+
 test('ハーメルン parseHistory / workInfo', async () => {
   const { NH, adapter } = page('https://syosetu.org/?mode=rireki', '<html><body></body></html>');
   const items = adapter.parseHistory(docOf(FIX('hameln_history.html')));
@@ -124,9 +178,29 @@ test('ハーメルン parseHistory / workInfo', async () => {
     { id: '777', title: 'しおりなし', url: 'https://syosetu.org/novel/777/', total: null },
   ]);
   NH.fetchListDoc = async () => docOf(FIX('hameln_ssdetail.html'));
-  eq(await adapter.workInfo({ id: '12345' }), { total: 8, status: '', sub: '', r18: true });
+  eq(await adapter.workInfo({ id: '12345' }), { total: 8, status: 'serial', sub: '', r18: true });
+  const detail = (v) => docOf('<html><body><table><tr><th>話数</th><td>' + v + '</td></tr></table></body></html>');
+  NH.fetchListDoc = async () => detail('連載(完結) 16話');
+  eq((await adapter.workInfo({ id: '2' })).status, 'complete');
+  NH.fetchListDoc = async () => detail('短編 1話');
+  eq((await adapter.workInfo({ id: '3' })).status, 'short');
   NH.fetchListDoc = async () => docOf('<html><body>空</body></html>');
   eq(await adapter.workInfo({ id: '1' }), { total: null, status: '', sub: '', r18: false });
+});
+
+test('ハーメルン workTitle: 短編・1 話の作品の作品トップ (本文つき。ページの題は「作品名 - 話名」) でも、見出しの作品名を返す', () => {
+  const html = '<html><head><title>作品A - 話の題 - ハーメルン</title></head><body><h1 id="pagetitle"><a href="./">作品A</a></h1><div id="maind"><p>本文</p></div></body></html>';
+  assert.equal(page('https://syosetu.org/novel/430424/', html).adapter.workTitle(), '作品A');
+});
+
+test('ハーメルン statusOf: トップの「新着短編小説」の見出しの下の作品は、作品の欄に「短編」の字が無くても短編。連載の見出しの下は読み取らない', () => {
+  const html = '<html><body><ul class="entry"><li class="id5"><strong>新着短編小説</strong></li>'
+    + '<li><a id="s1" href="https://syosetu.org/novel/1/" class="id1">短編の作品<br><span class="date">オリジナル：恋愛<br>作：甲</span></a></li></ul>'
+    + '<ul class="entry"><li class="id5"><strong>新着投稿作品</strong></li>'
+    + '<li><a id="s2" href="https://syosetu.org/novel/2/" class="id1">別の作品<br><span class="date">オリジナル：恋愛<br>作：乙</span></a></li></ul></body></html>';
+  const { adapter, document } = page('https://syosetu.org/', html);
+  assert.equal(adapter.statusOf(document.getElementById('s1')), 'short');
+  assert.equal(adapter.statusOf(document.getElementById('s2')), '');
 });
 
 test('カクヨム rankingItems / authorOf / statusOf: 重複・話へのリンク・今読んでいる作品の欄は除く', () => {
@@ -142,7 +216,7 @@ test('カクヨム rankingItems / authorOf / statusOf: 重複・話へのリン�
 test('カクヨム workTitle / workInfo / pageStatus / parseHistory', () => {
   const { adapter } = page('https://kakuyomu.jp/works/111', FIX('kakuyomu_work.html'));
   assert.equal(adapter.workTitle(), '作品名');
-  eq(adapter.workInfo(), { total: 44, status: '', sub: '' });
+  eq(adapter.workInfo(), { total: 44, status: 'serial', sub: '' });
   assert.equal(adapter.pageStatus(), 'serial');
   // 見出しが無いときはページ名「作品名（作者） - カクヨム」から。エラーのページ名は作品名にしない
   const t = page('https://kakuyomu.jp/works/111', '<html><head><title>話 - 別作品（誰か） - カクヨム</title></head><body></body></html>').adapter;

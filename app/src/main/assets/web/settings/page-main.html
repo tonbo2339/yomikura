@@ -41,7 +41,7 @@
   <div class="group">
     <button class="cell has-icon" data-go="sites"><span class="ico brown" data-icon="globe"></span><span class="text">表示するサイト</span><span class="value" id="v-sites"></span></button>
     <label class="cell has-icon" id="adultRow"><span class="ico pink" data-icon="person"></span><span class="text">18 歳以上</span><input type="checkbox" class="switch" id="adult"></label>
-    <label class="cell has-icon"><span class="ico red" data-icon="lock"></span><span class="text" id="nsfwLabel">NSFW モード</span><input type="checkbox" class="switch" id="nsfw"></label>
+    <label class="cell has-icon"><span class="ico red lock" id="nsfwIco"><svg viewBox="0 0 24 24"><path class="shackle" d="M8.5 14V8a3.5 3.5 0 0 1 7 0v3.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><rect x="5" y="11" width="14" height="10" rx="2"/></svg></span><span class="text" id="nsfwLabel">NSFW モード</span><input type="checkbox" class="switch" id="nsfw"></label>
     <button class="cell has-icon" data-go="accounts"><span class="ico blue" data-icon="person"></span><span class="text">ログイン</span><span class="value" id="v-accounts"></span></button>
   </div>
   <div class="hint" id="siteHint">「18 歳以上」をオフにすると、R18 のサイト (ノクターン・ムーンライト・ミッドナイト) は選べなくなります。「NSFW モード」をオンにすると、R18 のサイトにアクセスせず、リスト・履歴・ランキングにも R18 の作品を出しません。</div>
@@ -50,6 +50,7 @@
   <div class="group">
     <button class="cell has-icon" data-go="export"><span class="ico green" data-icon="download"></span><span class="text">書き出す</span><span class="value">ファイルに保存</span></button>
     <button class="cell has-icon" id="importBtn"><span class="ico blue" data-icon="inbox"></span><span class="text">読み込む</span><span class="value">ファイルから復元</span></button>
+    <button class="cell has-icon" id="undoRestoreBtn" hidden><span class="ico orange" data-icon="inbox"></span><span class="text">復元前の状態に戻す</span><span class="value" id="undoRestoreWhen"></span></button>
   </div>
   <div class="hint">設定・リスト・読書位置・閲覧履歴・ミュートを、項目を選んで書き出せます。読み込むと、ファイルに入っている項目だけを置き換えます。ログイン情報とオフライン保存の本文は含みません。</div>
 

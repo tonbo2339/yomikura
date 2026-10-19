@@ -1,5 +1,5 @@
 // サイトの表 (SITES / RANK_SITES / ACCOUNTS / COLLECT_SITES / TAB_COLOR_DEFAULT) は app.js
-const { load, SITE_DEFAULT } = NH; // 保存データの読み書きは core.js と共通 (書くときは NH.update)
+const { load, SITE_DEFAULT } = NH; // 保存データの読み書きは core/store.js と共通 (書くときは NH.update)
 const DEFAULTS = { theme: 'auto', font: 'site', size: 100, lh: 0, start: 'list', startSite: 'narou', autoCheck: true, autoCheckHours: 3, listArrows: true, dimRead: true, pruneDone: true, pruneDays: 30, historyMax: 300, historyDays: 0, sites: Object.assign({}, SITE_DEFAULT) };
 const FONTS = { site: 'inherit', gothic: '"Noto Sans CJK JP","Noto Sans JP",sans-serif', mincho: '"Noto Serif CJK JP","Noto Serif JP",serif' };
 const R18_MODES = [['menu', '「なろう」を素早く 2 回タップ'], ['tabs', '上部バーに、サイト名のタブで出す']];

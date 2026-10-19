@@ -26,9 +26,10 @@
   </div>
   <p style="margin-top:20px">機内モードや電波の状態、サイトの一時的な不具合などで読み込めないことがあります。</p>
 </main>
+<!--#scripts core-->
 <script src="app.js"></script>
 <script>
-// 読み込みに失敗したページの代わりに出す画面 (MainActivity の onReceivedError が u= に元の URL、m= に理由を付けて開く)
+// 読み込みに失敗したページの代わりに出す画面 (NovelClient の onReceivedError が u= に元の URL、m= に理由を付けて開く)
 const q = new URLSearchParams(location.search);
 const u = q.get('u') || '';
 const ok = /^https?:\/\//.test(u); // 元の URL が http(s) のときだけ使う (それ以外の文字列は開かない)

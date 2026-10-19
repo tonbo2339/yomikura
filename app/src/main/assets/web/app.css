@@ -18,6 +18,10 @@
   --switch-on: #34c759;
   --warn: #c76a00;
   --warn-soft: rgba(255, 149, 0, .14);
+  /* 連載状態の印 (連載中・完結・短編。それぞれ別の色。ほかの印 = 緑の時刻・橙の途/未読 とも重ならない色) */
+  --st-serial: #0a62c4; --st-serial-bg: rgba(10, 132, 255, .14);
+  --st-complete: #8a3fb8; --st-complete-bg: rgba(175, 82, 222, .14);
+  --st-short: #c4264a; --st-short-bg: rgba(255, 45, 85, .12);
   --danger: #ff3b30;
   --danger-text: #c4211a;                  /* 赤い文字 (背景と 4.5:1 以上。ライトでは danger より濃い赤) */
   --danger-soft: rgba(255, 59, 48, .1);
@@ -51,6 +55,9 @@ html[data-ui="large"] { --seg-h: 40px; --chip-h: 38px; --btn-h: 40px; --move-w: 
     --switch-on: #30d158;
     --warn: #ffb340;
     --warn-soft: rgba(255, 159, 10, .18);
+    --st-serial: #64b0ff; --st-serial-bg: rgba(10, 132, 255, .24);
+    --st-complete: #d596fa; --st-complete-bg: rgba(191, 90, 242, .24);
+    --st-short: #ff8aa3; --st-short-bg: rgba(255, 55, 95, .22);
     --danger: #ff453a;
     --danger-text: #ff6b61;
     --danger-soft: rgba(255, 69, 58, .16);
@@ -131,11 +138,13 @@ button.cell:active, a.cell:active, label.cell:active { background: var(--surface
 .cell .ico svg { width: 19px; height: 19px; fill: currentColor; }
 .cell .text { flex: 1 0 auto; max-width: 72%; word-break: auto-phrase; } /* ラベルを優先して幅を取り、右の値のほうを省略する */
 .cell .text small { display: block; font-size: 13px; color: var(--sub); margin-top: 1px; line-height: 1.4; }
-.cell .value { color: var(--sub); font-size: 15px; flex: 0 1 auto; min-width: 3em; max-width: 45%; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cell .value { color: var(--sub); font-size: 15px; flex: 0 1 auto; min-width: 3em; max-width: 45%; margin-left: auto; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cell .chev { width: 8px; height: 13px; flex: none; color: var(--muted); }
+/* 右の値が無い行は、.text の max-width で余った幅を「›」の左の余白にして、右端へ押す (無いと「›」が端に届かない) */
+.cell .text + .chev { margin-left: auto; }
 .cell.danger { color: var(--danger-text); justify-content: center; }
 .cell.accent { color: var(--accent-text); }
-.cell .check { width: 18px; height: 18px; flex: none; fill: var(--accent); }
+.cell .check { width: 18px; height: 18px; flex: none; fill: var(--accent); margin-left: auto; } /* .text の max-width で余った幅を左に取り、右端へ寄せる (›・スイッチと同じ) */
 
 /* スイッチ (iOS) */
 .switch { appearance: none; -webkit-appearance: none; flex: none; width: 51px; height: 31px; border-radius: 999px; margin: 0;
@@ -154,8 +163,14 @@ button.cell:active, a.cell:active, label.cell:active { background: var(--surface
   transition: background .2s;
 }
 .seg button.on { background: var(--surface); font-weight: 600; box-shadow: 0 3px 8px rgba(0, 0, 0, .12), 0 3px 1px rgba(0, 0, 0, .04); }
+/* 滑る選択 (.seg-thumb は settings/nav.js の segPick が置く。選んでいる印を、これが担う) */
+.seg.slide { position: relative; }
+.seg.slide button { position: relative; z-index: 1; background: transparent; box-shadow: none; }
+.seg-thumb { position: absolute; top: 2px; bottom: 2px; left: 0; border-radius: 7px; background: var(--surface); box-shadow: 0 3px 8px rgba(0, 0, 0, .12), 0 3px 1px rgba(0, 0, 0, .04); transition: transform .28s cubic-bezier(.3, .8, .4, 1), width .28s cubic-bezier(.3, .8, .4, 1); }
+.seg-thumb.instant { transition: none; }
+@media (prefers-reduced-motion: reduce) { .seg-thumb { transition: none; } }
 /* ダークは地が暗く、選んでいる側が灰色の塊にしか見えないので、アクセント色の縁と文字色で区別する */
-@media (prefers-color-scheme: dark) { .seg button.on { background: #48484a; color: var(--accent-strong); box-shadow: inset 0 0 0 1.5px var(--accent); } }
+@media (prefers-color-scheme: dark) { .seg button.on { background: #48484a; color: var(--accent-strong); box-shadow: inset 0 0 0 1.5px var(--accent); } .seg-thumb { background: #48484a; box-shadow: inset 0 0 0 1.5px var(--accent); } .seg.slide button.on { background: transparent; box-shadow: none; } }
 
 /* チップ (絞り込み) */
 .chips { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; margin: 0 -16px; padding: 2px 40px 4px 16px;

@@ -5,7 +5,7 @@ import vm from 'node:vm';
 import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
 
-const OFFLINE = fileURLToPath(new URL('../../main/assets/js/offline.js', import.meta.url));
+const OFFLINE = fileURLToPath(new URL('../../main/assets/js/offline/offline.js', import.meta.url));
 
 // 1 回の取り込み (fetch) の結果を決める。status を省くと 200 (本文あり)。challenge なら確認画面
 function makeEnv({ status = 200, meta = null, fetchFor = null, imageFor = null } = {}) {
@@ -13,12 +13,12 @@ function makeEnv({ status = 200, meta = null, fetchFor = null, imageFor = null }
   const NH = {
     CHALLENGE: 'challenge',
     sleep: async () => {},
-    pause: async () => {}, // 本物は 1.5〜3 秒待つ (core.js の NH.pause)。テストでは待たない
+    pause: async () => {}, // 本物は 1.5〜3 秒待つ (core/fetch.js の NH.pause)。テストでは待たない
     withSub: (x) => x,
     cleanNode: () => '<p>本文</p>',
     markRest: (id) => log.rest.push(id),
     isChallenge: () => false,
-    // core.js の NH.fetchDoc と同じ働き (その検査は core.test.mjs)。ここでは fetch の代わりを通す
+    // core/fetch.js の NH.fetchDoc と同じ働き (その検査は core.test.mjs)。ここでは fetch の代わりを通す
     fetchDoc: async (url) => {
       const res = await ctx.fetch(url, { credentials: 'include' });
       const doc = new ctx.DOMParser().parseFromString(await res.text(), 'text/html');

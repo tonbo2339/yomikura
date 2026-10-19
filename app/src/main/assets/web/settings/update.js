@@ -27,6 +27,27 @@ window.nhUpdate = (json) => {
   }
   paintUpdate();
 };
+// この版の変更点 (Kotlin の ReleaseNotes が読んだ形 [{k: h | li | p, s: [[文字, 太字か]]}])。アプリを更新した直後に 1 回だけ出すものと同じ文
+(function paintReleaseNotes() {
+  let blocks = [];
+  try { blocks = JSON.parse((window.NHStore && NHStore.releaseNotes && NHStore.releaseNotes()) || '[]'); } catch (e) { /* 出さない */ }
+  if (!Array.isArray(blocks) || !blocks.length) return;
+  $('u-notesLabel').textContent = 'バージョン ' + CURRENT + ' の変更点';
+  const box = $('u-notes');
+  let list = null; // 続く箇条書きは 1 つの <ul> にまとめる
+  blocks.forEach((b) => {
+    const line = el(b.k === 'h' ? 'h4' : b.k === 'li' ? 'li' : 'p');
+    (b.s || []).forEach(([t, bold]) => line.appendChild(bold ? el('b', '', t) : document.createTextNode(t)));
+    if (b.k === 'li') {
+      if (!list) { list = el('ul'); box.appendChild(list); }
+      list.appendChild(line);
+    } else {
+      list = null;
+      box.appendChild(line);
+    }
+  });
+  $('u-notesBox').hidden = false;
+})();
 function checkUpdate() {
   if (!CAN_UPDATE) return;
   upd = { state: 'checking' };

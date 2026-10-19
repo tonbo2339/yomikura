@@ -1,5 +1,11 @@
   body { overflow-x: hidden; }
   button.cell:disabled { color: var(--sub); pointer-events: none; }
+  /* アプリの更新: この版の変更点 (update.js が ReleaseNotes の形から作る) */
+  .group.notes { padding: 6px 16px 10px; font-size: 14px; line-height: 1.6; }
+  .notes h4 { margin: 12px 0 2px; font-size: 15px; }
+  .notes p { margin: 8px 0; }
+  .notes ul { margin: 4px 0; padding-left: 1.2em; }
+  .notes li { margin: 4px 0; }
   /* 裏での確認: 曜日のボタンと時刻の入力 */
   .bg-days { display: flex; gap: 6px; width: 100%; justify-content: space-between; }
   .bg-days button { flex: 1; height: 44px; border: 0; border-radius: 999px; background: var(--surface-2); color: var(--fg); font: inherit; font-size: 15px; }
@@ -40,7 +46,7 @@
   .ico.pink { background: #ff2d55; } .ico.brown { background: #a2845e; } .ico.red { background: #ff3b30; }
   .field { height: 40px; border: 0; border-radius: 10px; padding: 0 12px; background: var(--surface-2); color: var(--fg); font-size: 16px; outline: none; }
   .field:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-  .picker { appearance: none; -webkit-appearance: none; border: 0; background: none; color: var(--sub); font-size: 15px; text-align: right; max-width: 60%; }
+  .picker { appearance: none; -webkit-appearance: none; border: 0; background: none; color: var(--sub); font-size: 15px; text-align: right; max-width: 60%; margin-left: auto; }
   .del { color: var(--danger-text); font-size: 15px; padding: 6px 8px; min-height: 44px; min-width: 44px; flex: none; }
   .del:active { opacity: .5; }
 
@@ -60,6 +66,9 @@
   .icon-opt { display: flex; justify-content: center; padding: 0; background: none; border: 0; }
   .icon-opt img { width: 84px; height: 84px; max-width: 100%; border-radius: 22px; box-shadow: 0 2px 10px rgba(0, 0, 0, .15); outline: 3px solid transparent; outline-offset: 3px; transition: outline-color .15s; }
   .icon-opt.on img { outline-color: var(--accent); }
+  .icon-opt.pop img { animation: icon-pop .45s cubic-bezier(.3, 1.6, .5, 1); }
+  @keyframes icon-pop { 0% { transform: scale(1); } 35% { transform: scale(1.14) translateY(-4px); } 100% { transform: none; } }
+  @media (prefers-reduced-motion: reduce) { .icon-opt.pop img { animation: none; } }
 
   /* アプリの更新 */
   .update-card { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; padding: 12px 16px; margin: 4px 0 4px;
@@ -75,6 +84,11 @@
   .bars { display: flex; align-items: flex-end; gap: 4px; height: 100px; }
   .bars .col { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 2px; height: 100%; }
   .bars .col i { display: block; width: 100%; background: var(--accent); border-radius: 3px 3px 0 0; }
+  .bars .col i { transform-origin: bottom; animation: bar-grow .5s cubic-bezier(.3, .8, .4, 1) both; animation-delay: calc(var(--i, 0) * 35ms); }
+  .bars .col b { animation: bar-fade .4s ease-out both; animation-delay: calc(var(--i, 0) * 35ms + 150ms); }
+  @keyframes bar-grow { from { transform: scaleY(0); } }
+  @keyframes bar-fade { from { opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) { .bars .col i, .bars .col b { animation: none; } }
   .bars .col i.zero { background: var(--sub); opacity: .3; }
   .bars .col b { font-size: 10px; font-weight: 600; color: var(--sub); line-height: 1; }
   .bars-labels { display: flex; gap: 4px; margin-top: 6px; }
@@ -89,3 +103,10 @@
   .confirm-title { text-align: center; font-size: 13px; color: var(--sub); padding: 14px 16px; }
   .confirm .cell { justify-content: center; font-size: 17px; min-height: 56px; }
   .confirm .cancel { margin-top: 8px; font-weight: 600; color: var(--accent-text); }
+/* NSFW モードの鍵: オン (R18 は出ない) = 閉じて赤、オフ (R18 が使える) = 開いて緑。
+   開くときは、掛け金が上へ抜けて、右の足だけ本体から離れる (J の形)。閉じるときは逆。回さない。切り替えたときだけ動かす */
+.ico.lock.open { background: #34c759; }
+.ico.lock.open .shackle { transform: translateY(-3px); }
+.ico.lock.anim { transition: background-color .3s; }
+.ico.lock.anim .shackle { transition: transform .35s cubic-bezier(.3, 1.4, .5, 1); }
+@media (prefers-reduced-motion: reduce) { .ico.lock.anim, .ico.lock.anim .shackle { transition: none; } }

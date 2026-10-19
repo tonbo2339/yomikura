@@ -12,8 +12,8 @@ android {
     defaultConfig {
         minSdk = 26
         targetSdk = 36
-        versionCode = 101
-        versionName = "1.0.1"
+        versionCode = 112
+        versionName = "1.1.0"
     }
 
     buildFeatures {
@@ -25,7 +25,7 @@ android {
     flavorDimensions += "edition"
 
     // リリース署名: リポジトリの外にある keystore.properties (storeFile / storePassword / keyAlias / keyPassword) を使う。
-    // 鍵の場所は版ごとに -P / 環境変数で変えられる。何も指定しないときの既定は、公開版 (oss) はリポジトリ直下の keystore.properties (git に入らない)。自分用の版の既定は、下の版の定義を見る。
+    // 鍵の場所は版ごとに -P / 環境変数で変えられる。何も指定しないときの既定は、公開版 (oss) はリポジトリ直下の keystore.properties (git に入らない)。ほかの版の既定は、下の版の定義を見る。
     // 鍵の設定が見つからないとき: その版のリリース (assembleOssRelease など) を作ろうとしたら失敗にする (debug 鍵の APK を配ってしまう事故を防ぐ。確認だけなら -Pyomikura.allowDebugSigning=true)。
     // それ以外 (debug・テスト・版を指定しない assembleRelease) は、debug 鍵で署名し、リリースのときは警告を出す。
     // buildType の signingConfig は flavor のものより優先されるので、リリース鍵は flavor に付ける (debug は debug 鍵のまま)

@@ -54,11 +54,34 @@ function pickList(box, items, current, onPick) {
 }
 
 // 行の下に出す、横に並んだ 1 つ選ぶボタン (少ない選択肢を、別の画面に分けずに切り替える)
+// 選んでいる印 (白い丸みの部分) は、ボタンを作り直しても残る 1 つの要素 (.seg-thumb) で、選び直すと次のボタンへ滑る
 function segPick(box, items, current, onPick) {
-  box.innerHTML = '';
+  box.querySelectorAll('button').forEach((b) => b.remove());
   items.forEach(([k, label]) => {
     const b = setPressed(el('button', String(k) === String(current) ? 'on' : '', label), String(k) === String(current));
     b.onclick = () => onPick(k);
     box.appendChild(b);
   });
+  let thumb = box.querySelector('.seg-thumb');
+  const first = !thumb;
+  if (first) { thumb = el('i', 'seg-thumb'); thumb.hidden = true; box.prepend(thumb); box.classList.add('slide'); }
+  const place = () => {
+    const on = box.querySelector('button.on');
+    if (!on || !on.offsetWidth) return; // 隠れている画面では測れない (見えたときに ResizeObserver が置き直す)
+    thumb.style.width = on.offsetWidth + 'px';
+    thumb.style.transform = 'translateX(' + on.offsetLeft + 'px)';
+    thumb.hidden = false;
+  };
+  if (first) thumb.classList.add('instant'); // 最初の位置へは滑らず、すぐ置く
+  place();
+  if (first) {
+    requestAnimationFrame(() => requestAnimationFrame(() => thumb.classList.remove('instant')));
+    let lastW = box.offsetWidth; // 幅が変わったとき (画面が見えた・回転した) だけ、滑らずに置き直す。高さだけ変わる (操作部分の大きさ) ときは滑らせる
+    if (window.ResizeObserver) new ResizeObserver(() => {
+      if (box.offsetWidth === lastW) return;
+      lastW = box.offsetWidth;
+      thumb.classList.add('instant'); place();
+      requestAnimationFrame(() => requestAnimationFrame(() => thumb.classList.remove('instant')));
+    }).observe(box);
+  }
 }

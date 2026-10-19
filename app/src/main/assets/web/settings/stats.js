@@ -1,4 +1,4 @@
-// ---- 読書の統計 (core.js の NH.noteRead が数え、NH.statsSummary が集計する。計算は core.js でテスト済み) ----
+// ---- 読書の統計 (core/stats.js の NH.noteRead が数え、NH.statsSummary が集計する。計算は core.test.mjs でテスト済み) ----
 // 話の最後まで読んだときに 1 話。記録は端末の中だけ
 const fmtChars = (n) => (n >= 10000 ? '約 ' + (Math.round(n / 1000) / 10) + ' 万字' : n.toLocaleString('ja-JP') + ' 字');
 const statsTitle = (d, key) => {
@@ -33,6 +33,7 @@ function paintStats() {
     const col = el('div', 'col'), bar = el('i');
     bar.style.height = Math.max(3, Math.round((x.e / max) * 80)) + 'px';
     if (!x.e) bar.className = 'zero';
+    col.style.setProperty('--i', i); // 左から順に伸びる (style.css の bar-grow)
     if (x.e) col.append(el('b', '', String(x.e)));
     col.append(bar); bars.append(col);
     labels.append(el('span', '', i % 2 === 1 || i === 13 ? label(x) : ''));

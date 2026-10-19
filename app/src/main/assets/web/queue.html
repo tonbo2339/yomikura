@@ -47,7 +47,7 @@
 </main>
 <div class="snack" id="snack" role="status" aria-live="polite"><span id="snackText"></span><button id="snackUndo">元に戻す</button></div>
 
-<script src="js/core.js"></script>
+<!--#scripts core-->
 <script src="app.js"></script>
 <script>
 // オフライン保存のキュー: いま保存している作品の進み (一時停止・再開・中止) と、順番待ちの作品 (並べ替え・外す・もう一度)。
@@ -104,6 +104,8 @@ function jobRow(j, i, jobs, live) {
     const prev = jobs[i - 1], isNow = (x) => x && (x.status === 'RUNNING' || (live && live.key === x.key));
     up.disabled = running || i === 0 || isNow(prev);
     down.disabled = running || i === jobs.length - 1;
+    // 一時停止したまま保存のサービスが止まった作品 (Android の時間の上限など): アプリを開いても勝手には再開しないので、ここから再開する
+    if (j.status === 'PAUSED' && !(live && live.running)) acts.appendChild(btn('txt', '再開', () => { NH.off.queueStart(); done('再開しました'); }));
     acts.append(up, down);
   } else if (j.status === 'NEEDS_CHECK') {
     acts.appendChild(btn('txt', 'サイトを開く', () => openUrl(j.url)));

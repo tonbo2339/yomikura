@@ -5,7 +5,7 @@ import vm from 'node:vm';
 import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
 
-const CODE = fs.readFileSync(fileURLToPath(new URL('../../main/assets/js/reader.js', import.meta.url)), 'utf8');
+const CODE = fs.readFileSync(fileURLToPath(new URL('../../main/assets/js/ui/reader.js', import.meta.url)), 'utf8');
 const ctx = {
   window: {}, console, requestAnimationFrame: () => 0, cancelAnimationFrame: () => {},
   location: { hostname: 'ncode.syosetu.com' },

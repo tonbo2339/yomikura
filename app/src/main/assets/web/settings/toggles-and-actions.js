@@ -25,15 +25,15 @@ $$('.step').forEach((b) => (b.onclick = () => {
 
 // タブの名前の入力欄 (一度だけ作る。値は paint で入れ直す)
 const nameInputs = {};
-// 上部バーにタブとして出るサイトか (MainActivity.fillBar と同じ条件)
+// 上部バーにタブとして出るサイトか (TopBar.tabSpecs と同じ条件)
 // R18 は「サイト名のタブ」にしたとき、または なろうを隠しているときだけ
 const tabShown = (k) => siteOn(k) && (!SITES.find(([x]) => x === k)[2] || S.r18Mode === 'tabs' || !siteOn('narou'));
-// タブの点の既定の色は TAB_COLOR_DEFAULT (app.js。MainActivity の NAROU_COLOR などと同じ)。選べる色:
+// タブの点の既定の色は TAB_COLOR_DEFAULT (app.js。Kotlin の BarTheme の色と同じ)。選べる色:
 const TAB_COLORS = ['#4A8FE0', '#E07B3C', '#22B3A4', '#D9529A', '#8E6CD8', '#2F8F5B', '#E0504A', '#D9A400', '#8E8E93'];
 const COLOR_NAMES = { '#4A8FE0': '青', '#E07B3C': 'オレンジ', '#22B3A4': '青緑', '#D9529A': 'ピンク', '#8E6CD8': '紫', '#2F8F5B': '緑', '#E0504A': '赤', '#D9A400': '黄', '#8E8E93': 'グレー' };
 const swatches = {}; // サイト → [{color, button}]
 const tabMoves = {}; // サイト → [上へ, 下へ]
-// タブの並び (settings.tabOrder。MainActivity.fillBar と同じ: 書いていないサイトは既定の順で後ろに)
+// タブの並び (settings.tabOrder。TopBar.tabSpecs と同じ: 書いていないサイトは既定の順で後ろに)
 const TAB_KEYS = SITES.map(([k]) => k);
 const tabOrder = () => {
   const o = (Array.isArray(S.tabOrder) ? S.tabOrder : []).filter((k, i, a) => TAB_KEYS.includes(k) && a.indexOf(k) === i);
@@ -103,7 +103,7 @@ SITES.forEach(([k, label, r18]) => {
   row.append(name, cb); $('siteList').appendChild(row);
 });
 // 18 歳以上か。オフにしたら R18 のサイトもオフ、オンに戻したら R18 のサイトは既定 (全部オン) に
-const adultOn = () => S.adult !== false;
+const adultOn = () => NH.flagOf(S, 'adult');
 // R18 のサイトを使えるか。18 歳以上で、さらに R18 のサイトを「使う」版 (NH.R18_OPT_IN) なら、使うと決めている (NSFW モードがオフ) とき
 const r18Usable = () => adultOn() && !NH.nsfwOn({ settings: S }); // NSFW モードがオンの間は、どの版でも一切アクセスしない (Kotlin の nsfwOn と同じ)
 $('adult').onchange = (e) => {
@@ -145,6 +145,7 @@ function paintIcons() {
     b.append(img);
     b.onclick = () => {
       if (k === currentIcon || !window.NHStore || !NHStore.setLauncherIcon) return;
+      b.classList.remove('pop'); void b.offsetWidth; b.classList.add('pop'); // 選んだ絵が、ぴょんと跳ねる
       // 今すぐ: アプリを閉じて、ホーム画面のアイコンが変わる (開き直しはしない)。後で: 次にアプリを開いたときに変わる
       askChoice('アイコンを変えます', 'ホーム画面のアイコンは、アプリを閉じると変わります。',
         ['今すぐ (アプリを閉じる)', () => { NHStore.setLauncherIcon(k, true); }],

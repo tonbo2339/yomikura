@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 通知の小さなアイコン: 積んだ本の形 (ic_launcher_monochrome と同じ形。通知の小アイコンは単色にされ、色は付けられない) -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="60" android:viewportHeight="60">
+    <group android:translateX="-23" android:translateY="-21">
+    <path android:fillColor="#FFFFFFFF" android:fillType="evenOdd" android:pathData="M34,28 h37 a2,2 0 0 1 2,2 v6 a2,2 0 0 1 -2,2 h-37 a2,2 0 0 1 -2,-2 v-6 a2,2 0 0 1 2,-2 z M39,28 h2 v10 h-2 z" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M74,29.5 h4 v7 h-4 z" />
+    <path android:fillColor="#FFFFFFFF" android:fillType="evenOdd" android:pathData="M28,40 h37 a2,2 0 0 1 2,2 v6 a2,2 0 0 1 -2,2 h-37 a2,2 0 0 1 -2,-2 v-6 a2,2 0 0 1 2,-2 z M33,40 h2 v10 h-2 z" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M68,41.5 h4 v7 h-4 z" />
+    <path android:fillColor="#FFFFFFFF" android:fillType="evenOdd" android:pathData="M36,52 h37 a2,2 0 0 1 2,2 v6 a2,2 0 0 1 -2,2 h-37 a2,2 0 0 1 -2,-2 v-6 a2,2 0 0 1 2,-2 z M41,52 h2 v10 h-2 z" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M76,53.5 h4 v7 h-4 z" />
+    <path android:fillColor="#FFFFFFFF" android:fillType="evenOdd" android:pathData="M30,64 h37 a2,2 0 0 1 2,2 v6 a2,2 0 0 1 -2,2 h-37 a2,2 0 0 1 -2,-2 v-6 a2,2 0 0 1 2,-2 z M35,64 h2 v10 h-2 z" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M70,65.5 h4 v7 h-4 z" />
+    </group>
+</vector>

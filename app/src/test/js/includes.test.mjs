@@ -49,16 +49,27 @@ t('include の参照先がある (版によってだけある物は除く)', () 
   }
 });
 
-t('settings/ の部品は、settings.html から読み込まれている (使われない部品を残さない)', () => {
-  const used = walk('settings.html');
-  for (const f of fs.readdirSync(path.join(WEB, 'settings'))) {
-    assert.ok(used.has('settings/' + f), `settings/${f} はどこからも読み込まれていません`);
+// ページ名と同じ名前のフォルダ (settings/ list/) は、そのページを組み立てる部品。使われない部品・どのページにも属さない部品を残さない
+const partDirs = fs.readdirSync(WEB, { withFileTypes: true }).filter((e) => e.isDirectory() && pages.includes(e.name + '.html')).map((e) => e.name);
+
+t('部品のフォルダ (settings/ list/) の中身は、そのページから読み込まれている (使われない部品を残さない)', () => {
+  assert.ok(partDirs.includes('settings') && partDirs.includes('list'));
+  for (const dir of partDirs) {
+    const used = walk(dir + '.html');
+    for (const f of fs.readdirSync(path.join(WEB, dir))) assert.ok(used.has(dir + '/' + f), `${dir}/${f} はどこからも読み込まれていません`);
   }
 });
 
-t('settings.html は骨組みだけ (長い処理を直に書かない)', () => {
-  const lines = read('settings.html').split('\n');
-  assert.ok(lines.length < 120, `settings.html が ${lines.length} 行あります。ページ・処理は settings/ のファイルに分けてください`);
+t('ページ (settings.html / list.html) は骨組みだけ (長い処理を直に書かない)', () => {
+  for (const dir of partDirs) {
+    const lines = read(dir + '.html').split('\n');
+    assert.ok(lines.length < 120, `${dir}.html が ${lines.length} 行あります。ページ・処理は ${dir}/ のファイルに分けてください`);
+  }
+});
+
+t('web 直下以外のフォルダは、部品 (partDirs) と icons だけ', () => {
+  const dirs = fs.readdirSync(WEB, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name);
+  for (const d of dirs) assert.ok(d === 'icons' || partDirs.includes(d), `${d}/ は、ページと同じ名前でも icons でもありません (AppAssets.isIncludeOnly の決まりと合わせる)`);
 });
 
 t('ページの部品は 1 ファイル 1 ページ (id が p-<名前>)', () => {

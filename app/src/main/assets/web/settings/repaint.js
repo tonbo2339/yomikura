@@ -11,18 +11,22 @@ function paintTop() {
   const collectOn = NH.collectAny({ settings: S });
   $('v-auto').textContent = !collectOn ? '確認しない' : !activeAny() ? 'ログインが必要' : S.autoCheck ? '起動時' : 'オフ';
   $('v-bg').textContent = bgConf().on ? 'オン' : 'オフ';
-  $('v-bar').textContent = S.hideBarOnScroll !== false ? 'スクロールで隠す' : '常に表示';
+  $('v-bar').textContent = NH.flagOf(S, 'hideBarOnScroll') ? 'スクロールで隠す' : '常に表示';
   $('v-list').textContent = S.pruneDone ? '読了を ' + S.pruneDays + ' 日で削除' : '読了を残す';
-  const folded = ['foldComments', 'foldRecommend', 'foldLinks', 'foldReactions'].concat(EXTRA_FOLD).filter((k) => S[k] !== false).length;
+  const folded = ['foldComments', 'foldRecommend', 'foldLinks', 'foldReactions'].concat(EXTRA_FOLD).filter((k) => NH.flagOf(S, k)).length;
   $('v-fold').textContent = folded ? folded + ' 種類を畳む' : '畳まない';
   $('v-text').textContent = nameOf(FONT_NAMES, S.font) + '・' + S.size + '%';
   $('v-sites').textContent = on.length + ' サイト';
   const hn = (load().history || []).length;
-  $('v-history').textContent = S.history === false ? '記録しない' : hn ? hn + ' 作品' : '';
+  $('v-history').textContent = !NH.flagOf(S, 'history') ? '記録しない' : hn ? hn + ' 作品' : '';
   segPick($('densitySeg'), DENSITIES, S.uiSize || 'standard', (k) => { S.uiSize = k; applyUiSize(k); commit(); });
   segPick($('themeSeg'), THEMES, S.theme, (k) => { S.theme = k; commit(); });
   $('adult').checked = adultOn();
   $('nsfw').checked = NH.nsfwOn({ settings: S });
+  const lockIco = $('nsfwIco'), lockOpen = !$('nsfw').checked; // 鍵: R18 が使える (NSFW モードがオフ) とき開く
+  if (lockIco.dataset.shown && lockIco.classList.contains('open') !== lockOpen) lockIco.classList.add('anim'); // 最初の表示では動かさず、切り替わってからは動かす (途中で描き直されても、動きを止めない)
+  lockIco.classList.toggle('open', lockOpen);
+  lockIco.dataset.shown = '1';
   const rk = rankingsOf();
   $('v-ranking').textContent = Object.keys(rk).length ? Object.keys(rk).length + ' サイトを変更' : '既定';
   const mc = NH.muteOf(load()), bc = NH.blockOf(load());

@@ -1,4 +1,4 @@
-// ---- 読書の補助 (音量キー・自動スクロール・読み上げ。Kotlin の MainActivity / reader.js が設定 volumeKeys / autoScrollSpeed / ttsRate を読む) ----
+// ---- 読書の補助 (音量キー・自動スクロール・読み上げ。Kotlin の ReadingAids / reader.js が設定 volumeKeys / autoScrollSpeed / ttsRate を読む) ----
 const AUTO_SPEED = { min: 1, max: 10, def: 4 };   // 自動スクロールの速さの段階 (reader.js の SPEEDS と同じ 10 段階)
 const TTS_RATE = { min: 5, max: 20, def: 10 };    // 読み上げの速さ (0.1 刻みの整数。10 = 標準の 1.0 倍。保存は 1.0 のような倍率)
 const clampTo = (r, v) => Math.min(r.max, Math.max(r.min, Math.round(Number.isFinite(v) ? v : r.def)));

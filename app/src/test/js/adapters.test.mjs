@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
+import { runGroup } from './scripts.mjs';
 
 const JS = (name) => fileURLToPath(new URL('../../main/assets/js/' + name, import.meta.url));
 
@@ -18,7 +19,7 @@ function load(href, localStorage) {
   };
   ctx.window = ctx;
   vm.createContext(ctx);
-  for (const f of ['sites.js', 'core.js', 'narou.js', 'hameln.js', 'kakuyomu.js']) vm.runInContext(fs.readFileSync(JS(f), 'utf8'), ctx);
+  runGroup(vm, ctx, 'adapters');
   return ctx.NH;
 }
 

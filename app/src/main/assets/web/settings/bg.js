@@ -20,9 +20,10 @@ function paintBg() {
   const c = bgConf();
   $('bgOn').checked = !!c.on;
   $('bgBox').hidden = !c.on;
-  // ログインしているサイトが無いときは、押せなくして理由を出す (サイトを 1 つも選んでいないときは、bgNone が説明する)
+  // ログインしているサイトが無いときは、押せなくして理由を出す (サイトを 1 つも選んでいないときは、bgNone が説明する)。
+  // オンのまま全部のサイトからログアウトしたときは、オフにだけはできるようにする (オンのまま変えられなくならないように)
   const need = !activeAny();
-  $('bgToggleGroup').inert = need;
+  $('bgToggleGroup').inert = need && !c.on;
   $('bgBox').inert = need;
   const collectAny = NH.collectAny({ settings: S });
   $('bgNone').hidden = collectAny;
@@ -78,4 +79,3 @@ $('bgOn').onchange = (e) => {
   if (e.target.checked && window.NHStore && NHStore.requestNotify) NHStore.requestNotify();
 };
 $('bgNotifyAsk').onclick = () => { if (window.NHStore && NHStore.requestNotify) NHStore.requestNotify(); };
-$('bgRunNow').onclick = () => { if (window.NHStore && NHStore.bgRunNow) { NHStore.bgRunNow(); snack('裏で確認を始めました'); } };

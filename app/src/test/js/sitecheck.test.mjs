@@ -8,7 +8,7 @@ const JS = (name) => fileURLToPath(new URL('../../main/assets/js/' + name, impor
 const ctx = { window: {}, location: { hostname: 'ncode.syosetu.com', pathname: '/n1234ab/5/' }, document: { querySelectorAll: () => [] }, console };
 ctx.window = ctx;
 vm.createContext(ctx);
-for (const f of ['sites.js', 'sitecheck.js']) vm.runInContext(fs.readFileSync(JS(f), 'utf8'), ctx);
+for (const f of ['site/sites.js', 'site/sitecheck.js']) vm.runInContext(fs.readFileSync(JS(f), 'utf8'), ctx);
 const C = ctx.NH_SITECHECK, SITES = ctx.NH_SITES;
 
 const eq = (a, b) => assert.deepEqual(JSON.parse(JSON.stringify(a)), b); // vm の中の配列は、そのままでは比べられない
@@ -29,7 +29,7 @@ test('hideSelectors: CSS のルールから { の前のセレクターを取り�
 
 test('hideSelectors: 実際の sites.js のどのセレクターも、空でなく { や } を含まない', () => {
   for (const [k, s] of Object.entries(SITES)) {
-    for (const sel of [...C.hideSelectors(s.hide), ...C.hideSelectors(s.oldHide)]) {
+    for (const sel of [...C.hideSelectors(s.hide), ...C.hideSelectors(s.bars)]) {
       assert.ok(sel && !/[{}]/.test(sel), `${k}: ${JSON.stringify(sel)}`);
     }
   }
@@ -59,6 +59,7 @@ test('plan: 話ページは本文と欄と隠す対象、ほかは隠す対象�
   assert.ok(ep.items.some((i) => i.selector === '.l-header'));
   const rank = C.plan('yomou.syosetu.com', '/rank/daily/', SITES);
   assert.ok(!rank.episode); assert.ok(rank.items.every((i) => !i.critical && !i.label.startsWith('畳む')));
+  assert.ok(!rank.items.some((i) => i.selector === '.l-header'), 'ヘッダーは話ページ以外では隠さないので、調べない');
   assert.equal(C.plan('example.com', '/', SITES), null);
 });
 
@@ -83,11 +84,11 @@ test('text: 作品の ID・URL を載せず、判定とセレクターを載せ�
 test('nhSiteCheck: ページの中で呼ぶ。対応サイトでなければ null、不正なセレクターは -1', () => {
   const c2 = { window: {}, location: { hostname: 'ncode.syosetu.com', pathname: '/n1234ab/5/' }, document: { querySelectorAll: (s) => { if (s.startsWith('.l-footer')) throw new Error('bad'); return [1]; } }, console };
   c2.window = c2; vm.createContext(c2);
-  for (const f of ['sites.js', 'sitecheck.js']) vm.runInContext(fs.readFileSync(JS(f), 'utf8'), c2);
+  for (const f of ['site/sites.js', 'site/sitecheck.js']) vm.runInContext(fs.readFileSync(JS(f), 'utf8'), c2);
   assert.ok(c2.nhSiteCheck().includes('NG: 使えない'));
   const c3 = { window: {}, location: { hostname: 'example.com', pathname: '/' }, document: { querySelectorAll: () => [] }, console };
   c3.window = c3; vm.createContext(c3);
-  for (const f of ['sites.js', 'sitecheck.js']) vm.runInContext(fs.readFileSync(JS(f), 'utf8'), c3);
+  for (const f of ['site/sites.js', 'site/sitecheck.js']) vm.runInContext(fs.readFileSync(JS(f), 'utf8'), c3);
   assert.equal(c3.nhSiteCheck(), null);
 });
 

@@ -12,7 +12,7 @@ const read = (p) => fs.readFileSync(path.join(MAIN, p), 'utf8');
 const exists = (p) => fs.existsSync(path.join(MAIN, p));
 
 const manifest = read('AndroidManifest.xml');
-const kotlin = read('java/com/tonbo2339/yomikura/LauncherIcon.kt');
+const kotlin = read('java/com/tonbo2339/yomikura/screen/LauncherIcon.kt');
 const stateJs = read('assets/web/settings/state.js');
 
 // マニフェスト: [{name, icon, round, enabled}]

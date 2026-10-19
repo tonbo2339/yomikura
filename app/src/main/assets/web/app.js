@@ -1,12 +1,7 @@
-// アプリ内ページ (リスト / 履歴 / 設定) 共通の小さな道具。core.js の後に読み込む
+// アプリ内ページ (リスト / 履歴 / 設定) 共通の小さな道具。core/ (NH) の後に読み込む
 const $ = (id) => document.getElementById(id);
 const $$ = (sel) => document.querySelectorAll(sel);
-const el = (tag, cls, text) => {
-  const e = document.createElement(tag);
-  if (cls) e.className = cls;
-  if (text != null) e.textContent = text;
-  return e;
-};
+const el = NH.el; // DOM の要素を作る (core/base.js)
 
 // 右端などに置く、アイコンだけのボタン (label は読み上げ用の名前)。押しても下の行 (カード) は反応しない
 function iconBtn(name, label, fn, cls) {
@@ -57,19 +52,12 @@ function snack(text, undo) {
 }
 
 // ---- サイトの表 (web ページ共通。設定・はじめに・リストなどで同じ並び・名前・色を使う) ----
-// core.js が無いページ (error.html) でも読めるよう、NH には頼らない
-const WEB_SITES = [
-  { id: 'narou', label: 'なろう', color: '#4A8FE0' },
-  { id: 'hameln', label: 'ハーメルン', color: '#E07B3C' },
-  { id: 'kakuyomu', label: 'カクヨム', color: '#22B3A4' },
-  { id: 'noc', label: 'ノクターン', color: '#D9529A', r18: true },
-  { id: 'mnlt', label: 'ムーンライト', color: '#D9529A', r18: true },
-  { id: 'mid', label: 'ミッドナイト', color: '#D9529A', r18: true },
-];
+// 名前・色・R18 かどうかの元は core/siteinfo.js の NH.SITE_DEFS (narou18 は「R18 全体」を指す印で、ここでは 3 つの掲載サイトに分けて持つ)
+const WEB_SITES = NH.SITE_DEFS.filter((x) => x.key !== 'narou18').map((x) => ({ id: x.key, label: x.name, color: x.color, r18: !!x.sub }));
 const SITES = WEB_SITES.map((s) => (s.r18 ? [s.id, s.label, true] : [s.id, s.label])); // [id, 名前, R18 なら true]
 const RANK_SITES = SITES.map(([k, name]) => [k, name]); // ランキングの行き先を選ぶサイト
 const MAIN_SITES = SITES.filter((s) => !s[2]); // R18 でないサイト
-const TAB_COLOR_DEFAULT = Object.fromEntries(WEB_SITES.map((s) => [s.id, s.color])); // 上部バーのタブの点の既定色 (MainActivity と同じ)
+const TAB_COLOR_DEFAULT = Object.fromEntries(WEB_SITES.map((s) => [s.id, s.color])); // 上部バーのタブの点の既定色 (Kotlin の BarTheme と同じ)
 const R18_SITE_LABELS = WEB_SITES.filter((s) => s.r18).map((s) => s.label).join('・');
 // 更新を確認する単位 (R18 は 3 サイトまとめて 1 つ)
 const COLLECT_SITES = [['narou', 'なろう'], ['narou18', 'R18 (' + R18_SITE_LABELS + ')'], ['hameln', 'ハーメルン'], ['kakuyomu', 'カクヨム']];
@@ -248,4 +236,4 @@ const svg = (name) => '<svg viewBox="0 0 24 24"><path d="' + ICON_PATHS[name] + 
 // 操作部分の大きさ (settings.uiSize = compact | standard | large)。ページの読み込み時と、設定で変えたときに <html data-ui> へ反映する
 const UI_SIZES = ['compact', 'standard', 'large'];
 function applyUiSize(v) { document.documentElement.dataset.ui = UI_SIZES.includes(v) ? v : 'standard'; }
-applyUiSize(typeof NH === 'undefined' ? null : (NH.load().settings || {}).uiSize); // core.js を読まないページ (error.html) では既定
+applyUiSize((NH.load().settings || {}).uiSize);

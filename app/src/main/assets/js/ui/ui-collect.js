@@ -27,8 +27,16 @@ window.NH_UI_COLLECT = function (ctx) {
   const urlOf = (id) => NH.adapters.find((a) => a.id === id).collectUrl + '#nh-collect-' + mode;
   // 巡回は、休んでいない最初の対象サイトから始まる (SiteConfig.collectStartUrl。休んでいるサイトは開きもしない)。そのサイトが結果をまっさらにする
   if (adapter.id === enabled[0] && !split) {
+    // この実行の中で止められて休止になったサイト (確認画面・アクセス制限。先のサイトが休止にしたあと、次のサイトのページがここへ来る) は、
+    // その結果 (challenge など) を残す。実行の前から休んでいたサイトだけを rest と書く (実行の始まり = collectStartAt。CollectCooldown.markStarted)
+    const prev = d0.collectLog || {};
+    const started = d0.collectStartAt || 0;
     NH.update((d) => { d.collectLog = {}; });
-    resting.forEach((id) => logErr(id, 'rest'));
+    resting.forEach((id) => {
+      const stoppedNow = prev[id] && ((d0.rest || {})[id] || 0) >= started;
+      if (stoppedNow) NH.update((d) => { d.collectLog[id] = prev[id]; });
+      else logErr(id, 'rest');
+    });
   }
 
   // 巡回のページは履歴に残さない (replace)

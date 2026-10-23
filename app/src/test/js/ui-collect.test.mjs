@@ -147,6 +147,33 @@ test('確認画面のままなら 15 秒待ち、アプリに知らせる (hold 
   assert.equal(replaced.length, 1);
 });
 
+test('確認画面で止まったサイトは、続きのページが結果をまっさらにしても challenge と残る (rest にしない)', () => {
+  const st = makeStore();
+  // なろうが最初のサイト (ほかは設定で確認しない)。次はカクヨム
+  st.raw = JSON.stringify({ readLater: [], settings: { collectSites: { hameln: false, narou18: false } } });
+  const first = load('https://syosetu.com/favnovelmain/list/?nowcategory=1#nh-collect-fg', st, { title: 'Just a moment...' });
+  first.ctx.NH_UI_COLLECT({ adapter: first.ctx.NH.adapter(), challenge: true });
+  first.timers[0][0](); // 15 秒後: アプリに知らせて、hold でなければ次へ
+  first.timers[1][0]();
+  assert.equal(first.replaced.length, 1);
+  // 次のサイト (カクヨム) のページが開く。休止中のなろうを rest と書き直してはいけない (確認画面で止まった、という結果を消さない)
+  const next = load(first.replaced[0], st);
+  const adapter = next.ctx.NH.adapter();
+  assert.equal(adapter.id, 'kakuyomu');
+  next.ctx.NH_UI_COLLECT({ adapter, challenge: false });
+  assert.deepEqual(JSON.parse(st.raw).collectLog.narou, { err: 'challenge' });
+});
+
+test('前の実行で止まって、いまも休んでいるサイトは、新しい実行では rest と残す (古い challenge を引き継がない)', () => {
+  const st = makeStore();
+  const now = Date.now();
+  st.raw = JSON.stringify({ readLater: [], settings: { collectSites: { hameln: false, narou18: false } },
+    rest: { narou: now - 5 * 60000 }, collectStartAt: now - 60000, collectLog: { narou: { err: 'challenge' } } });
+  const { ctx } = load('https://kakuyomu.jp/my/antenna/works#nh-collect-fg', st);
+  ctx.NH_UI_COLLECT({ adapter: ctx.NH.adapter(), challenge: false });
+  assert.deepEqual(JSON.parse(st.raw).collectLog.narou, { err: 'rest' });
+});
+
 let failed = 0;
 for (const [name, fn] of tests) {
   try { await fn(); console.log('ok  ', name); } catch (e) { failed++; console.log('FAIL', name, '\n    ', e.message); }

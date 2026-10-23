@@ -55,6 +55,15 @@ class UpdaterTest {
     }
 
     @Test
+    fun APKのURLは自分のリポジトリのリリース配布先だけ() {
+        assertTrue(Updater.isExpectedApkUrl("https://github.com/tonbo2339/yomikura/releases/download/v1.1.0/a.apk", "tonbo2339/yomikura"))
+        assertFalse(Updater.isExpectedApkUrl("https://github.com/evil/other/releases/download/v1/a.apk", "tonbo2339/yomikura"))
+        assertFalse(Updater.isExpectedApkUrl("https://github.com/tonbo2339/yomikura-fake/releases/download/v1/a.apk", "tonbo2339/yomikura"))
+        assertFalse(Updater.isExpectedApkUrl("http://github.com/tonbo2339/yomikura/releases/download/v1/a.apk", "tonbo2339/yomikura"))
+        assertFalse(Updater.isExpectedApkUrl("https://evil.example/tonbo2339/yomikura/releases/download/v1/a.apk", "tonbo2339/yomikura"))
+    }
+
+    @Test
     fun 転送先は_https_かつgithubの配下だけ() {
         assertTrue(Updater.isAllowedRedirect("https://github.com/o/r/releases/download/v1/a.apk"))
         assertTrue(Updater.isAllowedRedirect("https://objects.githubusercontent.com/x?y=1"))

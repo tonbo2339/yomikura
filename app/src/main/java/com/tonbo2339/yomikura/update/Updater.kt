@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import android.webkit.CookieManager
+import androidx.core.content.pm.PackageInfoCompat
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
@@ -68,7 +69,7 @@ class Updater(private val context: Context, private val repo: String, private va
         val href = Regex("href=\"([^\"]*/releases/download/[^\"]+\\.apk)\"").find(html)?.groupValues?.get(1)
             ?: return Check("error", latest, "リリースに APK がありません")
         val url = (if (href.startsWith("/")) "https://github.com$href" else href).replace("&amp;", "&")
-        if (URL(url).host != "github.com") return Check("error", latest, "APK の場所が想定と違います")
+        if (!isExpectedApkUrl(url, repo)) return Check("error", latest, "APK の場所が想定と違います")
         apkUrl = url
         return Check("available", latest)
     }
@@ -135,7 +136,9 @@ class Updater(private val context: Context, private val repo: String, private va
         val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) PackageManager.GET_SIGNING_CERTIFICATES else @Suppress("DEPRECATION") PackageManager.GET_SIGNATURES
         val info = pm.getPackageArchiveInfo(apk.path, flags) ?: return "ダウンロードしたファイルを読めませんでした"
         if (info.packageName != context.packageName) return "別のアプリのファイルです"
-        val mine = signers(pm.getPackageInfo(context.packageName, flags))
+        val installed = pm.getPackageInfo(context.packageName, flags)
+        if (PackageInfoCompat.getLongVersionCode(info) <= PackageInfoCompat.getLongVersionCode(installed)) return "ダウンロードしたファイルは、今のアプリより新しくありません"
+        val mine = signers(installed)
         val theirs = signers(info)
         if (mine.isEmpty() || theirs.isEmpty()) return "署名を確認できませんでした"
         if (mine.none { it in theirs }) return "署名が今のアプリと違うため更新できません。テスト用 (debug) の版が入っているときは、一度アンインストールしてから入れてください"
@@ -159,6 +162,12 @@ class Updater(private val context: Context, private val repo: String, private va
             code == 404 -> Check("error", message = "公開されたリリースがありません")
             code !in 300..399 -> Check("error", message = "GitHub が応答しませんでした ($code)")
             else -> null
+        }
+
+        /** リリースのページから読んだ APK の URL が、このリポジトリのリリースの配布先 (https://github.com/<repo>/releases/download/…) か */
+        fun isExpectedApkUrl(url: String, repo: String): Boolean {
+            val u = try { URL(url) } catch (e: Exception) { return false }
+            return u.protocol == "https" && u.host == "github.com" && u.path.startsWith("/$repo/releases/download/", ignoreCase = true)
         }
 
         /** ダウンロードの転送先として許す URL か (https の github.com と、*.githubusercontent.com だけ) */

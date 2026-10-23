@@ -27,8 +27,7 @@ class UpdateFlow(private val host: BridgeHost) {
         val ua = host.userAgent()
         runBackground("Yomikura-update") {
             val r = try {
-                val c = host.updater.check(ua, BuildConfig.VERSION_NAME)
-                JSONObject().put("state", c.state).put("latest", c.latest).put("message", c.message)
+                checkJson(host.updater.check(ua, BuildConfig.VERSION_NAME))
             } catch (e: Exception) {
                 error("確認できませんでした (${e.message ?: e.javaClass.simpleName})")
             }
@@ -55,7 +54,14 @@ class UpdateFlow(private val host: BridgeHost) {
             try {
                 emit(progress(0))
                 // 画面が覚えていた結果から入れるとき (アプリを開き直したあと) は、APK の場所を探し直す
-                if (!host.updater.hasApk) host.updater.check(ua, BuildConfig.VERSION_NAME)
+                if (!host.updater.hasApk) {
+                    val c = host.updater.check(ua, BuildConfig.VERSION_NAME)
+                    if (c.state != "available") {
+                        // 探し直したら入れられる版が無かった (最新になっていた・リリースが消えた・ログイン切れなど)。その結果を画面に伝えて止める
+                        emit(checkJson(c))
+                        return@runBackground
+                    }
+                }
                 val apk = host.updater.download(ua) { pct -> emit(progress(pct)) }
                 val problem = host.updater.verify(apk)
                 if (problem != null) {
@@ -72,6 +78,7 @@ class UpdateFlow(private val host: BridgeHost) {
         }
     }
 
+    private fun checkJson(c: Updater.Check) = JSONObject().put("state", c.state).put("latest", c.latest).put("message", c.message)
     private fun error(message: String) = JSONObject().put("state", "error").put("message", message)
     private fun progress(pct: Int) = JSONObject().put("state", "progress").put("pct", pct)
 

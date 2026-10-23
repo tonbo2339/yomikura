@@ -48,6 +48,14 @@ window.nhUpdate = (json) => {
   });
   $('u-notesBox').hidden = false;
 })();
+// インストールの画面を開いたまま「キャンセル」で戻ると、installing のままボタンが隠れて固まる。戻ってきたら入れ直せる状態に戻す
+// (更新が済めばアプリごと入れ替わるので、戻ってくるのはキャンセルしたとき)
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && upd.state === 'installing') {
+    upd = { state: avail ? 'available' : 'idle', latest: avail };
+    paintUpdate();
+  }
+});
 function checkUpdate() {
   if (!CAN_UPDATE) return;
   upd = { state: 'checking' };

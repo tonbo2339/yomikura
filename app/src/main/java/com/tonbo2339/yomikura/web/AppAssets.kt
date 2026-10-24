@@ -14,7 +14,7 @@ object AppAssets {
     /** 版ごとの設定を JS (sites.js など) に渡す。sites.js より先に置く */
     val editionJs: String
         get() = "window.NH_EDITION=" + JSONObject()
-            .put("r18OptIn", Edition.R18_OPT_IN).put("appName", BuildConfig.APP_NAME).put("backupApp", Edition.BACKUP_APP).put("backupApps", org.json.JSONArray(Edition.BACKUP_ACCEPTS)).put("publicRepo", Edition.PUBLIC_REPO) + ";\n"
+            .put("r18OptIn", Edition.R18_OPT_IN).put("appName", BuildConfig.APP_NAME).put("backupApp", Edition.BACKUP_APP).put("backupApps", org.json.JSONArray(Edition.BACKUP_ACCEPTS)).put("publicRepo", Edition.PUBLIC_REPO).put("updateRepo", Edition.UPDATE_REPO) + ";\n"
 
     /** JS の一覧 (assets/js/scripts.json)。 */
     private fun manifest(ctx: Context) = JSONObject(readAsset(ctx, ScriptManifest.FILE))

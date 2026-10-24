@@ -27,6 +27,7 @@
     "offline/offline.js",
     "offline/offline-bg.js",
     "site/login.js",
+    "site/login-totp.js",
     "ui/ui-style.js",
     "ui/ui-collect.js",
     "ui/ui-save.js",

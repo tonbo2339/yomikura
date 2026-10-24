@@ -71,6 +71,7 @@ class MainActivity : AppCompatActivity(), BridgeHost {
     override val activity: AppCompatActivity get() = this
     override val appPageNow: Boolean get() = gate.app
     override val trustedPageNow: Boolean get() = gate.trusted
+    override val pageUrlNow: String get() = gate.url
     override val collectingNow: Boolean get() = collect.running
     override val collectProgressText: String get() = collect.progress
 
@@ -168,6 +169,7 @@ class MainActivity : AppCompatActivity(), BridgeHost {
             settings.domStorageEnabled = true
             addJavascriptInterface(StoreBridge(this@MainActivity), "NHStore")
             addJavascriptInterface(DiagBridge(this@MainActivity), "NHDiag")
+            addJavascriptInterface(TotpBridge(this@MainActivity), "NHTotp")
             addJavascriptInterface(OfflineBridge(this@MainActivity, offline, saveQueue, hostFilter), "NHOffline")
             // 版によってだけある連携 (Edition.installExtras)。公開版は何もしない
             extras = Edition.installExtras(this@MainActivity, this, offline, ::emitJs) { gate.app }

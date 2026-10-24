@@ -79,3 +79,4 @@ for f in app/src/test/js/*.test.mjs; do node "$f"; done   # JS の単体テス�
 年齢に関わる設定は [docs/adult.md](docs/adult.md) にまとめてあります。
 サイトへのアクセスのしかた (間隔・止められたときの休み方) は [docs/access.md](docs/access.md) にまとめてあります。
 文字の大きさ・テーマ・読み上げなど、見えかたや操作のしやすさに関わる設定は [docs/accessibility.md](docs/accessibility.md) にまとめてあります。
+なろうの 2 段階認証のコードを自動で入力する設定 (認証アプリの登録のしかたを含む) は [docs/2fa-login.md](docs/2fa-login.md) にまとめてあります。

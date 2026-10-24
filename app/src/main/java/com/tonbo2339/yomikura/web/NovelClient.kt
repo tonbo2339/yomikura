@@ -54,6 +54,7 @@ class NovelClient(
         // 信用しないページへ移るときは、読み込みの前 (転送の 1 回ごとにも呼ばれる) に、ここで窓口を閉じる。
         // onPageStarted は画面のスレッドに遅れて届くので、それまでの間に新しいページの JS が、前のページ (アプリ内ページなど) の扱いで窓口を使えてしまうため。
         // 開くのはここではしない (開くのは onPageStarted。読み込まれなかった移動で、窓口が開いたままにならないように)
+        if (gate.started && main) gate.navigating(request.url.toString()) // 信頼するほかのサイトへ移るときも、URL は先に新しいページのものにする (前のページの URL のまま窓口が答えないため)
         if (gate.started && main && !TrustGate.classify(request.url.toString()).trusted) gate.close()
         // アプリ内ページ (https://yomikura.local/xxx) は assets/web から、/js/xxx は assets/js から返す
         if (host == TrustGate.APP_HOST) {
@@ -127,6 +128,7 @@ class NovelClient(
     }
 
     override fun doUpdateVisitedHistory(view: WebView, url: String?, isReload: Boolean) {
+        gate.navigating(url) // 履歴の書き換え (pushState) で URL が変わるとき
         val path = url?.let { Uri.parse(it).let { u -> "${u.host}${u.path}" } }
         if (path != historyPath) {
             historyPath = path
@@ -143,6 +145,7 @@ class NovelClient(
             gate.page = page
             events.onPageKindChanged()
         }
+        gate.navigating(url) // 転送の先の URL で揃える (page と同じページを指す)
         if (page.injectable) view.evaluateJavascript(injectedJs, null)
         events.onPageFinished(url)
     }

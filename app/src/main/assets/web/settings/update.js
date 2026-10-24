@@ -11,6 +11,11 @@ const EXTRA_FOLD = [];
 const NEEDS_LOGIN = !!(window.NHStore && NHStore.updateNeedsLogin && NHStore.updateNeedsLogin());
 $('updLoginBox').hidden = !NEEDS_LOGIN;
 $('ghNote').hidden = !NEEDS_LOGIN;
+// 更新を取る GitHub のリリースページ (Kotlin の Edition.UPDATE_REPO)。版の変更点・過去の版はここで見られる
+const REPO_URL = (window.NH_EDITION || {}).updateRepo ? 'https://github.com/' + NH_EDITION.updateRepo + '/releases' : '';
+$('updRepoBox').hidden = $('updRepoUrl').hidden = !REPO_URL;
+$('updRepoUrl').textContent = REPO_URL;
+$('updRepo').onclick = () => { openUrl(REPO_URL); };
 let upd = { state: 'idle' };
 let avail = ''; // 入れられる新しい版 (あれば)
 try {

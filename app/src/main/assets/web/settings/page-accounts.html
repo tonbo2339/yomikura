@@ -6,4 +6,9 @@
     <button class="cell danger" id="clearLogins">すべてのログイン情報 (Cookie) を削除</button>
   </div>
   <div class="hint">なろう・ハーメルン・カクヨム<span id="ghNote">と GitHub</span>のログインをまとめて消します。</div>
+  <div class="group" id="totpGroup" style="margin-top:20px" hidden>
+    <div class="cell"><span class="text">なろうの 2 段階認証</span><span class="value" id="totpState"></span></div>
+    <button class="cell danger" id="totpClear" hidden>登録した認証アプリの鍵を削除</button>
+  </div>
+  <div class="hint" id="totpHint" hidden>認証アプリの鍵を登録すると、なろうのログインの認証コードを自動で入れます。登録は、なろうの「認証アプリ(Google Authenticator)の設定」で「セットアップキーで設定する」を開き、「ヨミクラにも登録する」を押します。鍵はこの端末の中で暗号化して保存し、Android の自動バックアップや設定の書き出しには入れません。</div>
 </section>

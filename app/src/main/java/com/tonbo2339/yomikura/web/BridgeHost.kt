@@ -13,6 +13,8 @@ interface BridgeHost {
     val appPageNow: Boolean
     /** いま出ているのが対応サイトの https かアプリ内ページか (TrustGate.Page.trusted) */
     val trustedPageNow: Boolean
+    /** いま出ているページの URL (どのスレッドからでも読める。信用しないページへ移る間は空) */
+    val pageUrlNow: String
     val collectingNow: Boolean
     val collectProgressText: String
     val updater: Updater

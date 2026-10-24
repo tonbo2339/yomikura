@@ -9,6 +9,10 @@ package com.tonbo2339.yomikura
 class PageGate {
     @Volatile var page = TrustGate.Page.NONE
 
+    /** いまのページの URL (set で控える)。窓口が「このページにだけ渡す」ものを決めるのに使う (認証アプリのコード = TotpPages)。信用しないページへ移る間は空 */
+    @Volatile var url = ""
+        private set
+
     /** この画面でページの読み込みが一度でも始まったか (onPageStarted)。まだなら、最初のページの通信のときに page を決める (NovelClient.shouldInterceptRequest) */
     @Volatile var started = false
 
@@ -30,12 +34,22 @@ class PageGate {
     /** url のページの扱いに決める。 */
     fun set(url: String?) {
         page = TrustGate.classify(url)
+        this.url = url.orEmpty()
         closedForNavigation = false
+    }
+
+    /**
+     * 主フレームの URL だけを更新する (信頼の扱い page は変えない)。ページ単位のものを渡す窓口 (認証アプリのコード = TotpPages) が、
+     * 信頼するほかのサイトへ移る途中・転送・履歴の書き換えの間も、前のページの URL のまま渡さないため。信用しないページへ移る間 (closedForNavigation) は空のまま。
+     */
+    fun navigating(url: String?) {
+        if (!closedForNavigation) this.url = url.orEmpty()
     }
 
     /** 窓口を閉じる (信用しないページへ移るとき)。 */
     fun close() {
         page = TrustGate.Page.NONE
+        url = ""
         closedForNavigation = true
     }
 }

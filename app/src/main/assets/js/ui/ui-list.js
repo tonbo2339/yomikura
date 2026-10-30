@@ -56,7 +56,7 @@ window.NH_UI_LIST = function (ctx) {
     if (!todo.length) { if (!view.viewed()) view.applyView(); block.sweepBlocked(); return; }
     const listed = NH.load().readLater;
     const inList = new Set(listed.map((x) => x.key));
-    const activeKeys = new Set(listed.filter((x) => !x.done).map((x) => x.key)); // 「追加済み」と出す作品 (読了は除く)
+    const activeKeys = new Set(listed.filter((x) => !x.done && NH.kindOf(x) === 'later').map((x) => x.key)); // 「追加済み」と出す作品 (「後で読む」だけ。読了と「更新」は除く。ボタンを押したときの判定 NH.inLater と同じ)
     // リストにある作品は、一覧に出ている連載状態で更新する (リストの絞り込み用。状態が変わったときだけ書く)
     const known = todo.filter(({ entry }) => entry.status && inList.has(entry.key));
     if (known.length) {

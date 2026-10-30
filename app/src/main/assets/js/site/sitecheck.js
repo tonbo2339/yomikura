@@ -45,8 +45,7 @@
       items.push({ label: '本文 (文字サイズの対象)', selector: s.body && s.body.box, critical: true });
       items.push({ label: '本文 (フォント・行間の対象)', selector: s.body && s.body.text, critical: true });
       const f = s.fold || {};
-      [['comments', '感想の欄'], ['recommend', 'おすすめの欄'], ['links', '作者・共有・リンクの欄'], ['reactions', '応援・リアクションの欄']]
-        .forEach(([k, label]) => { if (f[k]) items.push({ label: '畳む欄: ' + label, selector: f[k] }); });
+      (window.NH_FOLDS || []).forEach((fd) => { if (f[fd.key]) items.push({ label: '畳む欄: ' + fd.label, selector: f[fd.key] }); }); // 名前は sites.js の NH_FOLDS
     }
     // ヘッダー・フッター (bars) は話ページだけ隠すので、話ページのときだけ調べる
     [...hideSelectors(s.hide), ...(episode ? hideSelectors(s.bars) : [])].forEach((sel) => items.push({ label: '隠す対象', selector: sel }));

@@ -29,6 +29,7 @@ object Notices {
         UPDATES("updates", "更新のお知らせ", NotificationManager.IMPORTANCE_DEFAULT),
         OFFLINE_PROGRESS("offline_progress", "オフライン保存の進み", NotificationManager.IMPORTANCE_LOW),
         OFFLINE_DONE("offline_done", "オフライン保存のお知らせ", NotificationManager.IMPORTANCE_DEFAULT),
+        READ_ALOUD("read_aloud", "読み上げ", NotificationManager.IMPORTANCE_LOW),
     }
 
     /** 通知の番号 (同じ番号は上書きされる)。 */
@@ -36,6 +37,7 @@ object Notices {
         const val UPDATE = 1
         const val CHALLENGE = 2
         const val OFFLINE_PROGRESS = 4101
+        const val READ_ALOUD = 4301
         const val OFFLINE_DONE_BASE = 4200
     }
 

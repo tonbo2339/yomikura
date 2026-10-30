@@ -27,9 +27,24 @@ class ReadingAids(
         ctx.applicationContext,
         { js -> web().evaluateJavascript(js, null) },
         { r -> web().post { r() } },
-        { },
+        { on -> if (on) showNotice(false) else ReadAloudService.hide(ctx) },
         { msg -> Messages.show(ctx, msg) },
-    ).also { readAloud = it }
+        { paused -> showNotice(paused) },
+    ).also { readAloud = it; ReadAloudControl.handler = ::onControl }
+
+    /** 通知・ロック画面に出す (作品名つき) */
+    private fun showNotice(paused: Boolean) = ReadAloudService.show(ctx, paused, web().title.orEmpty())
+
+    /** 通知のボタンから (どのスレッドからでも) */
+    private fun onControl(action: String) {
+        web().post {
+            when (action) {
+                ReadAloudControl.PAUSE -> readAloud?.pause()
+                ReadAloudControl.RESUME -> readAloud?.resume()
+                ReadAloudControl.STOP -> stopReading()
+            }
+        }
+    }
 
     val speaking: Boolean get() = readAloud?.speaking == true
 
@@ -42,7 +57,9 @@ class ReadingAids(
                 List(arr.length()) { arr.optString(it) }
             }.getOrNull().orEmpty()
             val rate = settings().optDouble("ttsRate", 1.0).toFloat()
-            readAloud().start(list, rate)?.let { Messages.show(ctx, it) }
+            // 読み上げには画面のボタンが無いので、始めたときに止めるボタンを出す (あとは ⋮ メニューの「読み上げを止める」)
+            val err = readAloud().start(list, rate)
+            Messages.show(ctx, err ?: "読み上げを始めました (⋮ メニューでも止められます)", if (err == null) "止める" to { stopReading() } else null)
         }
     }
 
@@ -59,6 +76,8 @@ class ReadingAids(
     fun shutdown() {
         readAloud?.shutdown()
         readAloud = null
+        ReadAloudControl.handler = null
+        ReadAloudService.hide(ctx)
     }
 
     /**

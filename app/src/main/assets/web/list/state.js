@@ -3,7 +3,7 @@ const PRESET_TAGS = ['異世界', '現代', '恋愛', 'ラブコメ', 'ホラー
 // 保存データの読み書きと「続きから」の規則は core/ (サイト上の注入スクリプトと共通)
 const { load, resumeUrl, kindOf } = NH;
 
-const ui = { tab: null, site: '', tag: '', status: '', q: '', src: 'all' };
+const ui = { tab: null, site: '', tag: '', status: '', q: '', src: 'all', sel: null }; // sel = 選択モードで選んだ作品の key の集合 (select.js)
 // 連載状態の絞り込み (作品の status。ランキング・検索の一覧と作品ページから分かったものだけ。分からない作品は「すべて」にだけ出る)
 const STATUS_CHIPS = [['serial', '連載中'], ['complete', '完結'], ['short', '短編']];
 const STATUS_NAME = Object.fromEntries(STATUS_CHIPS);

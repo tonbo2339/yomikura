@@ -10,6 +10,7 @@
     <!-- オフライン保存 (OfflineService): 画面を消しても、別のアプリに移っても、キューの保存を続ける -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <!-- 端末の再起動後に、確認のアラームを掛け直す -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <!-- 決めた時刻どおりに確認する (Android 13 以降はこちら。ストア外のアプリはインストール時に許可される) -->
@@ -66,6 +67,7 @@
                 <data android:host="mnlt.syosetu.com" />
                 <data android:host="mid.syosetu.com" />
                 <data android:host="syosetu.org" />
+                <data android:host="h.syosetu.org" />
                 <data android:host="kakuyomu.jp" />
             </intent-filter>
 
@@ -227,6 +229,11 @@
             android:name=".OfflineService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
+        <!-- 読み上げの通知・ロック画面の操作を支える前景サービス (ReadAloudService.kt)。読み上げ自体は画面側 (ReadAloud.kt) -->
+        <service
+            android:name=".ReadAloudService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
         <!-- 裏での更新の確認 (BgCheck.kt): アラームの受け口と、画面に出さない WebView で巡回するジョブ -->
         <receiver
             android:name=".BgAlarmReceiver"

@@ -50,7 +50,9 @@ class Updater(private val context: Context, private val repo: String, private va
     fun check(userAgent: String, current: String): Check {
         apkUrl = null
         val c = open("https://github.com/$repo/releases/latest", userAgent)
+        val startedAt = System.currentTimeMillis()
         val code = c.responseCode
+        NetLog.native(c, "https://github.com/$repo/releases/latest", startedAt, needsLogin)
         val location = c.getHeaderField("Location").orEmpty()
         c.disconnect()
         earlyResult(code, location, needsLogin)?.let { return it }

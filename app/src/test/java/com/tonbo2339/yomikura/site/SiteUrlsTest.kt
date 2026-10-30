@@ -7,6 +7,16 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SiteUrlsTest {
+    @Test fun 描画前の差し込みの対象に対応サイトのホストが漏れていない() {
+        val hosts = listOf("syosetu.com", "ncode.syosetu.com", "syosetu.org", "kakuyomu.jp") + SiteUrls.R18_HOSTS
+        hosts.forEach { h ->
+            assertTrue("$h が INJECT_ORIGINS に入っていません", SiteUrls.INJECT_ORIGINS.any { SiteUrls.originMatches(it, h) })
+        }
+        // 対応サイトでないホストには当てはまらない
+        assertFalse(SiteUrls.INJECT_ORIGINS.any { SiteUrls.originMatches(it, "example.com") })
+        assertFalse(SiteUrls.INJECT_ORIGINS.any { SiteUrls.originMatches(it, "evilsyosetu.com") })
+    }
+
     @Test
     fun workUrls() {
         assertTrue(SiteUrls.isWorkUrl("https://ncode.syosetu.com/n1234ab/12/"))

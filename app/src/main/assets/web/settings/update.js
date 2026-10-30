@@ -10,7 +10,6 @@ const EXTRA_FOLD = [];
 // 更新に GitHub のログインが要る版か (非公開のリポジトリから取る版だけ)。要らない版は、ログインの表示を隠す
 const NEEDS_LOGIN = !!(window.NHStore && NHStore.updateNeedsLogin && NHStore.updateNeedsLogin());
 $('updLoginBox').hidden = !NEEDS_LOGIN;
-$('ghNote').hidden = !NEEDS_LOGIN;
 // 更新を取る GitHub のリリースページ (Kotlin の Edition.UPDATE_REPO)。版の変更点・過去の版はここで見られる
 const REPO_URL = (window.NH_EDITION || {}).updateRepo ? 'https://github.com/' + NH_EDITION.updateRepo + '/releases' : '';
 $('updRepoBox').hidden = $('updRepoUrl').hidden = !REPO_URL;
@@ -88,8 +87,10 @@ function paintUpdate() {
   $('updInstall').hidden = !avail || busy;
   $('updInstall').textContent = 'バージョン ' + avail + ' をダウンロードしてインストール';
   $('updCheck').disabled = busy || !CAN_UPDATE;
+  $('updLoginTop').hidden = !(NEEDS_LOGIN && upd.state === 'login'); // 確認が「ログインが必要」と返ったときだけ、ここからもログインできる
+  if (typeof paintGithub === 'function') paintGithub(); // 下のログインの表示も、確認の結果に合わせる
   $('updateCard').hidden = !avail;
   $('updateCardText').textContent = 'バージョン ' + avail + ' があります';
-  $('v-update').textContent = avail ? '新 ' + avail : upd.state === 'login' ? 'ログインが必要' : 'v' + CURRENT;
+  $('v-update').textContent = avail ? '新しい版 ' + avail : upd.state === 'login' ? 'ログインが必要' : CURRENT;
   $('v-update').style.color = avail ? 'var(--accent-text)' : '';
 }

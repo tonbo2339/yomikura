@@ -41,4 +41,17 @@ class CollectCooldownTest {
         assertEquals(1, CollectCooldown.remainingMinutes(min))
         assertEquals(7, CollectCooldown.remainingMinutes(6 * min + 1))
     }
+
+    @Test
+    fun autoDueCountsTheStartOfAStalledCheck() {
+        val hour = 3_600_000L
+        val now = 100 * hour
+        // 終わった時刻だけなら、1 時間以上前 = 時期
+        assertEquals(true, CollectCooldown.autoDue(now - 2 * hour, 1, now))
+        // 途中で止まった確認は lastCollect を書かず、始めた時刻だけが新しい: lastOf がそちらを選び、時期ではない
+        val data = org.json.JSONObject().put("lastCollect", now - 2 * hour).put("collectStartAt", now - 60_000L)
+        assertEquals(false, CollectCooldown.autoDue(CollectCooldown.lastOf(data), 1, now))
+        assertEquals(true, CollectCooldown.autoDue(0L, 3, now)) // 一度も確認していない
+        assertEquals(false, CollectCooldown.autoDue(now - hour, 1, now)) // ちょうど 1 時間: まだ
+    }
 }

@@ -1,4 +1,4 @@
-// list.html: 長押しの並べ替え・横スワイプの削除
+// list.html: 長押しの並べ替え・横スワイプの削除 (設定の「横にスワイプして削除」でオフにできる)
 // ---- 長押しして上下へ動かす並べ替え / 横にスワイプして削除 ----
 // 作品を長押しすると持ち上がり、指を上下に動かして離した場所に入る。画面の端に近づくと自動でスクロールする。
 // 長押しになる前に横へ動かすと、カードが指について動き、幅の SWIPE_RATIO を越えて離すとリストから削除する (Gmail と同じ)。
@@ -18,10 +18,11 @@ function applyOrder(keys) {
   });
 }
 
-// reorder = 長押しで動かせるか (自分で並べた順のときだけ)。横スワイプでの削除はいつでも使える
-function enableDrag(c, it, visible, reorder) {
+// reorder = 長押しで動かせるか (自分で並べた順で、選択中でないとき)。swipe = 横スワイプで削除できるか (設定。選択中は使わない)。まとめての削除は選択モード (select.js)
+function enableDrag(c, it, visible, reorder, swipe) {
   let timer = 0, sx = 0, sy = 0, st = null, raf = 0, swiping = false, swipeDx = 0;
   c.addEventListener('contextmenu', (e) => e.preventDefault());
+  if (!reorder && !swipe) return;
 
   const layout = (clientY) => {
     st.y = clientY;
@@ -120,10 +121,12 @@ function enableDrag(c, it, visible, reorder) {
       const dx = t.clientX - sx, dy = t.clientY - sy;
       if (Math.hypot(dx, dy) <= 10) return;
       clearTimeout(timer); timer = 0;
-      if (Math.abs(dx) > Math.abs(dy) * 1.2) { swiping = true; swipeDx = dx; if (e.cancelable) e.preventDefault(); swipeTo(dx); }
+      if (swipe && Math.abs(dx) > Math.abs(dy) * 1.2) { swiping = true; swipeDx = dx; if (e.cancelable) e.preventDefault(); swipeTo(dx); }
       return;
     }
     if (e.cancelable) e.preventDefault();
     layout(t.clientY);
   }, { passive: false });
   c.addEventListener('touchend', () => { endSwipe(true); finish(true); });
+  c.addEventListener('touchcancel', () => { endSwipe(false); finish(false); });
+}

@@ -110,10 +110,12 @@ object SiteConfig {
      * 更新の巡回の最初に開くページ (最初の対象サイトのブックマーク / しおり / フォロー)。mode = bg / fg / fg-auto。対象のサイトが無ければ null。
      * アクセスを止められて休んでいるサイト (SiteRest。手動 fg は 10 分、自動は 60 分) は飛ばす (開くだけでもアクセスになるため。全部休んでいれば null)。
      * そこから先のサイトは、ui-collect.js が同じ規則 (NH.isResting) で順にたどり、最後にリスト / 起動ページへ進む。
+     * forceManual (AppSettings.forceManualCheck) のときの手動 (fg) は、休止を見ずに開く (確認画面が出たら、人間に通してもらう)。
      */
-    fun collectStartUrl(data: JSONObject, mode: String, now: Long = System.currentTimeMillis()): String? {
+    fun collectStartUrl(data: JSONObject, mode: String, now: Long = System.currentTimeMillis(), forceManual: Boolean = false): String? {
         val rest = data.optJSONObject("rest")
-        return COLLECT_ORDER.firstOrNull { collectActive(data, it) && !SiteRest.isResting(rest, it, auto = mode != "fg", now) }
+        val ignoreRest = forceManual && mode == "fg"
+        return COLLECT_ORDER.firstOrNull { collectActive(data, it) && (ignoreRest || !SiteRest.isResting(rest, it, auto = mode != "fg", now)) }
             ?.let { COLLECT_PAGES.getValue(it) + "#nh-collect-$mode" }
     }
 }

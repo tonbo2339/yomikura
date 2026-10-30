@@ -10,6 +10,11 @@
     collectUrl: 'https://syosetu.org/?mode=siori2_view&type=2&filter=1',
     onCollectPage: (loc) => loc.search.includes('mode=siori2_view'),
     bodySel: '#honbun,#maegaki,#atogaki',
+    // 挿絵は <img> ではなく、本文の中の「【挿絵表示】」のリンク (ページの JS が表示のときに画像へ変える)。リンク先が画像の URL (http://syosetu.org/img/user/…)
+    imageLinkSel: 'a[href*="/img/user/"]',
+    // 取りに行く画像の URL。リンクの URL (syosetu.org/img/…) は img.syosetu.org へ 301 で転送されるので、転送先を直接指す
+    // (転送の前の URL は、アプリ自身の通信だと Cloudflare に止められ (403)、ページの fetch では転送先を CORS で読めない)
+    imageUrl: (url) => url.replace(/^https:\/\/syosetu\.org\/img\//, 'https://img.syosetu.org/img/'),
     // ページの下の畳む欄 (セレクターは sites.js)
     foldGroups: ((window.NH_SITES || {}).hameln || {}).fold,
     seqEpisodes: true, // 話番号が 1, 2, 3... の連番

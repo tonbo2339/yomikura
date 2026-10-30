@@ -20,4 +20,16 @@ class HamelnRatingTest {
     @Test fun タグ行が無ければ判別できない() {
         assertNull(HamelnRating.isR18("<html><body>何もない</body></html>"))
     }
+
+    @Test fun 開いた結果の判断() {
+        val r18 = page("R-18 ガールズラブ")
+        assertEquals(null to true, HamelnRating.judge(403, null, "")) // Cloudflare の確認など: 止める
+        assertEquals(null to true, HamelnRating.judge(429, null, ""))
+        assertEquals(null to true, HamelnRating.judge(503, null, ""))
+        assertEquals(true to false, HamelnRating.judge(200, "h.syosetu.org", "")) // R18 のドメインへ転送された: 中身は読まずに R-18
+        assertEquals(true to false, HamelnRating.judge(200, null, r18))
+        assertEquals(false to false, HamelnRating.judge(200, null, page("R-15 オリ主")))
+        assertEquals(null to false, HamelnRating.judge(0, null, "")) // 開けなかった・時間切れ: 判別できない (止めない)
+        assertEquals(null to false, HamelnRating.judge(404, null, r18)) // エラーのページの中身は読まない
+    }
 }

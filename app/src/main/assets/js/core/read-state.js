@@ -87,7 +87,8 @@ window.NH.define('read-state', function (NH) {
     const seen = new Set((d.history || []).map((h) => h.key));
     return (key) => {
       const p = progress[key];
-      if (doneInList.has(key) || (p && p.done)) return 'done';
+      // p.done はその話を読み終えたこと。次の話がある (p.next) なら、作品はまだ読みかけ
+      if (doneInList.has(key) || (p && p.done && !p.next)) return 'done';
       if (p) return 'reading';
       return seen.has(key) ? 'seen' : null;
     };

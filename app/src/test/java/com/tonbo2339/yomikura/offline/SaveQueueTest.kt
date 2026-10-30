@@ -229,4 +229,26 @@ class SaveQueueTest {
         assertTrue(b.remove("narou:a1"))
         assertFalse(a.contains("narou:a1"))
     }
+
+    @Test
+    // 自動更新の作品: 話の一覧は空のまま入り、同じ作品がキューにあれば入れない。読み書きしても refresh は残る
+    fun refreshJobIsAddedOnceAndSurvivesReload() {
+        val q = queue()
+        val j = job("a1").copy(refresh = true)
+        assertEquals(1, q.add(j))
+        assertEquals(0, q.add(j))
+        assertEquals(1, q.add(job("a1", "1"))) // 手動の保存は話を足すだけ (自動更新のまま。保存を始めるとき、保存していない話は全部取る)
+        val back = SaveQueue.decode(SaveQueue.encode(q.all())).single()
+        assertTrue(back.refresh)
+        assertEquals(1, back.eps.size)
+    }
+
+    @Test
+    // 自動更新は、「Wi-Fi のときだけ」の設定に関係なく従量課金の回線では始めない (「今回だけモバイル」があれば別)
+    fun refreshNeedsUnmetered() {
+        assertTrue(job("a1").copy(refresh = true).needsUnmetered(false))
+        assertFalse(job("a1").needsUnmetered(false))
+        assertTrue(job("a1").needsUnmetered(true))
+        assertFalse(job("a1").copy(mobileOk = true).needsUnmetered(true))
+    }
 }

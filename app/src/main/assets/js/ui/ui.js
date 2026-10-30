@@ -28,6 +28,9 @@
   if (saveWork) { NH_UI_SAVE({ adapter, challenge, mk, dropCover, askDialog }, saveWork); return; }
 
   dropCover(); // ここから先は保存ではない
+  // いま開いている作品のページ (短編・目次) で ⋮ の「この作品をオフライン保存」を押すと、URL に #nh-save が付くだけで読み込み直されない。
+  // 保存の画面はページを開いたときに出すので、読み込み直す
+  window.addEventListener('hashchange', () => { if (location.hash === '#nh-save') location.reload(); });
 
   // ---- 選択のダイアログ (画面の真ん中に出る。画面は離れない)。押した項目の値を返す。背景を押すと null ----
   // options: [[ラベル, 値], ...]
@@ -110,7 +113,7 @@
   window.nhWorkState = () => {
     const w = NH.parseWork(location.href);
     const it = w && NH.findItem(NH.load(), w);
-    return w ? { inList: !!it && !it.done, saved: !!NH.off.meta(w.site, w.id), url: w.url } : null;
+    return w ? { inList: !!it && !it.done && NH.kindOf(it) === 'later', saved: !!NH.off.meta(w.site, w.id), url: w.url } : null;
   };
   // 今の作品をリストから外す (⋮ メニューの「リストから削除」)。結果: removed / '' (作品のページではない・リストに無い)
   window.nhRemoveCurrent = () => {
@@ -119,7 +122,7 @@
     NH.update((d) => {
       result = '';
       const it = w && NH.findItem(d, w);
-      if (!it) return;
+      if (!it || it.done || NH.kindOf(it) !== 'later') return; // メニューに「削除」を出したのは「後で読む」にあるとき (間に状態が変わったら、何もしない)
       NH.removeItem(d, it);
       result = 'removed';
     });
@@ -135,7 +138,7 @@
   if (laterM) {
     history.replaceState(null, '', location.pathname + location.search); // 再読み込みで二重に追加しないよう印を外す
     const result = addCurrentWork() || 'failed';
-    if (laterM[1] && window.NHStore && NHStore.laterBack) NHStore.laterBack(result);
+    if (laterM[1]) NH.laterBack(result);
     else NH.toast({ added: '後で読むに追加しました', exists: 'すでにリストにあります', failed: '作品のページを開けなかったので、追加していません' }[result]);
   }
   // リストにある作品を開いたとき、ページから読めた連載状態で更新する (リストの絞り込み用。変わったときだけ書く)

@@ -34,6 +34,7 @@ class Collector(
 ) {
     private val mainHandler = MainThread.handler
     private var web: WebView? = null
+    private var ready: PageReady? = null // 巡回中のページの、読み込みの見張り
     private val stall = Runnable { Diag.w(TAG, "stalled at ${web?.url}"); finish(null) }
 
     val running get() = web != null
@@ -53,8 +54,12 @@ class Collector(
             settings.domStorageEnabled = true
             CookieManager.getInstance().setAcceptThirdPartyCookies(this, true) // 確認画面 (Turnstile) は別オリジンの枠を使う
             addJavascriptInterface(Store(), "NHStore")
-            webViewClient = object : WebViewClient() {
+            val client = object : WebViewClient() {
+                override fun onReceivedHttpError(view: WebView, request: WebResourceRequest, response: WebResourceResponse) =
+                    NetLog.webError("collect", request, response.statusCode, response.responseHeaders)
+
                 override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
+                    NetLog.page("collect", request)
                     // 対応サイトの https 以外のページは開かせない (合言葉と保存の窓口を、サイトの外へ渡さないため)
                     if (request.isForMainFrame && !allowedPage(request.url.scheme, request.url.host)) {
                         Diag.w(TAG, "off-site: ${request.url.host}")
@@ -73,8 +78,16 @@ class Collector(
                     return true
                 }
 
+                override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) { ready?.started(url) }
+
                 override fun onPageFinished(view: WebView, url: String?) {
                     Log.d(TAG, "page $url")
+                    if (ready?.finished(url) == true) return // 見張り (PageReady) がもう入れた
+                    inject(view, url)
+                }
+
+                /** 巡回の JS を入れる (onPageFinished か、完了の来ないときの見張りから) */
+                fun inject(view: WebView, url: String?) {
                     val u = android.net.Uri.parse(url.orEmpty())
                     if (!allowedPage(u.scheme, u.host)) { mainHandler.post { if (web === view) finish(null) }; return }
                     mainHandler.removeCallbacks(stall)
@@ -82,7 +95,10 @@ class Collector(
                     try { view.evaluateJavascript(js, null) } catch (e: Exception) { Diag.e(TAG, "inject", e); mainHandler.post { finish(null) } }
                 }
             }
+            webViewClient = client
             loadUrl(url)
+            // 公開版は広告を止めないので、広告の枠が終わらず onPageFinished が来ないことがある。本文が読めたら入れる
+            ready = PageReady(mainHandler, { v -> if (web === v) v.loadUrl(url) }) { v, u -> if (web === v) client.inject(v, u) }.also { it.watch(this) }
         }
         mainHandler.postDelayed(stall, STALL_MS)
         alive += this
@@ -92,6 +108,8 @@ class Collector(
     fun cancel() {
         alive -= this
         mainHandler.removeCallbacks(stall)
+        ready?.stop()
+        ready = null
         web?.apply {
             (parent as? android.view.ViewGroup)?.removeView(this) // 画面に出していたら外してから壊す
             stopLoading(); destroy()
@@ -112,7 +130,10 @@ class Collector(
 
         @JavascriptInterface
         fun bgDone(log: String) {
-            mainHandler.post { finish(log) }
+            mainHandler.post {
+                OfflineAutoUpdate.onCollected(ctx, log)
+                finish(log)
+            }
         }
 
         /** この WebView が、自分のサイトだけで終わる側か (確認画面で止まって、続きを別の WebView に渡したあと) */

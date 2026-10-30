@@ -27,6 +27,11 @@ class OfflineBridge(
     fun saveImage(site: String, id: String, url: String, referer: String, t: String?): String =
         if (trusted(t)) ImageSaver.save(offline, site, id, url, referer) { hostFilter.shouldBlock(it) } else "{}"
 
+    /** ページの中で取った挿絵 (base64) を保存する (本文と同じサイトの挿絵用。ImageSaver.saveData を参照) */
+    @JavascriptInterface
+    fun saveImageData(site: String, id: String, url: String, base64: String, t: String?): String =
+        if (trusted(t)) ImageSaver.saveData(offline, site, id, url, base64) { hostFilter.shouldBlock(it) } else "{}"
+
     @JavascriptInterface
     fun meta(site: String, id: String, t: String?): String = if (trusted(t)) offline.meta(site, id) else ""
 
@@ -122,7 +127,7 @@ class OfflineBridge(
 
     /** 従量課金でない回線 (Wi-Fi など) につながっているか。「Wi-Fi のときだけ保存する」設定の判定に使う。 */
     @JavascriptInterface
-    fun onUnmetered(): Boolean = Connectivity.unmetered(ctx)
+    fun onUnmetered(t: String?): Boolean = trusted(t) && Connectivity.unmetered(ctx)
 
     /** アプリ内ページからだけ受け付けて、キューを書き換え、画面の保存の帯に知らせる。 */
     private fun changeQueue(change: () -> Unit): Boolean = forApp(false) {

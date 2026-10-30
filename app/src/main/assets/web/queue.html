@@ -139,7 +139,7 @@ function paint() {
   root.textContent = '';
   if (!jobs.length) {
     const e = el('div', 'empty');
-    e.append(el('h2', '', '保存キューは空です'), document.createTextNode('作品の ⋮ メニューの「この作品を端末に保存」から、保存を始められます。画面を消しても、ほかのアプリに移っても、保存は続きます'));
+    e.append(el('h2', '', '保存キューは空です'), document.createTextNode('作品の ⋮ メニューの「この作品をオフライン保存」から、保存を始められます。画面を消しても、ほかのアプリに移っても、保存は続きます'));
     const b = el('button', 'btn block', '保存した作品を見る');
     b.style.marginTop = '16px';
     b.onclick = () => (location.href = 'offline.html');

@@ -113,6 +113,9 @@ object BgCheck {
         return null
     }
 
+    /** 次のアラームの時刻 (ミリ秒)。裏での確認がオフ・掛けていなければ 0 */
+    fun nextAlarmAt(ctx: Context): Long = if (config(ctx)?.optBoolean("on") == true) prefs(ctx).getLong(KEY_NEXT, 0L) else 0L
+
     /** 設定画面に出す内容: {on, slots: ['HH:MM'], next: 時刻 (ms) | 0, notify: 通知が許可されているか}。 */
     fun plan(ctx: Context): String {
         val c = config(ctx) ?: JSONObject()
@@ -134,6 +137,7 @@ object BgCheck {
         if (next == null) {
             am.cancel(alarmIntent(ctx))
             prefs(ctx).edit().remove(KEY_NEXT).apply()
+            DevLog.eventOf(DevLog.Category.CHECK, "bg alarm off")
             return
         }
         // 時刻どおりに鳴らす (USE_EXACT_ALARM。ストア外のアプリはインストール時に許可される)。
@@ -145,13 +149,18 @@ object BgCheck {
         }
         prefs(ctx).edit().putLong(KEY_NEXT, next).apply()
         Log.d(TAG, "next ${java.util.Date(next)}")
+        DevLog.eventOf(DevLog.Category.CHECK, "bg alarm set", "at" to DevLogFormat.time(next))
     }
 
     /** 確認を今すぐ始める (アラームから)。画面のボタンからは呼ばない (連打すると、クールダウン無しで何度もサイトへアクセスしてしまうため)。 */
     fun startNow(ctx: Context) {
         val js = ctx.getSystemService(JobScheduler::class.java)
         // 同じ ID で schedule し直すと、動いている確認が止められる (onStopJob)。予約済み・実行中なら、それに任せる
-        if (js.getPendingJob(JOB_ID) != null) { Log.d(TAG, "startNow: already scheduled or running"); return }
+        if (js.getPendingJob(JOB_ID) != null) {
+            Log.d(TAG, "startNow: already scheduled or running")
+            DevLog.eventOf(DevLog.Category.CHECK, "bg job", "result" to "already scheduled or running")
+            return
+        }
         val job = { expedited: Boolean ->
             JobInfo.Builder(JOB_ID, ComponentName(ctx, BgCheckJob::class.java))
                 .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)
@@ -159,8 +168,12 @@ object BgCheck {
                 .build()
         }
         // 急ぎのジョブにすると、省電力中でもすぐ動く (使える回数に上限があるので、だめなら普通のジョブで)
-        if (Build.VERSION.SDK_INT >= 31 && js.schedule(job(true)) == JobScheduler.RESULT_SUCCESS) return
-        js.schedule(job(false))
+        if (Build.VERSION.SDK_INT >= 31 && js.schedule(job(true)) == JobScheduler.RESULT_SUCCESS) {
+            DevLog.eventOf(DevLog.Category.CHECK, "bg job", "result" to "scheduled", "expedited" to true)
+            return
+        }
+        val ok = js.schedule(job(false)) == JobScheduler.RESULT_SUCCESS
+        DevLog.eventOf(DevLog.Category.CHECK, "bg job", "result" to if (ok) "scheduled" else "refused", "expedited" to false)
     }
 
     // ---- 通知 ----
@@ -203,6 +216,7 @@ object BgCheck {
         val errors = r.errors
         val sinceFg = System.currentTimeMillis() - data(ctx).optLong("lastCollectFg", 0L)
         Log.d(TAG, "done: fresh=${titles.size} errors=$errors fg=$foreground sinceFg=${sinceFg / 60000}min")
+        DevLog.eventOf(DevLog.Category.CHECK, "bg done", "fresh" to titles.size, "errors" to errors.joinToString(",").ifEmpty { null }, "inApp" to foreground, "sinceFgMin" to sinceFg / 60000)
         if (titles.isEmpty() || foreground || sinceFg < QUIET_AFTER_FG_MS || !Notices.allowed(ctx)) return
 
         val body = titles.joinToString("\n") + (if (errors.isNotEmpty()) "\n確認できなかった: " + errors.joinToString("、") else "")
@@ -244,8 +258,10 @@ object BgCheck {
 /** アラーム (次の確認の時刻): 確認を始めて、次のアラームを掛ける。非公開 (このアプリのアラームからだけ届く)。 */
 class BgAlarmReceiver : BroadcastReceiver() {
     override fun onReceive(ctx: Context, intent: Intent) {
+        Diag.init(ctx) // アラームでプロセスが起きたときも、開発用ログに残せるように
         // 確認を始められなくても、次のアラームは必ず掛け直す (でないと、以後の確認が途絶える)
         if (intent.action == BgCheck.ACTION_ALARM) {
+            DevLog.eventOf(DevLog.Category.CHECK, "bg alarm fired")
             try { BgCheck.startNow(ctx) } catch (e: Exception) { Diag.e(BgCheck.TAG, "startNow", e) }
         }
         BgCheck.reschedule(ctx)
@@ -278,6 +294,7 @@ class BgCheckJob : JobService() {
             startUrl == null -> "no site to check (or all resting)"
             else -> null
         }
+        DevLog.eventOf(DevLog.Category.CHECK, if (skip != null) "bg skip" else "bg run", "reason" to skip, "sinceLastMin" to (System.currentTimeMillis() - CollectCooldown.lastOf(NHData.obj(this))) / 60_000L)
         if (skip != null) {
             Log.d(BgCheck.TAG, "skip: $skip")
             pending.decrementAndGet() > 0 // 外への送信がまだなら、終わったときに jobFinished

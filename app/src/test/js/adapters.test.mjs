@@ -36,6 +36,15 @@ test('parseWork: なろう (作品トップ・話・R18)', () => {
   assert.equal(NH.parseWork('https://example.com/n1234ab/'), null);
 });
 
+test('ハーメルンの挿絵: リンクを画像として見つけ、取りに行く URL は転送先 (img.syosetu.org) を直接指す', () => {
+  const NH = load('https://syosetu.org/novel/431079/1.html');
+  const hameln = NH.adapters.find((a) => a.id === 'hameln');
+  assert.equal(hameln.imageLinkSel, 'a[href*="/img/user/"]');
+  assert.equal(hameln.imageUrl('https://syosetu.org/img/user/v2/6227/501/264262.jpg'), 'https://img.syosetu.org/img/user/v2/6227/501/264262.jpg');
+  assert.equal(hameln.imageUrl('https://img.syosetu.org/img/user/a.jpg'), 'https://img.syosetu.org/img/user/a.jpg'); // すでに転送先なら変えない
+  assert.equal(hameln.imageUrl('https://example.com/img/x.jpg'), 'https://example.com/img/x.jpg'); // ほかのホストは変えない
+});
+
 test('parseWork: ハーメルン・カクヨム', () => {
   const NH = load('https://syosetu.org/');
   eq(NH.parseWork('https://syosetu.org/novel/12345/7.html'), { site: 'hameln', id: '12345', url: 'https://syosetu.org/novel/12345/', episode: 7 });

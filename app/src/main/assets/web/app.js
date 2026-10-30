@@ -97,6 +97,18 @@ function setPressed(btn, on) { btn.setAttribute('aria-pressed', on ? 'true' : 'f
 // ---- 設定のスイッチ ----
 // <input type="checkbox" data-setting="キー" [data-default="off"]>。data-default が無い (on) ものは「未設定 = オン」(S[キー] !== false)、
 // off は「未設定 = オフ」(!!S[キー])。getS() は設定の写しを返す関数 (差し替えられても追えるように)
+// スイッチの 1 行 (設定の「スイッチ」の行)。sub は 2 行目の小さい説明。
+// 切り替えると onChange(新しい値) を呼ぶ。スイッチ本体は row.cb (無効にする・値を読むときに使う)
+function switchRow(label, on, onChange, sub) {
+  const row = el('label', 'cell');
+  const t = el('span', 'text', label);
+  if (sub) t.appendChild(el('small', '', sub));
+  const cb = el('input', 'switch'); cb.type = 'checkbox'; cb.checked = !!on;
+  cb.onchange = () => onChange(cb.checked);
+  row.append(t, cb);
+  row.cb = cb;
+  return row;
+}
 function bindToggles(getS, commit) {
   $$('[data-setting]').forEach((cb) => (cb.onchange = () => { getS()[cb.dataset.setting] = cb.checked; commit(); }));
 }
@@ -237,3 +249,10 @@ const svg = (name) => '<svg viewBox="0 0 24 24"><path d="' + ICON_PATHS[name] + 
 const UI_SIZES = ['compact', 'standard', 'large'];
 function applyUiSize(v) { document.documentElement.dataset.ui = UI_SIZES.includes(v) ? v : 'standard'; }
 applyUiSize((NH.load().settings || {}).uiSize);
+// サイトの点の色 (.dot.<サイト> の --<サイト>): 上部バーのタブと同じ色にする (設定の siteColors、無ければ SITE_DEFS の既定色)。
+// ページの読み込み時と、設定で色を変えたときに呼ぶ。R18 の掲載サイトは 1 色 (--narou18) のまま
+function applySiteColors(st) {
+  const custom = (st || {}).siteColors || {};
+  MAIN_SITES.forEach(([k]) => document.documentElement.style.setProperty('--' + k, custom[k] || TAB_COLOR_DEFAULT[k]));
+}
+applySiteColors(NH.load().settings);

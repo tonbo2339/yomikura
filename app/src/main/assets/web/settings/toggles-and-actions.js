@@ -78,7 +78,7 @@ SITES.forEach(([k, label]) => {
   const sw = el('div', 'swatches');
   swatches[k] = [TAB_COLOR_DEFAULT[k], ...TAB_COLORS.filter((c) => c !== TAB_COLOR_DEFAULT[k])].map((c, i) => {
     const b = el('button', 'swatch');
-    b.style.background = c;
+    b.style.backgroundColor = c; // background (一括の指定) だと background-clip が戻り、丸が押せる範囲いっぱいに広がる
     b.setAttribute('aria-label', label + 'のタブの色: ' + (i ? COLOR_NAMES[c] || '色' + i : '既定の色'));
     b.onclick = () => {
       S.siteColors = Object.assign({}, S.siteColors);
@@ -117,7 +117,6 @@ $('adult').onchange = (e) => {
 // 最初はオン。オフにする (使えるようにする) とき、18 歳以上かを確かめる。年齢の行はそのために隠す
 if (NH.R18_OPT_IN) {
   $('adultRow').hidden = true;
-  $('siteHint').textContent = '「NSFW モード」がオンの間は、成人向けのサイトにアクセスせず、リスト・履歴・ランキングにも成人向けの作品を出しません。オフにすると使えます (18 歳以上の方向け)。';
 }
 $('nsfw').onchange = (e) => {
   if (!NH.R18_OPT_IN || e.target.checked) { S.nsfw = e.target.checked; commit(true); return; }
@@ -137,19 +136,30 @@ let currentIcon = (window.NHStore && NHStore.launcherIcon) ? NHStore.launcherIco
 const ICON_LABEL = { paper: '紙', green: '緑', ocean: '海', purple: '紫', sakura: '桜', aigold: '藍と金', yuyake: '夕焼け', matcha: '抹茶', night: '夜', dusk: '夕暮れ', wood: '木', sea: '海辺' };
 function paintIcons() {
   const g = $('iconGrid'); g.innerHTML = '';
+  // 「後で」で予約したアイコン (次に開いたとき変わる)。点線の枠で示し、今のアイコンを押すと予約を取り消せる
+  const pending = (load().settings || {}).launcherIconPending || '';
+  const queued = pending && pending !== currentIcon ? pending : '';
   LAUNCHER.forEach((k) => {
-    const b = el('button', 'icon-opt' + (k === currentIcon ? ' on' : ''));
+    const b = el('button', 'icon-opt' + (k === currentIcon ? ' on' : '') + (k === queued ? ' pending' : ''));
     b.setAttribute('aria-pressed', k === currentIcon ? 'true' : 'false');
     b.setAttribute('aria-label', 'アイコン「' + (ICON_LABEL[k] || k) + '」'); // 絵だけのボタンなので、読み上げ用の名前を付ける
     const img = el('img'); img.src = 'icons/' + k + '.svg'; img.alt = '';
     b.append(img);
     b.onclick = () => {
-      if (k === currentIcon || !window.NHStore || !NHStore.setLauncherIcon) return;
+      if (!window.NHStore || !NHStore.setLauncherIcon) return;
+      if (k === currentIcon) {
+        if (!queued) return;
+        NHStore.setLauncherIcon(k, false); // 今のアイコンを予約し直す = 次に開いても変わらない
+        snack('アイコンの変更を取り消しました');
+        setTimeout(paintIcons, 300);
+        return;
+      }
+      if (k === queued) { snack('次にアプリを開いたとき、このアイコンに変わります'); return; }
       b.classList.remove('pop'); void b.offsetWidth; b.classList.add('pop'); // 選んだ絵が、ぴょんと跳ねる
       // 今すぐ: アプリを閉じて、ホーム画面のアイコンが変わる (開き直しはしない)。後で: 次にアプリを開いたときに変わる
       askChoice('アイコンを変えます', 'ホーム画面のアイコンは、アプリを閉じると変わります。',
         ['今すぐ (アプリを閉じる)', () => { NHStore.setLauncherIcon(k, true); }],
-        ['後で (次に開いたとき)', () => { NHStore.setLauncherIcon(k, false); snack('次にアプリを開いたとき、アイコンが変わります'); }]);
+        ['後で (次に開いたとき)', () => { NHStore.setLauncherIcon(k, false); snack('次にアプリを開いたとき、アイコンが変わります (今のアイコンを押すと取り消せます)'); setTimeout(paintIcons, 300); }]);
     };
     g.appendChild(b);
   });

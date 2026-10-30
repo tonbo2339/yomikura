@@ -16,6 +16,9 @@ object CollectCooldown {
     /** 前回の確認の時刻: 終わった時刻 (lastCollect。ui-collect.js が書く) と、始めた時刻の新しい方 */
     fun lastOf(data: JSONObject): Long = maxOf(data.optLong("lastCollect", 0L), data.optLong(KEY_STARTED, 0L))
 
+    /** 起動時の自動確認の時期か: 前回の確認 ([lastOf]) から hours 時間より長くたっている。前回が無ければ (0) 時期。Android に依存しない (単体テスト用) */
+    fun autoDue(last: Long, hours: Int, now: Long): Boolean = now - last > hours.coerceAtLeast(1) * 3_600_000L
+
     /** 確認を始めた (画面の確認・裏での確認の始まりで呼ぶ。確認画面で分かれた続きの巡回では呼ばない) */
     fun markStarted(ctx: Context) = NHData.update(ctx) { it.put(KEY_STARTED, System.currentTimeMillis()) }
 

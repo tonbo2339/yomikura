@@ -66,7 +66,7 @@ function selectRow(label, items, current, onPick) {
 function customRow(key) {
   const r = rankingsOf()[key];
   if (!r || !r.custom) return null;
-  const c = el('div', 'cell'); const t = el('span', 'text', 'このページ: ' + (r.label || ''));
+  const c = el('div', 'cell'); const t = el('span', 'text', '登録したページ: ' + (r.label || ''));
   t.appendChild(el('small', '', r.url)); c.appendChild(t); c.insertAdjacentHTML('beforeend', CHECK);
   return c;
 }
@@ -74,7 +74,7 @@ function customRow(key) {
 // ランキングの行き先: 一覧 (サイトごとに今の行き先) → サイトごとの選択画面 (p-rank-<site>)
 const rankLabel = (key) => {
   const r = rankingsOf()[key];
-  return !r ? '既定' : r.custom ? 'このページ: ' + (r.label || '') : r.label || '既定';
+  return !r ? '既定' : r.label || (r.custom ? '登録したページ' : '既定'); // 値の欄は狭いので題名だけ
 };
 function paintRanking() {
   const list = $('rankingList'); list.innerHTML = '';

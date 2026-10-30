@@ -32,9 +32,7 @@ function paintBg() {
   box.appendChild(segRow([['interval', '間隔で'], ['times', '時刻で']], c.mode, (k) => bgSet({ mode: k })));
   if (c.mode === 'interval') {
     box.appendChild(selectRow('間隔', BG_HOURS.map((h) => [h, h + ' 時間ごと']), c.hours, (v) => bgSet({ hours: Number(v) })));
-    const q = el('label', 'cell'); const qs = el('input', 'switch'); qs.type = 'checkbox'; qs.checked = !!c.quietOn;
-    qs.onchange = () => bgSet({ quietOn: qs.checked });
-    q.append(el('span', 'text', '確認しない時間帯'), qs); box.appendChild(q);
+    box.appendChild(switchRow('確認しない時間帯', c.quietOn, (on) => bgSet({ quietOn: on })));
     if (c.quietOn) {
       const r = el('div', 'cell bg-range');
       r.append(timeInput(c.quietFrom, '確認しない時間帯の開始', (v) => bgSet({ quietFrom: v })), el('span', '', 'から'), timeInput(c.quietTo, '確認しない時間帯の終了', (v) => bgSet({ quietTo: v })), el('span', '', 'まで'));

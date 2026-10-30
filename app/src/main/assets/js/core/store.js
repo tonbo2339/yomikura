@@ -16,7 +16,9 @@ window.NH.define('store', function (NH, T) { // T = 保存データの窓口に�
   //               historyMax (履歴に残す作品数。未設定は 300、0 = 無制限) / historyDays (履歴に残す日数。未設定・0 = 無期限),
   //               bgCheck (裏での確認、BgCheck.kt), bookmarkCats:{narou|narou18: [カテゴリ番号]}, r18Mode, siteNames, siteColors, tabsOneRow, tabsTinted,
   //               uiSize (アプリ内ページの操作部分の大きさ。compact | standard | large。未設定は standard),
-  //               hideBarOnScroll (サイトのページを下へスクロールすると上部バーを隠す。未設定は true),
+  //               offlineAutoUpdate (保存済みの作品に新しい話が出たら、更新の確認のあとに自動で保存する。Wi-Fi のときだけ。未設定はオフ。Kotlin の OfflineAutoUpdate),
+//               externalLinks (対応サイト以外のリンク = 広告など をタップしたとき: browser = 端末のブラウザで開く / app = アプリの中で開く。未設定は browser。Kotlin の AppSettings.externalLinksInBrowser),
+//               hideBarOnScroll (サイトのページを下へスクロールすると上部バーを隠す。未設定は true),
   //               showReload (上部バーの再読み込みボタン) / showLoadBar (読み込みの進み具合の線) / menuShare (旧。⋮ メニューの共有・URL コピー・ほかのブラウザをまとめて外す。いまは menuItems が未設定のときだけ見る) / heroResume (リストの上のカードを「さっきまで読んでいた作品」にする) / foldComments (話ページの下の感想・レビューの欄を畳む) / foldRecommend (おすすめ作品の欄を畳む) / foldLinks (作者マイページ・共有などのリンクを畳む) / foldReactions (ポイント・顔文字の応援を畳む) / foldRemember (畳んだ欄の開き具合をサイトごとに覚える。覚えた分は foldOpen = {サイト: {欄: true}}) = いずれも未設定は true,
   //               collectSites:{narou|narou18|hameln|kakuyomu: false} (更新を確認しないサイト。未設定は確認する),
   //               tabOrder:[サイトのキー] (上部バーのタブの並び。設定画面の ▲▼),
@@ -104,7 +106,12 @@ window.NH.define('store', function (NH, T) { // T = 保存データの窓口に�
   // 版付きの書き込み (setIf) が 8 回とも通らなかったら、書かずにあきらめる。版を見ずに書き直すと、断られて空として読んだデータ
   // (信頼の決まる前のページは get が '' を返す) で、保存データ全体を上書きしてしまうことがあるため
   NH.unreadable = false;
+  // 外のリンクの作品を「後で読む」に追加して戻る: アプリに知らせる (窓口には合言葉を添える)
+  NH.laterBack = function (result) { if (window.NHStore && window.NHStore.laterBack) window.NHStore.laterBack(result, T); };
+  // 版付きの書き込みを 8 回とも断られて書けなかったとき、直後の NH.updateGaveUp が true (呼び出し側が「保存できなかった」と知らせられる)。読めなくて書かなかったときは NH.unreadable
+  NH.updateGaveUp = false;
   NH.update = function (fn, opts = {}) {
+    NH.updateGaveUp = false;
     const fresh = () => {
       try { return loadFresh(true); } catch (e) {
         NH.unreadable = true;
@@ -123,6 +130,7 @@ window.NH.define('store', function (NH, T) { // T = 保存データの窓口に�
         fn(d);
         if (s.setIf(JSON.stringify(d), v, T)) return d;
       }
+      NH.updateGaveUp = true;
       return loadFresh();
     }
     const d = fresh(); // 版付きの書き込みが無い窓口 (localStorage・古い版) だけ

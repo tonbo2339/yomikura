@@ -27,7 +27,7 @@ class RankingTarget(
         Messages.show(ctx, "ランキングの行き先を初期設定に戻しました")
     }
 
-    /** 今開いているページを、そのサイトのランキングの行き先にする (設定画面では「このページ: タイトル」と出る)。 */
+    /** 今開いているページを、そのサイトのランキングの行き先にする (設定画面では「登録したページ: タイトル」と出る)。 */
     fun setHere(key: String) {
         val web = webView()
         val url = web.url ?: return

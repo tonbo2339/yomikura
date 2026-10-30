@@ -33,12 +33,12 @@ function library() {
   qg.appendChild(ql);
   root.appendChild(qg);
 
-  const g = addGroup(root, '保存の設定');
-  const lab = el('label', 'cell');
-  const t = el('span', 'text', 'Wi-Fi のときだけ保存する'); t.appendChild(el('small', '', 'モバイル回線のときは、保存を始める前に確認します。保存中に Wi-Fi が切れたら、つながるまで待って続きから再開します'));
-  const sw = el('input', 'switch'); sw.type = 'checkbox'; sw.checked = !!settings().offlineWifiOnly;
-  sw.onchange = () => setSetting('offlineWifiOnly', sw.checked);
-  lab.append(t, sw); g.appendChild(lab);
+  // 保存の設定 (Wi-Fi のときだけ・自動で保存・縦書き) は設定の画面にある
+  const sg = el('div', 'group'); sg.style.marginTop = '16px';
+  const sl = el('a', 'cell'); sl.href = 'settings.html?page=offlineset'; sl.style.textDecoration = 'none';
+  sl.append(el('span', 'text', '保存の設定'), el('span', 'value', settings().offlineWifiOnly ? 'Wi-Fi のみ' : ''));
+  sg.appendChild(sl);
+  root.appendChild(sg);
   if (works.length) {
     const g2 = el('div', 'group'); g2.style.marginTop = '16px';
     const b = el('button', 'cell danger', 'すべてのオフライン保存を削除…');

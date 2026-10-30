@@ -51,7 +51,7 @@ class StoreBridge(host: BridgeHost) : GuardedBridge(host) {
     /** 手動の「更新を確認」を押せるまで、あと何ミリ秒か (0 = 押せる。CollectCooldown)。リストのボタンの表示に使う。アプリ内ページだけ */
     @JavascriptInterface
     fun collectWaitMs(): Long =
-        forApp(0L) { CollectCooldown.remainingMs(CollectCooldown.lastOf(NHData.obj(ctx)), System.currentTimeMillis()) }
+        forApp(0L) { NHData.obj(ctx).let { d -> if (AppSettings.forceManualCheck(NHData.settingsOf(d))) 0L else CollectCooldown.remainingMs(CollectCooldown.lastOf(d), System.currentTimeMillis()) } }
 
     /** 更新を確認中か (リスト画面を開いたときに、更新ボタンを回すか決める)。アプリ内ページだけ */
     @JavascriptInterface
@@ -99,8 +99,8 @@ class StoreBridge(host: BridgeHost) : GuardedBridge(host) {
 
     /** 外部のリンクの作品を「後で読む」に追加したあと、読んでいた作品に戻る (openLink で選んだときだけ動く)。対応サイトのページから。 */
     @JavascriptInterface
-    fun laterBack(result: String) {
-        if (!host.trustedPageNow) return
+    fun laterBack(result: String, t: String?) {
+        if (!trusted(t)) return
         onUi { host.finishLaterBack(result) }
     }
 

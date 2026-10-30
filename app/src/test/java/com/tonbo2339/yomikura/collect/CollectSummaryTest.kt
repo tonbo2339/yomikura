@@ -13,7 +13,7 @@ class CollectSummaryTest {
     @Test
     fun autoCheckIsQuietWhenNothingHappened() {
         assertNull(CollectSummary.of(result(), auto = true, onAppPage = false))
-        assertEquals("更新作品はありませんでした", CollectSummary.of(result(), auto = false, onAppPage = true)!!.text)
+        assertEquals("新しい話のある作品はありませんでした", CollectSummary.of(result(), auto = false, onAppPage = true)!!.text)
     }
 
     // 新しく入った作品の数を先に出す。サイトのページを見ているときは「リスト」のボタン

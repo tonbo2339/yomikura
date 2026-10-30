@@ -10,7 +10,8 @@ import java.util.Locale
  * 読み始める段落ごとに、ページの JS (nhTtsMark) で色をつけて画面に出す。読み終わる・止める・エラーで onState(false)。
  *
  * - 日本語の声が無い端末では、始められない (理由を返す)。声は端末の設定 (音声合成の出力) のものを使う
- * - 画面を離れる・別のページへ移る・アプリを閉じるときは、呼ぶ側 (MainActivity) が stop / shutdown する
+ * - 別のページへ移る・アプリを閉じるときは、呼ぶ側 (MainActivity) が stop / shutdown する。画面を消しても読み続けられる (前景サービス ReadAloudService が支える)
+ * - 一時停止は、音声合成を止めて、いまの段から読み直す (音声合成には途中の一時停止が無いため)
  * - run = ページの JS を実行する (画面のスレッドで)。onState(読んでいるか) は画面のスレッドで呼ぶ (post)
  */
 class ReadAloud(
@@ -19,6 +20,8 @@ class ReadAloud(
     private val post: (() -> Unit) -> Unit,
     private val onState: (Boolean) -> Unit,
     private val onProblem: (String) -> Unit,
+    /** 一時停止したか・再開したか (画面のスレッドで呼ぶ) */
+    private val onPaused: (Boolean) -> Unit = { },
 ) {
     private var tts: TextToSpeech? = null
     private var ready = false
@@ -28,6 +31,12 @@ class ReadAloud(
     @Volatile private var gen = 0 // 読み始めるたびに増やす。止めた前の読み上げの終了通知を、今のものと取り違えない
     private val speakingFlag = java.util.concurrent.atomic.AtomicBoolean(false)
     val speaking: Boolean get() = speakingFlag.get()
+
+    /** 読んでいる段の番号 (chunks の中)。一時停止のあと、ここから読み直す */
+    @Volatile private var cursor = 0
+    @Volatile private var lastRate = 1f
+    @Volatile var paused = false
+        private set
 
     /** 読み始める。始められないときは理由 (画面に出す文) を返す。rate = 速さ (1.0 が標準) */
     fun start(paragraphs: List<String>, rate: Float): String? {
@@ -58,6 +67,7 @@ class ReadAloud(
             override fun onStart(utteranceId: String?) {
                 val i = indexOf(utteranceId) ?: return
                 val c = chunks.getOrNull(i) ?: return
+                cursor = i
                 // 同じ段落の続きなら、色を付け直さない
                 if (i == 0 || chunks.getOrNull(i - 1)?.para != c.para) post { run("window.nhTtsMark && nhTtsMark(${c.para})") }
             }
@@ -79,6 +89,9 @@ class ReadAloud(
         val t = tts ?: return
         chunks = list
         gen++
+        cursor = 0
+        lastRate = rate
+        paused = false
         t.setSpeechRate(rate.coerceIn(0.5f, 3.0f))
         speakingFlag.set(true)
         post { onState(true) }
@@ -102,8 +115,27 @@ class ReadAloud(
 
     /** 読み終わった・止めた・エラー: 色を消して、読んでいない状態に */
     private fun finish() {
+        paused = false
         if (!speakingFlag.compareAndSet(true, false)) return // 読み終わりとエラーが重なっても、1 回だけ
         post { run("window.nhTtsMark && nhTtsMark(-1)"); onState(false) }
+    }
+
+    /** 一時停止する (読んでいなければ何もしない)。止めた前の発話の終了通知は、世代 (gen) を進めて無視する */
+    fun pause() {
+        if (!speakingFlag.get() || paused) return
+        paused = true
+        gen++
+        tts?.stop()
+        post { onPaused(true) }
+    }
+
+    /** 一時停止から、いま読んでいた段の先頭から読み直す */
+    fun resume() {
+        if (!speakingFlag.get() || !paused) return
+        val rest = chunks.drop(cursor)
+        if (rest.isEmpty()) { finish(); return }
+        speak(rest, lastRate)
+        post { onPaused(false) }
     }
 
     fun stop() {

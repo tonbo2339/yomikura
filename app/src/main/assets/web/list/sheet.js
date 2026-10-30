@@ -9,7 +9,7 @@ function openSheet(key) {
   sh.appendChild(el('div', 'grip'));
   sh.appendChild(el('h2', '', it.title));
   const sub = el('div', 'sheet-sub');
-  sub.append(el('span', 'dot ' + it.site), document.createTextNode(NH.siteLabel(it) + ' ・ ' + (kindOf(it) === 'update' ? '未読の更新' : '後で読む')));
+  sub.append(el('span', 'dot ' + it.site), document.createTextNode(NH.siteLabel(it) + ' ・ ' + (kindOf(it) === 'update' ? '更新' : '後で読む')));
   sh.appendChild(sub);
 
   const acts = el('div', 'actions');
@@ -21,7 +21,7 @@ function openSheet(key) {
   };
   if (sortMode(d) === 'manual') act('top', '先頭へ', () => toTop(key)); // ほかの並べ替えでは、動かしても表示が変わらないので出さない
   act('check', '読了にする', () => markDone(key));
-  act('swap', kindOf(it) === 'update' ? '後で読むへ' : '未読へ', () => switchKind(key));
+  act('swap', kindOf(it) === 'update' ? '後で読むへ' : '更新へ', () => switchKind(key));
   sh.appendChild(acts);
 
   // オフライン保存: 保存してあれば「オフラインで読む」、無ければ「オフラインに保存」。どちらも追加・更新の保存ができる
@@ -38,16 +38,19 @@ function openSheet(key) {
   sh.appendChild(el('div', 'field-label', 'メモ'));
   const ta = el('textarea'); ta.placeholder = '気になった点、おすすめされた理由など'; ta.value = it.memo || '';
   sh.appendChild(ta);
-  sh.appendChild(el('div', 'field-label', 'ジャンル'));
-  const inp = el('input'); inp.type = 'text'; inp.placeholder = '自由入力、または下から選択'; inp.setAttribute('list', 'tagList'); inp.value = it.tag || '';
+  sh.appendChild(el('div', 'field-label', 'ジャンル・タグ'));
+  const inp = el('input'); inp.type = 'text'; inp.placeholder = '自由入力 (スペース区切りで複数)'; inp.setAttribute('list', 'tagList'); inp.value = it.tag || '';
   sh.appendChild(inp);
   const row = el('div', 'tag-row');
+  const tagsNow = () => NH.tagsOf({ tag: inp.value });
+  const paintChips = () => row.querySelectorAll('.chip').forEach((x) => x.classList.toggle('on', tagsNow().includes(x.textContent)));
   PRESET_TAGS.forEach((t) => {
-    const b = el('button', 'chip' + (inp.value === t ? ' on' : ''), t);
-    b.onclick = () => { inp.value = inp.value === t ? '' : t; row.querySelectorAll('.chip').forEach((x) => x.classList.toggle('on', x.textContent === inp.value)); };
+    const b = el('button', 'chip' + (tagsNow().includes(t) ? ' on' : ''), t);
+    // 押すたびに、そのタグを入れる / 外す (ほかのタグはそのまま)
+    b.onclick = () => { const now = tagsNow(); inp.value = (now.includes(t) ? now.filter((x) => x !== t) : [...now, t]).join(' '); paintChips(); };
     row.appendChild(b);
   });
-  inp.oninput = () => row.querySelectorAll('.chip').forEach((x) => x.classList.toggle('on', x.textContent === inp.value.trim()));
+  inp.oninput = paintChips;
   sh.appendChild(row);
 
   const dr = el('div', 'done-row');
@@ -59,7 +62,8 @@ function openSheet(key) {
 
   // 外側のタップや「戻る」で閉じたときも、メモとジャンルは保存する
   ui.sheetSave = () => {
-    if (ta.value.trim() !== (it.memo || '') || inp.value.trim() !== (it.tag || '')) patch(key, (x) => { x.memo = ta.value.trim(); x.tag = inp.value.trim(); });
+    const tag = tagsNow().join(' ');
+    if (ta.value.trim() !== (it.memo || '') || tag !== NH.tagsOf(it).join(' ')) patch(key, (x) => { x.memo = ta.value.trim(); x.tag = tag; });
   };
   sheetShow(sh, it.title, () => closeSheet(true));
   history.pushState({ nhSheet: true }, ''); // Android の「戻る」でシートだけ閉じるため

@@ -1,6 +1,7 @@
 {
   "_about": "注入・読み込みする JS の一覧と順番の、唯一の定義。Kotlin (AppAssets) と HTML (<!--#scripts 名前-->) とテストがここから読む。'@名前' はそのグループを展開する。JS の追加・順番の変更はここだけを直す。",
-  "early": ["site/sites.js", "site/early.js"],
+  "fonts": ["site/fonts.js"],
+  "early": ["@fonts", "site/sites.js", "site/early.js"],
   "core": [
     "core/base.js",
     "core/store.js",
@@ -21,6 +22,7 @@
     "core/toast.js",
     "core/ads.js"
   ],
+  "fold-labels": ["site/sites.js"],
   "adapters": ["site/sites.js", "@core", "site/narou.js", "site/hameln.js", "site/kakuyomu.js"],
   "site": [
     "@adapters",

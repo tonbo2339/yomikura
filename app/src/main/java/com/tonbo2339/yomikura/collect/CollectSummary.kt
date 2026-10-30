@@ -23,7 +23,7 @@ object CollectSummary {
         val head = when {
             r.added > 0 -> "${r.added} 作品の更新をリストに追加しました"
             r.fresh.isNotEmpty() -> "${r.fresh.size} 作品に新しい話があります"
-            else -> "更新作品はありませんでした"
+            else -> "新しい話のある作品はありませんでした"
         }
         val stuck = r.challenge.firstOrNull()
         val tail = when {

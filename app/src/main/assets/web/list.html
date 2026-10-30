@@ -22,6 +22,7 @@
   </div>
   <div style="display:flex;gap:4px;align-items:center">
     <button class="check-btn" id="collect" type="button"><svg class="check-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M17.65 6.35A7.96 7.96 0 0 0 12 4a8 8 0 1 0 7.73 10h-2.08A6 6 0 1 1 12 6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg><svg class="check-book" viewBox="0 0 24 24" aria-hidden="true"><rect class="bg" width="24" height="24" rx="6"/><rect class="cover" x="2.5" y="4" width="19" height="16" rx="1.5"/><g class="pg-l"><rect x="4" y="5.5" width="7.6" height="13" rx=".8"/><path d="M5.8 9h4M5.8 12h4M5.8 15h3"/></g><rect class="spine" x="11.5" y="3.5" width="1" height="17"/><g class="pg"><rect x="12.4" y="5.5" width="7.6" height="13" rx=".8"/><path d="M14.2 9h4M14.2 12h4M14.2 15h3"/></g><g class="pg"><rect x="12.4" y="5.5" width="7.6" height="13" rx=".8"/><path d="M14.2 9h4M14.2 12h4M14.2 15h3"/></g><g class="pg"><rect x="12.4" y="5.5" width="7.6" height="13" rx=".8"/><path d="M14.2 9h4M14.2 12h4M14.2 15h3"/></g></svg><span id="collectText">更新を確認</span></button>
+    <button class="icon-btn" id="selectBtn" aria-label="選択" hidden></button>
     <button class="icon-btn" id="searchBtn" aria-label="検索"></button>
   </div>
 </header>
@@ -32,6 +33,12 @@
   <input id="q" type="search" placeholder="作品名・メモ・タグ・サイトで検索" autocomplete="off" enterkeyhint="search">
   <span class="count" id="qCount"></span>
   <button class="icon-btn" id="qClose" aria-label="検索を閉じる"></button>
+</div>
+<div class="selbar" id="selBar" hidden>
+  <button class="icon-btn" id="selClose" aria-label="選択をやめる"></button>
+  <span class="sel-n" id="selN" aria-live="polite"></span>
+  <button class="btn" id="selAll" type="button">すべて選択</button>
+  <button class="icon-btn danger" id="selDel" aria-label="選んだ作品を削除"></button>
 </div>
 <div class="sortrow" id="sortRow"><label>並べ替え <select id="sortSel"></select></label></div>
 <div class="chips filters" id="filters"></div>
@@ -63,6 +70,7 @@
 <!--#include list/hero.js-->
 <!--#include list/sheet.js-->
 <!--#include list/actions.js-->
+<!--#include list/select.js-->
 <!--#include list/search.js-->
 <!--#include list/collect.js-->
 <!--#include list/sync.js-->

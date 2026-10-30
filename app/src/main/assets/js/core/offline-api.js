@@ -10,6 +10,8 @@ window.NH.define('offline-api', function (NH, T) { // T = オフライン保存�
     available: () => !!off(),
     // 挿絵を端末に取って保存する (アプリが取る)。結果 {name, bytes} / {error: 'challenge'} / {} (取れなかった)
     saveImage: (site, id, url, referer) => json(() => off() && off().saveImage(site, id, url, referer, T), {}),
+    // ページの中 (WebView の fetch) で取った挿絵 (base64) を保存する。本文と同じサイトの挿絵用。結果は saveImage と同じ形
+    saveImageData: (site, id, url, base64) => json(() => off() && off().saveImageData(site, id, url, base64, T), {}),
     putEpisode: (site, id, ep, obj) => !!off() && off().putEpisode(site, id, String(ep), JSON.stringify(obj), T),
     putMeta: (site, id, obj) => !!off() && off().putMeta(site, id, JSON.stringify(obj), T),
     meta: (site, id) => json(() => off() && off().meta(site, id, T), null),
@@ -18,7 +20,7 @@ window.NH.define('offline-api', function (NH, T) { // T = オフライン保存�
     readerBar: (hide) => { try { off() && off().readerBar(!!hide); } catch (e) {} }, // 読書画面で上部バーを隠す / 出す
     remove: (site, id) => !!off() && off().delete(site, id),
     removeAll: () => !!off() && off().deleteAll(),
-    onUnmetered: () => { try { return !off() || off().onUnmetered(); } catch (e) { return true; } },
+    onUnmetered: () => { try { return !off() || off().onUnmetered(T); } catch (e) { return true; } },
     // 保存キュー (端末の待ち行列)。追加は保存を進めるサイト上から、中身の読み出し・並べ替え・削除はアプリ内ページからだけ
     queueAdd: (job) => (off() && off().queueAdd(JSON.stringify(job), T)) || 0,
     queueList: () => json(() => off() && off().queueList(), []),

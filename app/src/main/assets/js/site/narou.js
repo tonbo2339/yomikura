@@ -33,6 +33,8 @@
       seqEpisodes: true, // 話番号が 1, 2, 3... の連番
       match: (host, path) => (host === 'syosetu.com' || host.endsWith('.syosetu.com')) && isR18(host, path) === !!v.r18,
       onCollectPage: (loc) => loc.pathname.startsWith(v.favPath),
+      // 巡回の開始ページから転送された、ログイン・2 段階認証のページ (ログイン切れ・2 段階認証の途中。巡回の画面はここで「ログイン切れ」として次へ進む = ui-collect.js)
+      onLoginPage: (loc) => loc.pathname.startsWith('/login/') || loc.pathname.startsWith('/user2stepauth/'),
 
       // 話ページの「次へ」リンク (最終話には無い)
       nextUrl() {

@@ -5,6 +5,7 @@ function mutate(fn, message) {
   const copy = (d) => JSON.parse(JSON.stringify({ readLater: d.readLater, progress: d.progress || {} }));
   NH.update((d) => { before = copy(d); fn(d); after = copy(d); });
   if (!after) { snack('保存データを読めないため、変更できませんでした'); return; } // NH.update が書かなかった (NH.unreadable)
+  if (NH.updateGaveUp) { render(); snack('保存できませんでした。もう一度お試しください'); return; } // 書き込みを断られ続けた (ほかが書き続けている)
   render();
   if (message) snack(message, () => { NH.update((x) => undoChange(x, before, after)); render(); });
   else hideSnack(); // 別の操作をしたら、前の「元に戻す」は使えなくする (その操作まで戻ってしまうため)
@@ -30,15 +31,21 @@ function undoChange(x, before, after) {
 }
 function patch(key, fn) { mutate((d) => { const x = d.readLater.find((y) => y.key === key); if (x) fn(x); }); }
 function remove(key) { mutate((d) => { d.readLater = d.readLater.filter((x) => x.key !== key); NH.dropProgress(d, [key]); }, 'リストから削除しました'); }
+// 選択モードでまとめて削除 (1 回で元に戻せる)
+function removeMany(keys) {
+  if (!keys.length) return;
+  mutate((d) => { const gone = new Set(keys); d.readLater = d.readLater.filter((x) => !gone.has(x.key)); NH.dropProgress(d, keys); }, keys.length + ' 作品をリストから削除しました');
+}
 function markDone(key) { mutate((d) => { const x = d.readLater.find((y) => y.key === key); if (x) NH.setDone(x, true); }, '読了にしました'); }
-function restore(key) { mutate((d) => { const x = d.readLater.find((y) => y.key === key); if (x) NH.setDone(x, false); }, '未読に戻しました'); }
+function restore(key) { mutate((d) => { const x = d.readLater.find((y) => y.key === key); if (x) NH.setDone(x, false); }, '読了を取り消しました'); }
 function clearDone() {
   // 画面に出ている読了の作品だけ (NSFW モードで隠れている作品・検索で外れている作品は消さない)
   const d = load(), terms = queryTerms();
-  const keys = d.readLater.filter((x) => x.done && !NH.nsfwHides(d, x) && (!terms.length || kindOf(x) === ui.tab) && matchQuery(x, terms)).map((x) => x.key); // render の doneShown と同じ
+  const pick = (dd) => dd.readLater.filter((x) => x.done && !NH.nsfwHides(dd, x) && (!terms.length || kindOf(x) === ui.tab) && matchQuery(x, terms)).map((x) => x.key); // render の doneShown と同じ
+  const keys = pick(d);
   if (!keys.length) return;
-  const gone = new Set(keys);
-  mutate((x) => { x.readLater = x.readLater.filter((y) => !gone.has(y.key)); NH.dropProgress(x, keys); }, '読了 ' + keys.length + ' 作品を削除しました');
+  // 消す作品は、書き込みの中で選び直す (間に更新の確認が読了を外した作品を消さない)
+  mutate((x) => { const gone = new Set(pick(x)); x.readLater = x.readLater.filter((y) => !gone.has(y.key)); NH.dropProgress(x, [...gone]); }, '読了 ' + keys.length + ' 作品を削除しました');
 }
 function switchKind(key) {
   const it = load().readLater.find((y) => y.key === key);
@@ -50,7 +57,7 @@ function switchKind(key) {
     if (!x) return;
     x.kind = to;
     if (to === 'update') x.manualKind = true; else delete x.manualKind;
-  }, '「' + (to === 'later' ? '後で読む' : '未読の更新') + '」へ移しました');
+  }, '「' + (to === 'later' ? '後で読む' : '更新') + '」タブへ移しました');
 }
 function toTop(key) {
   mutate((d) => {

@@ -67,6 +67,7 @@
   .searchbar > svg { width: 20px; height: 20px; fill: var(--sub); flex: none; }
   .searchbar input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; font: inherit; font-size: 16px; color: var(--fg); }
   .searchbar input::placeholder { color: var(--muted); }
+  .searchbar input::-webkit-search-cancel-button { -webkit-appearance: none; } /* 右の「検索を閉じる」(✕) と並んで紛らわしいので、入力欄の消去ボタンは出さない */
   .searchbar .count { font-size: 13px; color: var(--sub); white-space: nowrap; }
   @keyframes nh-drop { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
 
@@ -139,6 +140,17 @@
   .item { touch-action: pan-y; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
   .item.removing { background: #ff3b30; }
   .item.dragging { z-index: 20; box-shadow: 0 14px 34px rgba(0, 0, 0, .35); transition: none; position: relative; }
+  /* 選択モード (select.js): カードの左にチェックボックス。操作のボタンは隠す */
+  .selbar { position: sticky; top: 0; z-index: 30; display: flex; align-items: center; gap: 8px; padding: 6px 0; margin-bottom: 8px; background: var(--bg); }
+  .selbar .sel-n { flex: 1; min-width: 0; font-weight: 700; font-size: 14px; }
+  .selbar .icon-btn.danger { color: var(--danger-text); }
+  .selbar .icon-btn:disabled { opacity: .3; }
+  .selecting #active .item .move, .selecting #active .item .go, .selecting #active .item .icon-btn, .selecting .hero { display: none; }
+  .selbox { order: -1; flex: none; width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--muted); margin-right: 8px; display: grid; place-items: center; }
+  .selbox svg { width: 16px; height: 16px; fill: var(--on-accent, #fff); opacity: 0; }
+  .item.picked { background: var(--accent-soft); }
+  .item.picked .selbox { background: var(--accent-fill); border-color: var(--accent-fill); }
+  .item.picked .selbox svg { opacity: 1; }
   /* 読む順番の上下 (⋯ の左)。設定でオフにできる */
   .move { display: flex; flex-direction: column; }
   .move .icon-btn { width: var(--move-w); height: var(--move-h); border-radius: 10px; }

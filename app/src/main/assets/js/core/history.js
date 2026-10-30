@@ -14,6 +14,21 @@ window.NH.define('history', function (NH) {
   NH.historyOn = (d) => NH.flag(d, 'history');
   // 古い履歴を消す: 保存する日数 (settings.historyDays。0 = 無期限、既定) を過ぎたものと、保存する作品数 (settings.historyMax) を超えた分。
   // 日数は最後に開いた時刻 (アプリ at / 公式 siteAt の新しい方) で見る。戻り値: 消した数
+  // 1.0.x の不具合 (ログインしていない話ページで、なろうの作品名を「ログイン」と取った) で残った作品名を片付ける。
+  // リストは ID を仮の名前に (開いたときに直る)、履歴はリストの名前か空 (「作品名不明」と出て、開いたときに直る) にする。直した数を返す
+  NH.fixLoginTitles = function (d) {
+    const bad = (x) => (x.site === 'narou' || x.site === 'narou18') && x.title === 'ログイン';
+    let n = 0;
+    (d.readLater || []).forEach((x) => { if (bad(x)) { x.title = x.id; n++; } });
+    (d.history || []).forEach((e) => {
+      if (!bad(e)) return;
+      const it = (d.readLater || []).find((x) => x.key === e.key);
+      e.title = it && it.title !== it.id ? it.title : '';
+      n++;
+    });
+    return n;
+  };
+
   NH.pruneHistory = function (d) {
     if (!Array.isArray(d.history)) return 0;
     const st = d.settings || {};

@@ -33,13 +33,24 @@
 const q = new URLSearchParams(location.search);
 const u = q.get('u') || '';
 const ok = /^https?:\/\//.test(u); // 元の URL が http(s) のときだけ使う (それ以外の文字列は開かない)
-$('why').textContent = q.get('m') || '';
+// よくある理由は日本語にする (元の符号はかっこで残す。報告のときに役立つ)
+const WHY = [
+  [/INTERNET_DISCONNECTED|NETWORK_CHANGED|ADDRESS_UNREACHABLE/, '通信できません'],
+  [/NAME_NOT_RESOLVED|NAME_RESOLUTION_FAILED/, 'サイトの場所が分かりませんでした (通信の状態を確かめてください)'],
+  [/TIMED_OUT/, '時間がかかりすぎたので、やめました'],
+  [/CONNECTION_(REFUSED|RESET|CLOSED|FAILED)/, 'サイトにつながりませんでした'],
+  [/^HTTP 5\d\d$/, 'サイト側で問題が起きています'],
+  [/^HTTP 4\d\d$/, 'ページが見つからないか、開けません'],
+];
+const m = q.get('m') || '';
+const why = (WHY.find(([re]) => re.test(m)) || [])[1];
+$('why').textContent = why ? why + ' (' + m + ')' : m;
 $('url').textContent = ok ? u : '';
 $('retry').hidden = !ok;
 $('retry').onclick = () => location.replace(u);
 $('list').onclick = () => (location.href = 'list.html');
 $('offline').onclick = () => (location.href = 'offline.html');
-$('back').onclick = () => history.back();
+$('back').onclick = () => (history.length > 2 ? history.go(-2) : history.back()); // 失敗したページ (1 つ前) を飛ばして戻る。戻るとまた失敗してここに来るため
 </script>
 </body>
 </html>

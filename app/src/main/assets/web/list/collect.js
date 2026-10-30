@@ -18,15 +18,15 @@ window.nhCollecting = (on) => {
   if (!on) render();
 };
 // 手動の確認は、前回の確認から 10 分は押せない (残りは Kotlin の CollectCooldown が NHStore.collectWaitMs で返す)。
-// 待つ間はボタンを押せなくして「あと N 分」を出し、時間が来たら描き直して押せるように戻す
+// 待つ間はボタンを押せなくして「次は N 分後から」を出し、時間が来たら描き直して押せるように戻す
 var waitTimer = 0;
 function paintCollectWait() {
   clearTimeout(waitTimer);
   const ms = !checking && window.NHStore && NHStore.collectWaitMs ? Number(NHStore.collectWaitMs()) || 0 : 0;
   $('collect').disabled = checking || ms > 0;
   if (ms > 0) {
-    $('checkLast').textContent += ' ・ あと ' + Math.ceil(ms / 60000) + ' 分';
-    waitTimer = setTimeout(paintCheckRow, Math.min(ms, 60000) + 200); // 1 分ごとに「あと N 分」を進める (一覧は描き直さない。操作中のフォーカスや持ち上げを崩さないため)
+    $('checkLast').textContent += ' ・ 次は ' + Math.ceil(ms / 60000) + ' 分後から';
+    waitTimer = setTimeout(paintCheckRow, Math.min(ms, 60000) + 200); // 1 分ごとに「次は N 分後から」を進める (一覧は描き直さない。操作中のフォーカスや持ち上げを崩さないため)
   }
 }
 // 前回の確認の時刻 (確認していないときだけ。確認中は「確認中」と進み具合になる) と、次に押せるまでの時間

@@ -20,10 +20,14 @@
   .rbar { position: fixed; left: 0; right: 0; z-index: 10; display: flex; align-items: center; gap: 4px; padding: 0 6px;
     height: 48px; background: var(--surface); box-shadow: 0 0 0 .5px var(--line); }
   .rbar.top { top: 0; } .rbar.bottom { bottom: 0; height: 52px; padding-bottom: env(safe-area-inset-bottom); box-sizing: content-box; }
+  /* 進むと隠れ、戻す・本文をタップすると出る (reader.js の setBar)。隠れている間は、本文の領域を広げる (縦書き) */
+  .rbar { transition: transform .22s ease; }
+  body.bars-hidden .rbar.top { transform: translateY(-100%); }
+  body.bars-hidden .rbar.bottom { transform: translateY(100%); }
   .rbar .name { flex: 1; min-width: 0; font-size: 13px; color: var(--sub); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .rbar .pos { flex: 1; text-align: center; font-size: 13px; color: var(--sub); font-variant-numeric: tabular-nums; }
   .rbar button:disabled { opacity: .25; pointer-events: none; }
-  #page { padding: 64px 22px 72px; max-width: 760px; margin: 0 auto; }
+  #page { padding: 64px 22px calc(52px + env(safe-area-inset-bottom) + 32px); max-width: 760px; margin: 0 auto; } /* 下の余白は、下のバーに隠れないよう、バーの高さ (52px + 画面の下の余白) より広く */
   #page h2 { font-size: 1.1em; margin: 0 0 1.4em; line-height: 1.5; }
   #text p { margin: 0; }
   #text hr { border: 0; border-top: 1px solid var(--line); margin: 2em 0; }
@@ -33,7 +37,72 @@
   #vwrap #text img { max-height: 86vh; width: auto; max-width: none; }
   #text.no-img img { display: none; }
   #text .img-missing { display: block; margin: 1em 0; color: var(--sub); font-size: .85em; }
+  /* 書式 (ハーメルンの掲示板形式・色・大小・表・脚注・動く装飾)。クラスは core/clean.js の FORMAT_CLASSES。値はハーメルンの CSS (sp_v2.css) の写し。
+     本文 (#text) と、引用元・脚注の吹き出し (.bbs-tip) の両方に効かせる。動きの @keyframes は下 (名前は全体で共通) */
+  #text { position: relative; } /* 本文の中の position: absolute の箱 (流れる文字など) の基準 */
+  :is(#text, .bbs-tip) .bold { font-weight: 700; }
+  :is(#text, .bbs-tip) .italic { font-style: oblique; }
+  :is(#text, .bbs-tip) .strike { text-decoration: line-through; }
+  :is(#text, .bbs-tip) .underline { text-decoration: underline; }
+  :is(#text, .bbs-tip) .small { font-size: 83%; }
+  :is(#text, .bbs-tip) .xsmall { font-size: 70%; }
+  :is(#text, .bbs-tip) .big { font-size: 120%; }
+  :is(#text, .bbs-tip) .xbig { font-size: 144%; }
+  :is(#text, .bbs-tip) div.center { text-align: center; }
+  :is(#text, .bbs-tip) div.left { text-align: left; float: left; }
+  :is(#text, .bbs-tip) div.right { text-align: right; float: right; }
+  :is(#text, .bbs-tip) sup, :is(#text, .bbs-tip) sub { height: 0; line-height: 1; vertical-align: baseline; position: relative; }
+  :is(#text, .bbs-tip) sup { bottom: 1ex; }
+  :is(#text, .bbs-tip) sub { top: .5ex; }
+  :is(#text, .bbs-tip) .bgcolor { color: #444; } /* 背景色のある枠は、作者の背景色の上に、暗い文字 (サイトと同じ) */
+  :is(#text.night, .bbs-tip.night) .bgcolor { color: #bbb; } /* ダークテーマでは、背景色も反転する (richtext.js) ので、文字は明るく (#444 を同じ式で反転した色) */
+  :is(#text, .bbs-tip) .strokecolor { font-weight: 700; }
+  :is(#text, .bbs-tip) em.emphasisDots { font-style: normal; text-emphasis: filled dot; -webkit-text-emphasis: filled dot; text-emphasis-position: over right; } /* カクヨムの傍点 (サイトは 3px の点の画像を文字の上に敷く) */
+  :is(#text, .bbs-tip) .bordercolor { border-style: solid; border-width: 1px; }
+  :is(#text, .bbs-tip) table.tag_table { border-collapse: collapse; display: inline-table; border-style: solid; border-width: 1px; word-break: break-word; max-width: 100%; }
+  :is(#text, .bbs-tip) table.tag_table td, :is(#text, .bbs-tip) table.tag_table th { border-style: solid; border-width: 1px; padding: 5px; }
+  :is(#text, .bbs-tip) .tag_pc { display: none !important; } /* 大きい画面の表示 (デスクトップ版) だけに出す部分。スマホの読み画面には出さない */
+  :is(#text, .bbs-tip) a.bbs_template_popup, :is(#text, .bbs-tip) a.footnote_number, :is(#text, .bbs-tip) a.footnote_link, :is(#text, .bbs-tip) a.jump_link {
+    color: var(--accent-text); text-decoration: none; -webkit-touch-callout: none; }
+  :is(#text, .bbs-tip) a.bbs_template_popup, :is(#text, .bbs-tip) a.footnote_number { user-select: none; }
+  :is(#text, .bbs-tip) a.footnote_number { text-decoration: underline dotted; }
+  :is(#text, .bbs-tip) .footnote { margin-top: 25px; padding-top: 25px; font-size: smaller; border-top: 1px solid var(--line); }
+  /* 動く装飾 (サイトの CSS の写し) */
+  :is(#text, .bbs-tip) .shake-1 { animation-name: shake-anim-1; animation-duration: .8s; transform-origin: 50% 50%; animation-iteration-count: infinite; animation-timing-function: linear; display: inline-block; }
+  :is(#text, .bbs-tip) .vib-1 { animation: .8s vib-anim-1 infinite alternate; display: inline-block; }
+  :is(#text, .bbs-tip) div.marquee { overflow: hidden; position: relative; }
+  :is(#text, .bbs-tip) div.marquee::after { content: "　"; white-space: nowrap; display: inline-block; }
+  :is(#text, .bbs-tip) div.marquee span.inner_marquee { position: absolute; top: 0; margin: 0; display: inline-block; white-space: nowrap;
+    animation-name: marquee; animation-duration: 10s; animation-timing-function: linear; animation-iteration-count: infinite; animation-fill-mode: both; }
+  :is(#text, .bbs-tip) .tag_blink { animation: blink-anim 5s step-end infinite; opacity: 0; }
+  :is(#text, .bbs-tip) .tag_fade { animation: fade-anim 5s ease infinite; opacity: 0; }
+  :is(#text, .bbs-tip) .tag_telop { font-weight: 700; -webkit-text-stroke: 1px #000; display: inline-block; position: relative;
+    background: linear-gradient(to right, red 50%, #fff 50%); background-size: 200% 200%; background-clip: text; -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent; animation: telop-anim linear 10s; animation-fill-mode: both; }
+  @keyframes shake-anim-1 { 0% { transform: translate(2px, 1px) rotate(0); } 10% { transform: translate(-1px, -2px) rotate(-1deg); } 20% { transform: translate(-3px, 0) rotate(1deg); }
+    30% { transform: translate(0, 2px) rotate(0); } 40% { transform: translate(1px, -1px) rotate(1deg); } 50% { transform: translate(-1px, 2px) rotate(-1deg); }
+    60% { transform: translate(-3px, 1px) rotate(0); } 70% { transform: translate(2px, 1px) rotate(-1deg); } 80% { transform: translate(-1px, -1px) rotate(1deg); }
+    90% { transform: translate(2px, 2px) rotate(0); } 100% { transform: translate(1px, -2px) rotate(-1deg); } }
+  @keyframes vib-anim-1 { 0% { transform: skewX(-15deg); } 5% { transform: skewX(15deg); } 10% { transform: skewX(-15deg); } 15% { transform: skewX(15deg); } 20% { transform: skewX(0); } 100% { transform: skewX(0); } }
+  @keyframes marquee { from { left: 100%; transform: translate(0); } to { left: 0; transform: translate(-100%); } }
+  @keyframes marquee-visible { from { left: 100%; transform: translate(-100%); } to { left: 0; transform: translate(0); } }
+  @keyframes marquee-visible-in { from { left: 100%; transform: translate(-100%); } to { left: 0; transform: translate(-100%); } }
+  @keyframes marquee-visible-out { from { left: 100%; transform: translate(0); } to { left: 0; transform: translate(0); } }
+  @keyframes marquee-vertical { from { top: 100%; transform: translateY(0); } to { top: 0; transform: translateY(-100%); } }
+  @keyframes marquee-vertical-visible-in { from { top: 0; transform: translateY(0); } to { top: 0; transform: translateY(-100%); } }
+  @keyframes marquee-vertical-visible-out { from { top: 100%; transform: translateY(0); } to { top: 100%; transform: translateY(-100%); } }
+  @keyframes marquee-vertical-visible { from { top: 0; transform: translateY(0); } to { top: 100%; transform: translateY(-100%); } }
+  @keyframes marquee-rotate-z { 0% { transform: rotateZ(0); } 100% { transform: rotateZ(360deg); } }
+  @keyframes marquee-rotate-x { 0% { transform: rotateX(0); } 100% { transform: rotateX(360deg); } }
+  @keyframes marquee-rotate-y { 0% { transform: rotateY(0); } 100% { transform: rotateY(360deg); } }
+  @keyframes blink-anim { 0% { opacity: 1; } 50% { opacity: 0; } }
+  @keyframes fade-anim { 0% { opacity: 1; } 50% { opacity: 0; } }
+  @keyframes telop-anim { 0% { background-position: 100% 50%; } 100% { background-position: 0 50%; } }
+  /* >>N を押している間に出る、引用元のレスの吹き出し (richtext.js)。本文の外 (画面に固定) に出すので、縦書きでも横書き */
+  .bbs-tip { position: fixed; z-index: 30; max-width: calc(100vw - 8px); box-sizing: border-box; padding: 6px 8px; background: var(--surface);
+    color: var(--fg); border: 1px solid var(--line); border-radius: 6px; font-size: 14px; line-height: 1.6; pointer-events: none; overflow: hidden; }
   #vwrap { position: fixed; top: 48px; bottom: calc(52px + env(safe-area-inset-bottom)); left: 0; right: 0; overflow-x: auto; overflow-y: hidden; writing-mode: vertical-rl; }
+  body.bars-hidden #vwrap { top: 0; bottom: 0; }
   #vwrap #inner { height: 100%; padding: 22px 26px; box-sizing: border-box; text-combine-upright: digits 2; }
   #vwrap hr { border: 0; border-right: 1px solid var(--line); margin: 0 2em; }
   #vwrap h2 { margin: 0 0 0 1.4em; }
@@ -43,4 +112,5 @@
   .setrow .val { min-width: 3.4em; text-align: right; color: var(--sub); font-variant-numeric: tabular-nums; }
   .step { width: 44px; height: 44px; border-radius: 50%; background: var(--surface-2); font-size: 18px; font-weight: 600; color: var(--accent-text); flex: none; }
   .setrow .seg { flex: 1; }
+  .setrow .picker { appearance: none; -webkit-appearance: none; border: 0; background: none; color: var(--sub); font-size: 16px; text-align: right; max-width: 60%; }
   .loading { padding: 14px 16px; color: var(--sub); font-size: 14px; }

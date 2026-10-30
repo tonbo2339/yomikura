@@ -44,8 +44,20 @@ object SiteUrls {
     private fun queryParam(url: String, name: String): String =
         try { URI(url).rawQuery.orEmpty().split('&').firstOrNull { it.substringBefore('=') == name }?.substringAfter('=', "").orEmpty() } catch (e: Exception) { "" }
 
+    /**
+     * ページの描画前に CSS や JS を差し込む対象の origin (WebView の addDocumentStartJavaScript の書き方。ホストの前に「*.」が付いたものはサブドメインも含み、
+     * 付かないものはそのホストだけ)。対応サイトのホストを漏れなく入れる (漏れると、そのサイトでは広告やバーを描画前に隠せない)
+     */
+    val INJECT_ORIGINS = setOf("https://*.syosetu.com", "https://syosetu.com", "https://syosetu.org", "https://h.syosetu.org", "https://kakuyomu.jp")
+
+    /** origin の書き方 (https:// のあとのホストが、「*.」付きか、そのままか) が、このホストに当てはまるか */
+    fun originMatches(origin: String, host: String): Boolean {
+        val pattern = origin.removePrefix("https://")
+        return if (pattern.startsWith("*.")) host.endsWith(pattern.removePrefix("*")) else host == pattern
+    }
+
     /** R18 のサイトのホスト (ノクターン・ムーンライト・ミッドナイト・R18 の作品と感想・ハーメルンの R18)。NSFW モードで通信を止める対象 */
-    private val R18_HOSTS = setOf("noc.syosetu.com", "mnlt.syosetu.com", "mid.syosetu.com", "novel18.syosetu.com", "novelcom18.syosetu.com", "h.syosetu.org")
+    internal val R18_HOSTS = setOf("noc.syosetu.com", "mnlt.syosetu.com", "mid.syosetu.com", "novel18.syosetu.com", "novelcom18.syosetu.com", "h.syosetu.org")
 
     /** R18 のサイトの URL か (R18 のブックマーク /favnovelmain18/ も含む)。 */
     fun isR18Url(url: String?): Boolean {

@@ -52,9 +52,28 @@
     return NH.offlinePlanFrom(adapter, w, eps, adapter.workTitle && adapter.workTitle());
   };
 
-  // 挿絵 1 枚を、アプリの中から取って端末に保存する (サイトのページからは、画像の置き場所の CORS で取れないため)。
-  // 保存できたら {name, bytes}、取れなかったら null。確認画面 (403 / 429 / 503) は話と同じく NH.CHALLENGE で止める
-  function fetchImage(site, id, url) {
+  // 挿絵 1 枚を取って端末に保存する。保存できたら {name, bytes}、取れなかったら null。確認画面 (403 / 429 / 503) は話と同じく NH.CHALLENGE で止める
+  // 本文と同じサイトにある挿絵は、ページの中で fetch して取る (WebView の通信なので、Cloudflare に止められない。アプリ自身の通信は 403 になる)。
+  // ほかのサイトにある挿絵は、ページからは CORS で読めないので、アプリが取る
+  const MAX_IMAGE_BYTES = 8 * 1024 * 1024; // OfflineStore.MAX_IMAGE_BYTES と同じ
+  const toBase64 = async (blob) => {
+    const buf = new Uint8Array(await blob.arrayBuffer());
+    let s = '';
+    for (let i = 0; i < buf.length; i += 0x8000) s += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000));
+    return btoa(s);
+  };
+  async function fetchImageHere(site, id, url) {
+    let res;
+    try { res = await fetch(url, { credentials: 'include' }); } catch (x) { return null; }
+    if ([403, 429, 503].includes(res.status)) throw new Error(NH.CHALLENGE);
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    if (blob.size > MAX_IMAGE_BYTES) return null;
+    const got = NH.off.saveImageData(site, id, url, await toBase64(blob));
+    return got.name ? got : null;
+  }
+  async function fetchImage(site, id, url) {
+    if (new URL(url).origin === location.origin) return fetchImageHere(site, id, url);
     const got = NH.off.saveImage(site, id, url, location.href);
     if (got.error === 'challenge') throw new Error(NH.CHALLENGE);
     return got.name ? got : null;
@@ -66,17 +85,23 @@
     const want = !!withImages;
     if (e.rec && !!e.rec.withImages === want) return e.rec;
     const doc = e.doc || (await NH.fetchDoc(e.url));
-    const imgs = [...doc.querySelectorAll(adapter.bodySel)].flatMap((b) => [...b.querySelectorAll('img')]);
+    // 挿絵: <img> と、アダプターが示す画像へのリンク (imageLinkSel。ハーメルンの「【挿絵表示】」)。<img> を含むリンクは <img> の方だけ数える
+    const imgs = [...doc.querySelectorAll(adapter.bodySel)].flatMap((b) => [
+      ...b.querySelectorAll('img'),
+      ...(adapter.imageLinkSel ? [...b.querySelectorAll(adapter.imageLinkSel)].filter((a) => !a.querySelector('img')) : []),
+    ]);
     let imgBytes = 0, saved = 0;
     if (want) {
       const seen = new Map(); // 同じ話の中で同じ挿絵は 1 回だけ取る
       const counted = new Set(); // 容量と件数は、保存した挿絵 1 枚ごとに 1 回だけ数える
       for (const img of imgs) {
-        const src = img.getAttribute('src') || img.getAttribute('data-src') || '';
+        const src = img.getAttribute('src') || img.getAttribute('data-src') || (img.tagName === 'A' ? img.getAttribute('href') : '') || '';
         let url;
         try { url = new URL(src, e.url).href; } catch (x) { continue; }
+        url = url.replace(/^http:/, 'https:'); // 平文の通信は使わない (ImageSaver も https だけ)。画像の置き場所は https でも開ける
+        if (adapter.imageUrl) url = adapter.imageUrl(url); // サイトごとの取りに行く URL (ハーメルンは転送先を直接)
         if (!/^https?:\/\//.test(url)) continue;
-        if (!seen.has(url)) seen.set(url, fetchImage(adapter.id, w.id, url));
+        if (!seen.has(url)) seen.set(url, await fetchImage(adapter.id, w.id, url));
         const got = seen.get(url);
         if (!got) continue;
         img.setAttribute('data-nh-local', 'img/' + got.name);

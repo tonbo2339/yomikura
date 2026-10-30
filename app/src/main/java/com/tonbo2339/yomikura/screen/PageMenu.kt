@@ -67,7 +67,7 @@ class PageMenu(
                     }
                     // オフライン保存 (作品のページを #nh-save 付きで開くと、リストからの保存と同じ画面になる)
                     work?.optString("url")?.takeIf { shown(MenuItems.SAVE) && it.startsWith("https://") }?.let { workUrl ->
-                        val label = if (work.optBoolean("saved")) "端末の保存を更新" else "この作品を端末に保存"
+                        val label = if (work.optBoolean("saved")) "オフライン保存を更新" else "この作品をオフライン保存"
                         add(action(R.drawable.ic_download, label) { navigate("$workUrl#nh-save") })
                     }
                     // ランキングの行き先がこのページなら「初期設定に戻す」

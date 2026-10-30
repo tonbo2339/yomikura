@@ -2,8 +2,14 @@
 // ---- カード ----
 function card(d, it, isActive, visible) {
   const c = el('div', 'card item' + (isActive ? '' : ' done'));
-  asButton(c, () => { if (Date.now() - dragEndedAt > 500) openWork(d, it, visible); }); // 持ち上げて離したときは開かない (キーボードでも Enter / Space で開く)
-  if (isActive) enableDrag(c, it, visible, sortMode(d) === 'manual');
+  const picking = isActive && selecting(); // 選択モードでは、押すと開かず選ぶ (select.js)
+  asButton(c, () => { if (picking) toggleSel(it.key); else if (Date.now() - dragEndedAt > 500) openWork(d, it, visible); }); // 持ち上げて離したときは開かない (キーボードでも Enter / Space で開く)
+  if (isActive) enableDrag(c, it, visible, sortMode(d) === 'manual' && !picking, swipeOn(d) && !picking);
+  if (picking) {
+    c.dataset.key = it.key; c.setAttribute('role', 'checkbox');
+    const box = el('span', 'selbox'); box.innerHTML = svg('check');
+    c.appendChild(box);
+  }
 
   const main = el('div', 'main');
   const meta = el('div', 'meta');
@@ -14,7 +20,7 @@ function card(d, it, isActive, visible) {
   // 連載状態 (連載中・完結・短編。分かるときだけ。履歴と同じ場所・同じ印)
   if (STATUS_NAME[it.status]) meta.appendChild(el('span', 'badge status ' + it.status, STATUS_NAME[it.status]));
   if (isActive && st.unread && !st.short) meta.appendChild(el('span', 'badge unread', '未読' + st.unread + '話'));
-  if (it.tag) meta.appendChild(el('span', 'badge tag', it.tag));
+  NH.tagsOf(it).forEach((t) => meta.appendChild(el('span', 'badge tag', t)));
   main.append(meta, el('div', 'title', it.title));
   if (it.memo) main.appendChild(el('div', 'memo', it.memo));
   if (isActive) {

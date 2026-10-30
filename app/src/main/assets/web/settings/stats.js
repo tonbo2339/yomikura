@@ -13,7 +13,7 @@ function paintStats() {
   const d = load(), s = NH.statsSummary(d);
   const amount = (label, x, works) => {
     const c = el('div', 'cell');
-    const v = el('span', 'value', x.e + ' 話 ・ ' + fmtChars(x.c) + (works ? '\n' + x.works + ' 作品' : ''));
+    const v = el('span', 'value', !x.e ? 'なし' : x.e + ' 話 ・ ' + fmtChars(x.c) + (works ? '\n' + x.works + ' 作品' : ''));
     v.style.cssText = 'white-space:pre-line;text-align:right'; // 作品数は 2 行目 (… で切らない)
     c.append(el('span', 'text', label), v);
     return c;

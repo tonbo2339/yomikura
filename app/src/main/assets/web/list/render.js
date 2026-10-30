@@ -32,13 +32,13 @@ function render() {
     tabs.appendChild(b);
   });
 
-  if (ui.tab === 'history') { $('sortRow').hidden = true; return renderHistory(d); } // 並べ替えは作品の一覧だけ
+  if (ui.tab === 'history') { $('sortRow').hidden = true; syncSelect(null); return renderHistory(d); } // 並べ替えは作品の一覧だけ
   // 絞り込み (このタブにある分だけ)。検索中も、いまのタブの中だけを探す
   const terms = queryTerms();
   const inTab = active.filter((x) => kindOf(x) === ui.tab && matchQuery(x, terms));
   const sites = [...new Set(inTab.map(NH.siteKey))]; // R18 はノクターンなどに分ける
   const stats = STATUS_CHIPS.filter(([k]) => inTab.some((x) => x.status === k)); // 連載状態が分かっている作品があるものだけ
-  const tags = [...new Set(inTab.map((x) => x.tag).filter(Boolean))];
+  const tags = [...new Set(inTab.flatMap(NH.tagsOf))];
   if (ui.site && !sites.includes(ui.site)) ui.site = '';
   if (ui.status && !stats.some(([k]) => k === ui.status)) ui.status = '';
   if (ui.tag && !tags.includes(ui.tag)) ui.tag = '';
@@ -53,7 +53,7 @@ function render() {
   fl.hidden = !fl.childElementCount;
 
   const mode = sortMode(d);
-  const visible = sortItems(inTab.filter((x) => (!ui.site || NH.siteKey(x) === ui.site) && (!ui.tag || x.tag === ui.tag) && (!ui.status || x.status === ui.status)), mode);
+  const visible = sortItems(inTab.filter((x) => (!ui.site || NH.siteKey(x) === ui.site) && (!ui.tag || NH.tagsOf(x).includes(ui.tag)) && (!ui.status || x.status === ui.status)), mode);
   // 並べ替えの欄 (選ぶと設定に覚える)
   const sel = $('sortSel');
   if (!sel.dataset.ready) {
@@ -62,6 +62,7 @@ function render() {
     sel.addEventListener('change', () => { NH.setSetting('listSort', sel.value); render(); });
   }
   sel.value = mode;
+  syncSelect(visible);
   $('sortRow').hidden = inTab.length < 2; // 並べる作品が 2 つ以上あるときだけ
   const hero = $('hero'); hero.innerHTML = '';
   const root = $('active'); root.innerHTML = '';
@@ -98,4 +99,5 @@ function render() {
   $('qCount').textContent = terms.length ? visible.length + doneShown.length + ' 件' : '';
   const st = d.settings || {};
   $('pruneHint').textContent = !NH.flagOf(st, 'pruneDone') ? '' : '読了から ' + (st.pruneDays || NH.PRUNE_DAYS) + ' 日たつと自動で削除します (設定で変更)';
+  paintSelect(); // カードを作り直したあとにも、選んだ作品のチェックを付ける (syncSelect の時点では、まだ古いカード)
 }

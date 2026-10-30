@@ -1,10 +1,10 @@
 // サイトの表 (SITES / RANK_SITES / ACCOUNTS / COLLECT_SITES / TAB_COLOR_DEFAULT) は app.js
 const { load, SITE_DEFAULT } = NH; // 保存データの読み書きは core/store.js と共通 (書くときは NH.update)
-const DEFAULTS = { theme: 'auto', font: 'site', size: 100, lh: 0, start: 'list', startSite: 'narou', autoCheck: true, autoCheckHours: 3, listArrows: true, dimRead: true, pruneDone: true, pruneDays: 30, historyMax: 300, historyDays: 0, sites: Object.assign({}, SITE_DEFAULT) };
-const FONTS = { site: 'inherit', gothic: '"Noto Sans CJK JP","Noto Sans JP",sans-serif', mincho: '"Noto Serif CJK JP","Noto Serif JP",serif' };
+const DEFAULTS = { theme: 'auto', font: 'site', size: 100, lh: 0, start: 'list', startSite: 'narou', externalLinks: 'browser', autoCheck: true, autoCheckHours: 3, listArrows: true, listSwipe: true, dimRead: true, pruneDone: true, pruneDays: 30, historyMax: 300, historyDays: 0, sites: Object.assign({}, SITE_DEFAULT) };
 const R18_MODES = [['menu', '「なろう」を素早く 2 回タップ'], ['tabs', '上部バーに、サイト名のタブで出す']];
 const START = [['ranking', 'ランキング'], ['top', 'サイトのトップ'], ['list', 'リスト'], ['last', '最後に開いていたページ']];
 const DENSITIES = [['compact', '小さめ'], ['standard', '標準'], ['large', '大きめ']];
+const LINK_MODES = [['browser', '端末のブラウザで開く'], ['app', 'ヨミクラの中で開く']];
 const THEMES = [['auto', '自動'], ['light', 'ライト'], ['dark', 'ダーク']];
 const FONT_NAMES = [['site', 'サイト標準'], ['gothic', 'ゴシック'], ['mincho', '明朝']];
 const HOURS = [1, 3, 6, 12];
@@ -13,7 +13,7 @@ const HISTORY_MAX = [[100, '100 作品'], [300, '300 作品'], [1000, '1000 作�
 const HISTORY_DAYS = [[30, '30 日'], [90, '90 日'], [180, '半年'], [365, '1 年'], [0, '無期限']];
 // アイコンの選択肢のキー (並びは Kotlin の LauncherIcon.ICONS と同じ。名前は付けず、画像 icons/<キー>.svg だけを並べる)
 const LAUNCHER = ['paper', 'green', 'ocean', 'purple', 'sakura', 'aigold', 'yuyake', 'matcha', 'night', 'dusk', 'wood', 'sea'];
-const TITLES = { names: '', bg: '裏での確認と通知', bar: '上部バー', history: '閲覧履歴', accounts: 'ログイン', data: '初期化と消去', diag: '診断情報', privacy: 'プライバシー', licenses: 'オープンソースライセンス', stats: '読書の統計', reading: '読書の補助', export: '書き出す', start: '起動ページ', update: 'アプリの更新', auto: '更新の確認', list: 'リスト', fold: '話ページの下の欄', text: '本文の文字', icon: 'アプリのアイコン', sites: '表示するサイト', mute: 'ミュート・ブロック・既読', ranking: 'ランキングの行き先', 'rank-narou': 'なろう', 'rank-hameln': 'ハーメルン', 'rank-kakuyomu': 'カクヨム', 'rank-noc': 'ノクターン', 'rank-mnlt': 'ムーンライト', 'rank-mid': 'ミッドナイト' };
+const TITLES = { names: '', bg: '裏での確認と通知', bar: '上部バー', history: '閲覧履歴', accounts: 'ログイン', data: '初期化と消去', diag: '診断情報', privacy: 'プライバシー', licenses: 'オープンソースライセンス', stats: '読書の統計', reading: '読書の補助', export: '書き出す', start: '起動ページ', links: 'リンクの扱い', offlineset: 'オフライン保存の設定', update: 'アプリの更新', auto: '更新の確認', list: 'リスト', fold: '話ページの下の欄', text: '本文の文字', icon: 'アプリのアイコン', sites: '表示するサイト', mute: 'ミュート・ブロック・既読', ranking: 'ランキングの行き先', 'rank-narou': 'なろう', 'rank-hameln': 'ハーメルン', 'rank-kakuyomu': 'カクヨム', 'rank-noc': 'ノクターン', 'rank-mnlt': 'ムーンライト', 'rank-mid': 'ミッドナイト' };
 const MUTE_MODES = [['hide', '隠す'], ['dim', '薄く表示']];
 
 const CHEV = '<svg class="chev" viewBox="0 0 8 13"><path d="M1.5 1.5 6.5 6.5 1.5 11.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
@@ -45,6 +45,8 @@ function writeSettings() {
     LIVE_KEYS.forEach((k) => { if (d.settings && d.settings[k] !== undefined) live[k] = d.settings[k]; });
     d.settings = Object.assign({}, S, live);
   });
+  // 保存データが読めないときは NH.update が書かない (中身を消さないため)。黙って戻らないよう、変えられなかったことを知らせる
+  if (NH.unreadable) snack('保存データを読めないため、設定を保存できませんでした。バックアップの「読み込む」で復元できます');
 }
 function commit(heavy) { writeSettings(); paint(heavy === true); } // heavy = トップの重い値 (オフラインの数・ログイン) も読み直す
 function commitSoon() {

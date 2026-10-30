@@ -12,7 +12,7 @@ window.NH_UI_LIST_LATER = function (ctx) {
   // key の作品のボタンを全部 on / off の見た目にする (画面から外れたボタンは飛ばす)
   const paintKey = (key, on) => (btnsOf.get(key) || []).forEach((b) => { if (b.isConnected) paintBtn(b, on); });
   // 読了にした作品は「追加済み」にしない (押すと、読了を外してリストに戻す)
-  const isOn = (d, work) => { const it = NH.findItem(d, work); return !!it && !it.done; };
+  const isOn = (d, work) => NH.inLater(d, work);
   const refresh = (work) => paintKey(NH.workKey(work), isOn(NH.load(), work));
   // 押した直後に、同じ作品のボタンをぽんと弾ませる (押したことが手応えとして分かるように。最初の表示や元の状態への描き直しでは動かさない)
   const pop = (key) => (btnsOf.get(key) || []).forEach((b) => {
@@ -28,8 +28,9 @@ window.NH_UI_LIST_LATER = function (ctx) {
     let r = null; // NH.update がやり直したときのために、fn の中で決め直す。書かなかったときは null のまま
     NH.update((d) => { r = NH.toggleLater(d, work, title, entry.status); });
     if (!r) { NH.toast('保存データを読めないため、変更できませんでした'); return; }
+    if (NH.updateGaveUp) { NH.toast('保存できませんでした。もう一度お試しください'); return; }
     const undo = r.removed && { label: '元に戻す', fn: () => { NH.update((d) => NH.restoreItem(d, r.removed)); refresh(work); } };
-    NH.toast(r.result === 'revived' ? 'リストに戻しました (読了を外しました)' : r.result === 'added' ? '後で読むに追加しました' : 'リストから外しました', undo || undefined);
+    NH.toast(r.result === 'revived' ? 'リストに戻しました (読了を外しました)' : r.result === 'moved' ? '「後で読む」に移しました' : r.result === 'added' ? '後で読むに追加しました' : 'リストから外しました', undo || undefined);
     refresh(work);
     pop(NH.workKey(work));
   }

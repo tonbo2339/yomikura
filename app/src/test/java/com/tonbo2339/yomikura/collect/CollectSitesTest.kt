@@ -58,6 +58,15 @@ class CollectSitesTest {
         assertTrue(SiteConfig.collectStartUrl(d, "bg")!!.startsWith("https://syosetu.com/favnovelmain/")) // ハーメルンは飛ばして、なろうから
     }
 
+    @Test fun 強制の手動だけが休んでいるサイトも開く() {
+        val now = 10_000_000L
+        val all = data("""{"nsfw":false}""").put("rest", JSONObject().apply { listOf("hameln", "narou", "narou18", "kakuyomu").forEach { put(it, now) } })
+        assertNull(SiteConfig.collectStartUrl(all, "fg", now)) // 既定 (強制しない): 全部休んでいる
+        assertTrue(SiteConfig.collectStartUrl(all, "fg", now, forceManual = true)!!.endsWith("#nh-collect-fg"))
+        assertNull(SiteConfig.collectStartUrl(all, "bg", now, forceManual = true)) // 裏の確認は強制しない
+        assertNull(SiteConfig.collectStartUrl(all, "fg-auto", now, forceManual = true)) // 起動時の自動も強制しない
+    }
+
     @Test fun 休んでいるサイトは開きもせず次のサイトから始まる() {
         val now = 10_000_000L
         val d = data("""{"nsfw":false}""").put("rest", JSONObject("""{"hameln":${now - 30 * 60_000L}}""")) // 30 分前に止められた

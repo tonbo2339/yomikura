@@ -1,21 +1,21 @@
 package com.tonbo2339.yomikura
 
+import android.content.Context
 import android.util.Log
-import android.webkit.CookieManager
-import java.net.HttpURLConnection
-import java.net.URL
 
 /**
  * R18 の作品がノクターン / ムーンライト / ミッドナイトのどれかを、作品ページ (novel18.syosetu.com/ID/) を読んで判別する。
- * サイトを記録する前 (v0.15.0 より前) に入れた作品や、更新の確認で入った作品のため。WebView では開かないので閲覧履歴には残らない。
+ * サイトを記録する前 (v0.15.0 より前) に入れた作品や、更新の確認で入った作品のため。アプリの画面の WebView では開かないので、アプリの閲覧履歴には残らない。
  * 作品ページのヘッダーにあるサイトへのリンク (…?ref=ncodeheader) のホストで判断する (ui.js の NH.r18Sub と同じ)。
- * Cookie と UA はアプリの WebView と同じものを使う (年齢確認を通った Cookie が無ければ確認ページになり、判別できずに飛ばす)。
+ * ページは画面に出さない WebView で開く ([PageProbe]。アプリ自身の通信は、サイトの Cloudflare にボットとして 403 で止められるため)。
+ * Cookie は WebView と共通 (年齢確認を通った Cookie が無ければ確認ページになり、判別できずに飛ばす)。
  * アクセスのマナー: 1 件ずつ 1.5〜3 秒あけ、403 / 429 / 503 が来たらやめる。同じ作品はアプリを開いている間 1 回だけ試す。
  */
 object R18Subs {
     private const val TAG = "Yomikura.r18"
     private val tried = HashSet<String>()
     @Volatile private var running = false
+    private val STOP_CODES = setOf(403, 429, 503)
     private val HEADER = Regex("""https://(noc|mnlt|mid)\.syosetu\.com/[^"'\s]*ref=ncodeheader""")
     private val ANY = Regex("""https://(noc|mnlt|mid)\.syosetu\.com/""")
     private val NCODE = Regex("n\\d{4}[a-z]+")
@@ -23,11 +23,18 @@ object R18Subs {
     /** 作品ページの HTML から noc / mnlt / mid を読む (ヘッダーのリンクを優先)。分からなければ null。Android に依存しない (単体テスト用) */
     fun detectSub(html: String): String? = (HEADER.find(html) ?: ANY.find(html))?.groupValues?.get(1)
 
+    /** 開いた結果から、(noc / mnlt / mid (判別できなければ null), 止めるべきか) を決める。止めるべき = 403 / 429 / 503。Android に依存しない (単体テスト用) */
+    fun judge(status: Int, html: String): Pair<String?, Boolean> {
+        if (status in STOP_CODES) return null to true
+        if (status != 200) return null to false
+        return detectSub(html) to false
+    }
+
     /**
-     * ids の作品を順に判別し、分かるたびに onFound(id, sub) (メインスレッド)、最後に onDone() (メインスレッド)。
-     * stop = 途中でやめるか (1 件ごとに、取りに行く前に見る。判別の途中で NSFW モードがオンになったら、R18 のサイトへ行かない)。裏のスレッドから呼ぶ
+     * ids の作品を順に判別し、分かるたびに onFound(id, sub)、最後に onDone()。メインスレッドで呼ぶ (結果もメインスレッド)。
+     * stop = 途中でやめるか (1 件ごとに、取りに行く前に見る。判別の途中で NSFW モードがオンになったら、R18 のサイトへ行かない)
      */
-    fun fill(ids: List<String>, ua: String, onFound: (String, String) -> Unit, onDone: () -> Unit, isResting: () -> Boolean = { false }, markRest: () -> Unit = {}, stop: () -> Boolean = { false }) {
+    fun fill(ctx: Context, ids: List<String>, onFound: (String, String) -> Unit, onDone: () -> Unit, isResting: () -> Boolean = { false }, markRest: () -> Unit = {}, stop: () -> Boolean = { false }) {
         // 止められたばかりのサイトには行かない (試したことにせず見送る。休止が明けて、あとで呼ばれたとき判別できるように)
         if (isResting()) return
         // 実行中に呼ばれたときは、試したことにせず見送る (あとで呼ばれたとき判別できるように)
@@ -36,56 +43,26 @@ object R18Subs {
             ids.filter { NCODE.matches(it) && tried.add(it) }.also { if (it.isNotEmpty()) running = true }
         }
         if (todo.isEmpty()) return
-        val main = MainThread.handler
-        runBackground("Yomikura-r18subs") {
-            try {
-                for ((i, id) in todo.withIndex()) {
-                    if (i > 0) Politeness.pause()
-                    if (stop()) {
-                        // 残りは試したことにしない (NSFW モードを切ってから、もう一度呼ばれたときに判別できるように)
-                        Log.d(TAG, "stopped by the caller")
-                        synchronized(tried) { tried.removeAll(todo.subList(i, todo.size).toSet()) }
-                        break
-                    }
-                    val (code, html) = get("https://novel18.syosetu.com/$id/", ua)
-                    if (code == 403 || code == 429 || code == 503) {
-                        // 残りは試したことにしない (休みが明けたあと、もう一度判別できるように)
-                        Diag.w(TAG, "stopped: $code"); markRest()
-                        synchronized(tried) { tried.removeAll(todo.subList(i, todo.size).toSet()) }
-                        break
-                    }
-                    val sub = detectSub(html)
-                    Log.d(TAG, "$id -> $code $sub")
-                    if (sub != null) main.post { onFound(id, sub) }
-                }
-            } catch (e: Exception) {
-                Diag.w(TAG, "failed", e)
-            } finally {
-                synchronized(tried) { running = false }
-                main.post(onDone)
+        ProbeRun.run(ctx, todo, { "https://novel18.syosetu.com/$it/" }, emptySet(), stop = stop, onResult = { id, r ->
+            if (r.status == 0) {
+                // 開けなかった・時間切れ (オフラインなど)。試したことにせず、ここでやめる (あとで、もう一度判別できるように)
+                Log.d(TAG, "$id -> not loaded")
+                return@run false
             }
-        }
-    }
-
-    private fun get(url: String, ua: String): Pair<Int, String> {
-        val c = URL(url).openConnection() as HttpURLConnection
-        try {
-            c.connectTimeout = 15_000
-            c.readTimeout = 15_000
-            c.setRequestProperty("User-Agent", ua)
-            CookieManager.getInstance().getCookie(url)?.let { c.setRequestProperty("Cookie", it) }
-            val code = c.responseCode
-            if (code != 200) return code to ""
-            // ヘッダーは先頭にあるので、前のほうだけ読めば足りる
-            val text = c.inputStream.bufferedReader().use { r ->
-                val buf = CharArray(200_000)
-                var n = 0
-                while (n < buf.size) { val k = r.read(buf, n, buf.size - n); if (k < 0) break; n += k }
-                String(buf, 0, n)
+            val (sub, stopSite) = judge(r.status, r.html)
+            if (stopSite) {
+                // 403 / 429 / 503 でやめる。残りは試したことにしない (休みが明けたあと、もう一度判別できるように)
+                Diag.w(TAG, "stopped: ${r.status}"); markRest()
+                false
+            } else {
+                Log.d(TAG, "$id -> ${r.status} $sub")
+                sub?.let { onFound(id, it) }
+                true
             }
-            return code to text
-        } finally {
-            c.disconnect()
-        }
+        }, finished = { notDone ->
+            // やめた (403 など・NSFW モードがオン) ときの残りは、試したことにしない (あとで、もう一度判別できるように)
+            synchronized(tried) { tried.removeAll(notDone.toSet()); running = false }
+            onDone()
+        })
     }
 }

@@ -12,6 +12,9 @@ object Edition {
     /** アプリの更新を取る GitHub のリポジトリ */
     const val UPDATE_REPO = "tonbo2339/yomikura"
 
+    /** デバッグ用の機能 (設定の「デバッグ」のページ) は無い (通信の記録は URL を省かないので、診断情報の方針に合わない) */
+    const val DEBUG_TOOLS = false
+
     /** ソースコードと LICENSE を公開している GitHub のリポジトリ (設定の「オープンソースライセンス」に出す) */
     const val PUBLIC_REPO = "tonbo2339/yomikura"
 

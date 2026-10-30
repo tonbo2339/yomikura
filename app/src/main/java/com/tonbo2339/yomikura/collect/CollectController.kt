@@ -48,27 +48,41 @@ class CollectController(
     fun start(auto: Boolean) {
         // この画面の確認か、裏での確認 (BgCheckJob) が進んでいる間は始めない
         if (Collector.crawling()) {
+            DevLog.eventOf(DevLog.Category.CHECK, "app skip", "reason" to "already checking", "auto" to auto)
             if (!auto) ui.snack("更新を確認しています…")
             return
         }
-        // 手動の確認は、前回の確認 (途中で止まったものも) から 10 分は始めない (サイトへ続けてアクセスしないため)
-        if (!auto) {
+        // 回線が無いときは始めない (読み込みに失敗し続けて、止まるまで「確認中」のままになり、待ち時間も数えてしまう)
+        if (!Connectivity.hasNetwork(activity)) {
+            DevLog.eventOf(DevLog.Category.CHECK, "app skip", "reason" to "no network", "auto" to auto)
+            if (!auto) ui.snack("通信できないため、更新を確認できません")
+            return
+        }
+        // 手動の確認は、前回の確認 (途中で止まったものも) から 10 分は始めない (サイトへ続けてアクセスしないため)。デバッグのスイッチ (forceManualCheck) がオンなら除く
+        val force = cfg.forceManualCheck()
+        if (!auto && !force) {
             val wait = CollectCooldown.remainingMs(CollectCooldown.lastOf(cfg.data()), System.currentTimeMillis())
             if (wait > 0) {
+                DevLog.eventOf(DevLog.Category.CHECK, "app skip", "reason" to "cooldown", "waitMin" to CollectCooldown.remainingMinutes(wait), "auto" to auto)
                 ui.snack("続けて確認できるのは、前回から ${CollectCooldown.MINUTES} 分後です (あと ${CollectCooldown.remainingMinutes(wait)} 分)")
                 return
             }
         }
-        val startUrl = SiteConfig.collectStartUrl(cfg.data(), if (auto) "fg-auto" else "fg")
+        val startUrl = SiteConfig.collectStartUrl(cfg.data(), if (auto) "fg-auto" else "fg", forceManual = force)
         if (startUrl == null) {
+            DevLog.eventOf(DevLog.Category.CHECK, "app skip", "reason" to "no site to check (or all resting)", "auto" to auto)
             if (!auto) {
                 // 対象のサイトはあるが、どれもアクセスを止められて休んでいる (SiteRest)
-                ui.snack(if (SiteConfig.collectAnyActive(cfg.data())) "アクセスを止められたサイトを休ませています。しばらくしてからお試しください"
-                    else "更新を確認するサイトがありません。設定の「更新の確認」で選べます")
+                ui.snack(when {
+                    SiteConfig.collectAnyActive(cfg.data()) -> "アクセスを止められたサイトを休ませています。しばらくしてからお試しください"
+                    SiteConfig.collectAny(cfg.data()) -> "確認するサイトにログインしていません。設定の「ログイン」からログインしてください"
+                    else -> "更新を確認するサイトがありません。設定の「更新の確認」で選べます"
+                })
             }
             return
         }
         stop() // 前回、確認画面で待ったまま残っているもの
+        DevLog.eventOf(DevLog.Category.CHECK, "app start", "auto" to auto, "force" to force)
         CollectCooldown.markStarted(activity)
         session = CollectSession(
             activity, hostFilter, startUrl,
@@ -80,6 +94,8 @@ class CollectController(
             onHeldEnd = { site, ok -> closeChallenge(site, ok) },
         ) { log ->
             setRunning(false)
+            val r = log?.let { BgCheck.parse(it) }
+            DevLog.eventOf(DevLog.Category.CHECK, "app done", "auto" to auto, "finished" to (log != null), "fresh" to r?.fresh?.size, "errors" to r?.errors?.joinToString(",")?.ifEmpty { null })
             showResult(log, auto)
         }
         setRunning(true)
@@ -149,12 +165,13 @@ class CollectController(
         promptSite = null
     }
 
-    /** 確認の結果を出す: 「N 作品の更新をリストに追加しました」「更新作品はありませんでした」と、確認できなかったサイト。 */
+    /** 確認の結果を出す: 「N 作品の更新をリストに追加しました」「新しい話のある作品はありませんでした」と、確認できなかったサイト。 */
     private fun showResult(log: String?, auto: Boolean) {
         ui.listCountChanged()
         if (log == null) {
             // 「もう一度」は出さない: 止まった確認も 10 分の待ちに数える (CollectCooldown.lastOf) ので、すぐには押せないため
-            if (!auto) ui.snack("更新を確認できませんでした (ページが進みませんでした)。${CollectCooldown.MINUTES} 分ほどたってから、もう一度お試しください")
+            if (!auto) ui.snack("更新を確認できませんでした (ページが進みませんでした)。" +
+                if (cfg.forceManualCheck()) "もう一度お試しください" else "${CollectCooldown.MINUTES} 分ほどたってから、もう一度お試しください")
             return
         }
         // 文とボタンは CollectSummary が決める。開く先の URL はここで決める

@@ -1,5 +1,6 @@
 // list.html: 一覧の並べ替え
 const arrowsOn = (d) => NH.flag(d, 'listArrows');
+const swipeOn = (d) => NH.flag(d, 'listSwipe'); // 横スワイプで削除 (既定はオン)
 
 // 一覧の並べ替え (表示の順だけ。手動の並び (▲▼ で動かした順) は残す)。手動以外のときは ▲▼ を出さない
 const SORTS = [['manual', '自分で並べた順'], ['updated', '更新が新しい順'], ['unread', '未読が多い順'], ['title', '名前順'], ['site', 'サイト順']];

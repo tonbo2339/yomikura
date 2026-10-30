@@ -4,12 +4,17 @@
   <div class="group">
     <label class="cell"><span class="text">さっきまで読んでいた作品を出す</span><input type="checkbox" class="switch" id="heroResume" data-setting="heroResume"></label>
   </div>
-  <div class="hint">オンは最近読んだ作品の「続きから読む」、オフはリスト先頭の作品を、上のカードに出します。</div>
+  <div class="hint">オンは、最近読んだ作品の「続きから読む」を上のカードに出します。オフは、リスト先頭の作品を出します。</div>
   <div class="section-label">並べ替え</div>
   <div class="group">
     <label class="cell"><span class="text">読む順番の上下ボタンを表示</span><input type="checkbox" class="switch" id="listArrows" data-setting="listArrows"></label>
   </div>
-  <div class="hint">各作品に ▲▼ を出します。長押しして動かす入れ替えは、いつでも使えます。</div>
+  <div class="hint">各作品に ▲▼ を出します。長押しでの入れ替えは、この設定に関係なく使えます。</div>
+  <div class="section-label">削除</div>
+  <div class="group">
+    <label class="cell"><span class="text">横にスワイプして削除</span><input type="checkbox" class="switch" id="listSwipe" data-setting="listSwipe"></label>
+  </div>
+  <div class="hint">作品を横へ大きく動かして離すと、リストから削除します (元に戻せます)。オフでも、「選択」から削除できます。</div>
   <div class="group" style="margin-top:16px">
     <label class="cell"><span class="text">読了を自動で削除</span><input type="checkbox" class="switch" id="pruneDone" data-setting="pruneDone"></label>
   </div>
@@ -17,5 +22,5 @@
     <div class="section-label">読了にしてから、この日数がたったとき</div>
     <div class="group" id="pruneDaysList"></div>
   </div>
-  <div class="hint">削除はリストを開いたときに行い、読書位置の記録も消えます。リストの「読了」の欄からまとめて消すこともできます。</div>
+  <div class="hint">リストを開いたときに削除し、読書位置の記録も消します。「読了」の欄からまとめて消すこともできます。</div>
 </section>

@@ -9,8 +9,9 @@ window.NH.define('list-model', function (NH) {
 
   // 読了の印。読了にした時刻 (doneAt) も持つ (一定日数で自動的に片付けるため)
   NH.setDone = (x, on) => {
+    const was = !!x.done;
     x.done = !!on;
-    if (on) x.doneAt = x.doneAt || Date.now();
+    if (on) x.doneAt = was && x.doneAt ? x.doneAt : Date.now(); // 読了でなかった作品は、前の時刻が残っていても今から数える (読了にした直後に、日数がたったと見なされて消えないように)
     else delete x.doneAt;
   };
 
@@ -31,6 +32,9 @@ window.NH.define('list-model', function (NH) {
     }
     return gone.length;
   };
+
+  // 作品のジャンル・タグ (x.tag に、スペース・読点・カンマで区切って複数入る。以前の 1 つだけの値もそのまま読める)。重複は除く
+  NH.tagsOf = (x) => [...new Set(String((x && x.tag) || '').split(/[\s,、，]+/).filter(Boolean))];
 
   NH.workKey = (w) => w.site + ':' + w.id;
   NH.findItem = (d, w) => d.readLater.find((x) => x.key === NH.workKey(w));
@@ -74,8 +78,9 @@ window.NH.define('list-model', function (NH) {
     let added = 0;
     let updates = 0;
     let fresh = [];
+    let freshKeys = []; // fresh と同じ並びの作品のキー (保存済みの作品の自動更新が使う)
     NH.update((d) => {
-      added = 0; updates = 0; fresh = []; // NH.update がやり直したときのために、ここで数え直す
+      added = 0; updates = 0; fresh = []; freshKeys = []; // NH.update がやり直したときのために、ここで数え直す
       const seen = new Set();
       items.forEach((u) => {
         const key = site + ':' + u.id;
@@ -106,7 +111,7 @@ window.NH.define('list-model', function (NH) {
         if (it) {
           // 最終話が増えた (最終話が分からないサイトでは未読が増えた) なら新着
           const grew = u.lastEp != null && it.lastEp != null ? u.lastEp > it.lastEp : (u.unread || 0) > (it.unread || 0);
-          if (grew) fresh.push(it.title || u.title);
+          if (grew) { fresh.push(it.title || u.title); freshKeys.push(key); }
           // 読了にした作品でも、新しい話が来たら未読に戻す (最終話が分からないサイト = カクヨムで取れなかったときは、未読が増えたことで判断)
           if (it.done && (grew || u.lastEp > (it.lastEp || 0))) NH.setDone(it, false);
           Object.assign(it, { url: u.url, unread: u.unread, lastEp: u.lastEp, urlAt: moved(it) || (grew && !appAhead(it)) ? Date.now() : it.urlAt });
@@ -116,16 +121,21 @@ window.NH.define('list-model', function (NH) {
           d.readLater.push({ key, site, id: u.id, url: u.url, title: u.title, addedAt: Date.now(), done: false, kind: 'update', unread: u.unread, lastEp: u.lastEp, urlAt: Date.now(), ...(u.cat != null ? { cat: u.cat } : {}) });
           added++;
           fresh.push(u.title);
+          freshKeys.push(key);
         }
       });
       const readKeys = new Set((readIds || []).map((id) => site + ':' + id));
       const scanned = (x) => !cats || (x.cat != null && cats.includes(x.cat));
       d.readLater.forEach((x) => {
         if (x.site !== site || x.kind !== 'update' || seen.has(x.key) || x.manualKind) return; // 手で移した作品は、サイトの一覧に無くて当然
+        // アプリで読んでいる途中 (最後まで読んでいない) の作品は、読了に回さない。サイトのしおりが最新話まで進んだだけで、まだ読み終えていない
+        // (ハーメルンのしおりを押して読み進めると、未読が無くなって一覧から外れる)。読み終えるか、手で読了にするまで「更新」に残す
+        const p = NH.progressOf(d, x);
+        if (p && !p.done) return;
         if (truncated ? readKeys.has(x.key) : scanned(x)) NH.setDone(x, true);
       });
     });
-    return { added, updates, fresh };
+    return { added, updates, fresh, freshKeys };
   };
 
   // ---- 「後で読む」リストへの追加・削除 (一覧のボタン・作品ページのメニュー・ページ側の追加が共通で使う。NH.update の fn の中で呼ぶ) ----
@@ -133,10 +143,14 @@ window.NH.define('list-model', function (NH) {
   NH.newLaterItem = (work, title, status) => NH.withSub({
     key: NH.workKey(work), site: work.site, id: work.id, url: work.url, title, addedAt: Date.now(), done: false, kind: 'later', ...(status ? { status } : {}),
   });
-  // リストに足す。戻り値: 'revived' (読了だった作品の読了を外してリストに戻した) / 'exists' (すでにリストにある) / 'added' (新しく足した)
+  // 「後で読む」に入っているか (読了でなく、「後で読む」の作品)。「更新」の作品は含めない (「後で読む」に移す対象)
+  NH.inLater = (d, work) => { const it = NH.findItem(d, work); return !!it && !it.done && NH.kindOf(it) === 'later'; };
+  // 「後で読む」に足す。戻り値: 'revived' (読了だった作品の読了を外してリストに戻した) / 'moved' (「更新」の作品を「後で読む」に移した) /
+  // 'exists' (すでに「後で読む」にある) / 'added' (新しく足した)
   NH.addLater = (d, work, title, status) => {
     const it = NH.findItem(d, work);
-    if (it && it.done) { NH.setDone(it, false); return 'revived'; } // 読了の作品は、消さずに読了を外して戻す
+    if (it && !it.done && NH.kindOf(it) === 'update') { it.kind = 'later'; delete it.manualKind; return 'moved'; } // 外さずに、タブだけ移す (メモ・読書位置はそのまま)
+    if (it && it.done) { NH.setDone(it, false); it.kind = 'later'; delete it.manualKind; return 'revived'; } // 読了の作品は、消さずに読了を外して「後で読む」へ戻す (「更新」のままだと、次の更新の確認でまた読了に回る)
     if (it) return 'exists';
     const item = NH.newLaterItem(work, title, status);
     // 履歴に覚えてある連載状態・全話数を引き継ぐ (履歴の「＋」・作品ページのメニュー・ランキングのボタンのどこから足しても同じ。ページから読めた状態が先)
@@ -168,11 +182,12 @@ window.NH.define('list-model', function (NH) {
     d.readLater.splice(Math.min(removed.at, d.readLater.length), 0, removed.item);
     if (removed.progress) { d.progress = d.progress || {}; if (!d.progress[removed.item.key]) d.progress[removed.item.key] = removed.progress; }
   };
-  // 一覧のボタンを押したとき: リストにあって読了でなければ外し、無いか読了なら足す (読了なら読了を外して戻す)。
-  // 戻り値: {result: 'removed' | 'revived' | 'added', removed: 元に戻すための控え (外したときだけ。無ければ null)}
+  // 一覧のボタンを押したとき: 「後で読む」にあって読了でなければ外し、無いか読了なら足す (読了なら読了を外して戻す。「更新」の作品は「後で読む」に移す)。
+  // 戻り値: {result: 'removed' | 'revived' | 'moved' | 'added', removed: 元に戻すための控え (外したときだけ。無ければ null)}
   NH.toggleLater = (d, work, title, status) => {
     const it = NH.findItem(d, work);
-    if (it && !it.done) return { result: 'removed', removed: NH.removeItem(d, it) };
-    return { result: NH.addLater(d, work, title, status) === 'revived' ? 'revived' : 'added', removed: null };
+    if (it && !it.done && NH.kindOf(it) === 'later') return { result: 'removed', removed: NH.removeItem(d, it) };
+    const r = NH.addLater(d, work, title, status);
+    return { result: r === 'revived' || r === 'moved' ? r : 'added', removed: null };
   };
 });

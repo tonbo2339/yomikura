@@ -28,7 +28,7 @@ object MenuItems {
 
     val ALL = listOf(
         Item(LATER, "後で読むに追加・リストから削除", "作品", true),
-        Item(SAVE, "端末に保存", "作品", true),
+        Item(SAVE, "オフライン保存", "作品", true),
         Item(RANKING, "ランキングの行き先に設定", "作品", true),
         Item(READ_ALOUD, "読み上げ", "読書の補助", true),
         Item(AUTO_SCROLL, "自動スクロール", "読書の補助", true),

@@ -12,14 +12,8 @@ function paintMenuItems() {
       group = it.group;
       g = addGroup(box, group);
     }
-    const c = el('label', 'cell');
-    const sw = el('input', 'switch');
-    sw.type = 'checkbox';
-    sw.checked = !!it.on;
     // ほかの設定と同じく S を通して書く (保存データへ直接書くと、あとで別の設定を変えたときに S で上書きされて消える)
-    sw.onchange = () => { S.menuItems = Object.assign({}, S.menuItems, { [it.key]: sw.checked }); commit(); };
-    c.append(el('span', 'text', it.label), sw);
-    g.append(c);
+    g.append(switchRow(it.label, it.on, (on) => { S.menuItems = Object.assign({}, S.menuItems, { [it.key]: on }); commit(); }));
   });
 }
 ON_SHOW.menu = paintMenuItems; // 開いたとき、いまの設定で並べ直す

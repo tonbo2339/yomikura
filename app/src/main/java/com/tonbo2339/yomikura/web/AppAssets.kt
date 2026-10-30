@@ -14,7 +14,7 @@ object AppAssets {
     /** 版ごとの設定を JS (sites.js など) に渡す。sites.js より先に置く */
     val editionJs: String
         get() = "window.NH_EDITION=" + JSONObject()
-            .put("r18OptIn", Edition.R18_OPT_IN).put("appName", BuildConfig.APP_NAME).put("backupApp", Edition.BACKUP_APP).put("backupApps", org.json.JSONArray(Edition.BACKUP_ACCEPTS)).put("publicRepo", Edition.PUBLIC_REPO).put("updateRepo", Edition.UPDATE_REPO) + ";\n"
+            .put("r18OptIn", Edition.R18_OPT_IN).put("appName", BuildConfig.APP_NAME).put("backupApp", Edition.BACKUP_APP).put("backupApps", org.json.JSONArray(Edition.BACKUP_ACCEPTS)).put("publicRepo", Edition.PUBLIC_REPO).put("updateRepo", Edition.UPDATE_REPO).put("debugTools", Edition.DEBUG_TOOLS) + ";\n"
 
     /** JS の一覧 (assets/js/scripts.json)。 */
     private fun manifest(ctx: Context) = JSONObject(readAsset(ctx, ScriptManifest.FILE))
@@ -36,8 +36,13 @@ object AppAssets {
 
     /** NSFW モード中に、リンクのタップ以外 (アプリ自身の読み込みなど) で R18 のページを開こうとしたときの画面。通信はしない。目立たないよう、ほぼ空白 */
     fun nsfwBlockedPage(): WebResourceResponse {
+        // 通信していないページ (サイトの URL のまま) なので、アプリ内ページへは飛べない。理由と、戻る・設定の場所だけ出す
         val html = "<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'>" +
-            "<body style='font:13px sans-serif;margin:0;padding:24px;color:#999;background:#f2f2f7'>" + Edition.R18_OFF_WHY + "開きません"
+            "<meta name=color-scheme content='light dark'>" +
+            "<body style='font:16px/1.7 sans-serif;margin:0;padding:48px 24px;text-align:center'>" +
+            "<p style='font-weight:700;font-size:18px;margin:0 0 8px'>" + Edition.R18_OFF_WHY + "開きません</p>" +
+            "<p style='opacity:.7;font-size:14px;margin:0 0 24px'>設定の「NSFW モード」で切り替えられます。</p>" +
+            "<button onclick='history.back()' style='font:inherit;padding:10px 28px;border-radius:12px;border:1px solid currentColor;background:none;color:inherit'>前のページへ戻る</button>"
         return WebResourceResponse("text/html", "utf-8", 200, "OK", emptyMap(), ByteArrayInputStream(html.toByteArray()))
     }
 
@@ -50,6 +55,18 @@ object AppAssets {
         // 確かめたあとに消されることもある (保存した作品を消した、など)。ここで例外を出すとアプリが落ちるので、404 にする
         val input = try { FileInputStream(file) } catch (e: java.io.IOException) { return empty(404, "Not Found") }
         return WebResourceResponse(mime, null, input)
+    }
+
+    /**
+     * 自分で入れたフォントを返す。id は /font/<id> の <id>。無い・形が違うときは 404。
+     * サイトのページ (別の origin) の @font-face からも読まれるので、CORS を許す (フォントは CORS が要る。中身は利用者が入れたフォントだけ)
+     */
+    fun customFont(fonts: CustomFonts, id: String): WebResourceResponse {
+        val file = fonts.file(id)
+        val mime = fonts.mimeOf(id)
+        if (file == null || mime == null) return empty(404, "Not Found")
+        val input = try { FileInputStream(file) } catch (e: java.io.IOException) { return empty(404, "Not Found") }
+        return WebResourceResponse(mime, null, 200, "OK", mapOf("Access-Control-Allow-Origin" to "*"), input)
     }
 
     /**

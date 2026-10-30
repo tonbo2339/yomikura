@@ -8,6 +8,15 @@ import android.webkit.WebView
 
 /** 診断情報を集める (Android の情報はここで読み、文の組み立ては DiagReport)。 */
 object Diagnostics {
+    /** 小説サイトの Cookie の名前だけ (値は読まない・出さない)。年齢の確認など、サイト側の状態を調べるときに使う */
+    private fun cookieNames(): List<String> {
+        val cm = android.webkit.CookieManager.getInstance()
+        return listOf("https://syosetu.org/", "https://h.syosetu.org/").map { url ->
+            val names = cm.getCookie(url).orEmpty().split(";").map { it.substringBefore("=").trim() }.filter { it.isNotEmpty() }
+            "${url.removePrefix("https://").trimEnd('/')}: ${names.sorted().joinToString(", ").ifEmpty { "なし" }}"
+        }
+    }
+
     fun report(ctx: Context): String {
         val app = ctx.applicationContext
         val pkg = app.packageManager.getPackageInfo(app.packageName, 0)
@@ -34,6 +43,7 @@ object Diagnostics {
                 "裏での確認の予定: ${BgCheck.plan(app).ifEmpty { "なし" }}",
             ),
             "データ" to DiagReport.dataSummary(NHData.obj(app)),
+            "サイトの Cookie (名前だけ。中身は出さない)" to cookieNames(),
         )
         val log = Diag.entries().asReversed().map { DiagBuffer.line(it) }
         return DiagReport.format(BuildConfig.APP_NAME, sections, log)

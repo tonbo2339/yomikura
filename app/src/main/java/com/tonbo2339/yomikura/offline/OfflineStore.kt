@@ -131,6 +131,12 @@ class OfflineStore(private val root: File) {
         return d.deleteRecursively().also { sizes.remove(d.absolutePath) }
     }
 
+    /** meta.json の無い作品のフォルダ (保存中に消したあとで、挿絵などだけ書かれたもの) を消す。一覧に出ず容量だけ使うので */
+    fun dropIfNoMeta(site: String, id: String) {
+        val d = dir(site, id) ?: return
+        if (d.isDirectory && !File(d, "meta.json").isFile) d.deleteRecursively().also { sizes.remove(d.absolutePath) }
+    }
+
     fun deleteAll(): Boolean = (!root.exists() || root.deleteRecursively()).also { sizes.clear() }
 
     /** ファイルを文字列で読む。圧縮してあれば (先頭の印で見分ける) 展開する。壊れた圧縮は空 */

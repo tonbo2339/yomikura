@@ -51,24 +51,27 @@ function historyRow(d, e, inList) {
   const status = e.status || (listed || {}).status; // 連載状態 (履歴に覚えた値 → リストの値)
   if (STATUS_NAME[status]) meta.appendChild(el('span', 'badge status ' + status, STATUS_NAME[status]));
   if (e.appAt) {
-    // 話数・読んだ状態は、リストのカードと同じ判定 (NH.readState) で出す。リストに無い作品は、履歴に覚えた値で同じ形の項目を作って判定する (url は渡さない: 渡すと、開いた話をサイトのしおりとみなして「途」にしてしまう)
+    // 話数・読んだ状態は、リストのカードと同じ判定 (NH.readState) で出す。リストに無い作品は、履歴に覚えた値で同じ形の項目を作って判定する (url は渡さない: 渡すと、開いた話をサイトのしおりとみなして「読みかけ」にしてしまう)
     const st = NH.readState(d, listed || { key: e.key, site: e.site, status: e.status, total: e.total });
     const pos = (d.progress || {})[e.key];
     const hp = NH.historyPos(e); // 履歴に覚えた、最後に開いた話の番号・読み具合 (別の話のときに覚えたものは除く)
     const n = (pos && NH.epNumber(pos)) || hp.no || NH.epNumber({ ep: e.ep }); // 最後に読んだ (開いた) 話の番号。リストの「続きから」は次に読む話なので、読み終えた直後は 1 つ違う
     const total = st.total || e.total || 0;
     // その日 (この行が並んでいる日) に読んだ話。「3〜5・7 / 112話」。記録が無いときは、最後に読んだ (開いた) 話だけ「10 / 112話」
-    const readList = (e.reads || {})[NH.dayKey(e.at)] || [];
+    // 行は開いた日に並び、記録は読んだ日に付く。日付をまたいで同じ話を読み続けたとき (開いた日には記録が無い) は、それより後の最新の日の記録を出す
+    const reads = e.reads || {};
+    const rowDay = NH.dayKey(e.at);
+    const laterDay = Object.keys(reads).filter((k) => k > rowDay).sort().pop();
+    const readList = reads[rowDay] || (laterDay && reads[laterDay]) || [];
     const shown = readList.length ? NH.fmtEpisodes(readList, 4) : n || '';
     const ep = shown && !st.short ? shown + (total && total >= Math.max(...(readList.length ? readList : [n || 0])) ? ' / ' + total : '') + '話' : ''; // 全話数が分からないときは「10話」
-    // 読んだ状態 (リストの「まだ読んでいません / 読みかけ / 読了」と同じ): 途 (読みかけ) / 未 (まだ読んでいない)。読み終えた作品は印を付けない
+    // 読んだ状態 (リストの「まだ読んでいません / 読みかけ / 読了」と同じ): 読みかけ / 未読。読み終えた作品は印を付けない
     const gone = !st.started && !!e.pr; // 読書位置が消えている (リストから外した・整理された): 履歴に覚えた読み具合で補う (どの話のものでも、読み始めてはいる)
     const goneDone = gone && !!hp.pr && hp.pr.done && (st.short || (total && n && n >= total)); // 最後の話を最後まで読んでいた
-    const state = st.finished || goneDone ? '' : st.started || gone ? '途' : '未';
+    const state = st.finished || goneDone ? '' : st.started || gone ? 'mid' : 'none';
     meta.appendChild(el('span', 'hsrc app', [H_TIME.format(new Date(e.appAt)), ep].filter(Boolean).join(' ・ ')));
     if (state) {
-      const mark = el('span', 'hsrc state s' + (state === '途' ? 'mid' : 'none'), state);
-      mark.title = state === '途' ? '途中まで読んだ' : 'まだ読んでいない';
+      const mark = el('span', 'hsrc state s' + state, state === 'mid' ? '読みかけ' : '未読');
       meta.appendChild(mark);
     }
   }

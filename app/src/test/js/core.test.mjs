@@ -80,6 +80,10 @@ test('NH.update: 書き込みを断られ続けたら、版を見ずに書き直
   assert.equal(st.setIfCalls, 8);
   assert.equal(JSON.parse(st.raw).readLater.length, 1); // 元のデータのまま
   assert.equal(JSON.parse(st.raw).readLater[0].key, 'narou:n1');
+  assert.equal(NH.updateGaveUp, true); // 呼び出し側が「保存できなかった」と知らせられる
+  st.api.setIf = () => true;
+  NH.update(() => {});
+  assert.equal(NH.updateGaveUp, false); // 次の書き込みが通れば戻る
 });
 
 test('mergeUpdates: やり直しても数が二重にならない', () => {
@@ -91,6 +95,7 @@ test('mergeUpdates: やり直しても数が二重にならない', () => {
     { id: '2', title: 'B', url: 'u2', unread: 3, lastEp: 3 }, // 新しい作品
   ]);
   assert.deepEqual({ added: r.added, updates: r.updates, fresh: [...r.fresh] }, { added: 1, updates: 2, fresh: ['A', 'B'] });
+  assert.deepEqual([...r.freshKeys], ['kakuyomu:1', 'kakuyomu:2']);
   const d = JSON.parse(st.raw);
   assert.equal(d.readLater.length, 2);
 });
@@ -413,6 +418,38 @@ tests.push(['pruneHistory: 作品数と日数の上限で古い履歴を消す',
   assert.equal(NH.pruneHistory({ readLater: [] }), 0);
 }]);
 
+tests.push(['readStates: 話を読み終えても、次の話があれば読みかけ。最後の話・リストの読了は読了', () => {
+  const NH = loadCore(makeStore({ readLater: [] }));
+  const d = {
+    readLater: [{ key: 'narou:n4', done: true }],
+    progress: {
+      'narou:n1': { ep: '1', done: true, next: 'https://ncode.syosetu.com/n1/2/' },
+      'narou:n2': { ep: '9', done: true },
+      'narou:n3': { ep: '3', y: 0.4 },
+    },
+    history: [{ key: 'narou:n5' }],
+  };
+  const st = NH.readStates(d);
+  assert.deepEqual(['narou:n1', 'narou:n2', 'narou:n3', 'narou:n4', 'narou:n5', 'narou:n6'].map(st), ['reading', 'done', 'reading', 'done', 'seen', null]);
+}]);
+
+tests.push(['fixLoginTitles: なろうの作品名が「ログイン」のまま残ったものを片付ける', () => {
+  const NH = loadCore(makeStore({ readLater: [] }));
+  const d = {
+    readLater: [{ key: 'narou:n1', site: 'narou', id: 'n1', title: 'ログイン' }, { key: 'narou:n2', site: 'narou', id: 'n2', title: '本当の名前' }],
+    history: [
+      { key: 'narou:n1', site: 'narou', id: 'n1', title: 'ログイン' },
+      { key: 'narou:n2', site: 'narou', id: 'n2', title: 'ログイン' },
+      { key: 'kakuyomu:9', site: 'kakuyomu', id: '9', title: 'ログイン' }, // なろう以外は触らない (本当にその名前の作品かもしれない)
+    ],
+  };
+  assert.equal(NH.fixLoginTitles(d), 3);
+  assert.equal(d.readLater[0].title, 'n1'); // ID を仮の名前に (開いたときに直る)
+  assert.deepEqual(d.history.map((e) => e.title), ['', '本当の名前', 'ログイン']);
+  assert.equal(NH.fixLoginTitles(d), 0); // 2 回目は何もしない
+  assert.equal(NH.fixLoginTitles({ readLater: [] }), 0);
+}]);
+
 tests.push(['backupJson: 選んだ項目だけ、無い項目は空で入れる', () => {
   const NH = loadCore(makeStore({ readLater: [] }));
   const d = { readLater: [{ key: 'a' }], settings: { theme: 'dark' }, collectLog: { x: 1 } };
@@ -513,6 +550,145 @@ test('cleanNode: 挿絵は端末に保存した物 (img/...) だけ残す。サ�
     el('P', {}, [txt('本文 & <b>')]),
   ]);
   assert.equal(NH.cleanNode(root), '<img src="img/i0a1b2c3d.jpg" alt=""><img src="img/i0a1b2c3d.png" alt=""><p>本文 &amp; &lt;b&gt;</p>');
+});
+
+test('cleanNode: 画像へのリンク (ハーメルンの【挿絵表示】) は、保存した画像があればその画像に、なければリンクの文字だけ残す', () => {
+  const NH = loadCore(makeStore({ readLater: [] }));
+  const el = (tag, attrs, kids) => ({ nodeType: 1, tagName: tag, childNodes: kids || [], getAttribute: (k) => (attrs && k in attrs ? attrs[k] : null) });
+  const txt = (v) => ({ nodeType: 3, nodeValue: v });
+  const link = (attrs) => el('A', { href: 'http://syosetu.org/img/user/v2/1/2/3.jpg', ...attrs }, [txt('【挿絵表示】')]);
+  assert.equal(NH.cleanNode(el('DIV', {}, [link({ 'data-nh-local': 'img/i0a1b2c3d.jpg' })])), '<img src="img/i0a1b2c3d.jpg" alt="">'); // 保存した: 画像 (リンクの文字は出さない)
+  assert.equal(NH.cleanNode(el('DIV', {}, [link({})])), '【挿絵表示】'); // 保存していない: 文字だけ (リンクの URL は残さない)
+  assert.equal(NH.cleanNode(el('DIV', {}, [link({ 'data-nh-local': 'https://evil.example/x.jpg' })])), '【挿絵表示】'); // 形が違う印は信用しない
+});
+
+// 書式 (ハーメルンの掲示板形式・色・大小など): 許可したクラス・色・目印・>>N だけ残す
+const fmt = () => {
+  const NH = loadCore(makeStore({ readLater: [] }));
+  const el = (tag, attrs, kids) => ({ nodeType: 1, tagName: tag, childNodes: kids || [], getAttribute: (k) => (attrs && k in attrs ? attrs[k] : null),
+    get textContent() { return (kids || []).map((k) => (k.nodeType === 3 ? k.nodeValue : k.textContent)).join(''); } });
+  const txt = (v) => ({ nodeType: 3, nodeValue: v });
+  const run = (...kids) => NH.cleanNode(el('DIV', {}, kids));
+  return { el, txt, run };
+};
+
+test('cleanNode 書式: 許可したクラスと色だけ残し、何も付かない span / div は今までどおり中身だけにする', () => {
+  const { el, txt, run } = fmt();
+  assert.equal(run(el('SPAN', {}, [txt('素')])), '素'); // 書式なし: 中身だけ
+  assert.equal(run(el('DIV', { class: 'unknown' }, [txt('素')])), '素'); // 許可していないクラス: 中身だけ
+  assert.equal(run(el('SPAN', { class: 'bold big evil' }, [txt('強')])), '<span class="bold big">強</span>');
+  assert.equal(run(el('SPAN', { class: 'color', style: 'color:#0000EE' }, [txt('名')])), '<span class="color" style="color:#0000EE">名</span>');
+  assert.equal(run(el('DIV', { class: 'bgcolor', style: 'background-color:#f2eaea' }, [txt('枠')])), '<div class="bgcolor" style="background-color:#f2eaea">枠</div>');
+  assert.equal(run(el('DIV', { class: 'center' }, [txt('中')])), '<div class="center">中</div>');
+});
+
+test('cleanNode 書式: スタイルは許可した項目だけ、値の形も確かめる (url() や expression は通さない)', () => {
+  const { el, txt, run } = fmt();
+  const st = (style, cls = 'color') => run(el('SPAN', { class: cls, style }, [txt('x')]));
+  const kept = (style, expected) => assert.equal(st(style), '<span class="color" style="' + expected + '">x</span>', style);
+  const dropped = (style) => assert.equal(st(style), '<span class="color">x</span>', style);
+  kept('color:rgb(1, 2, 3);background-color:red;border-color:#abc', 'color:rgb(1, 2, 3);background-color:red;border-color:#abc');
+  kept('font-size:0.85em;display:inline-block;width:100%;line-height:0em', 'font-size:0.85em;display:inline-block;width:100%;line-height:0em');
+  kept('box-sizing:border-box;white-space:normal;overflow:hidden !important;border:1px solid #000;border-radius:1em', 'box-sizing:border-box;white-space:normal;overflow:hidden;border:1px solid #000;border-radius:1em');
+  kept('transform:rotateX(180deg);position:relative;left:10px;top:-5px;z-index:3', 'transform:rotateX(180deg);position:relative;left:10px;top:-5px;z-index:3');
+  kept('writing-mode:vertical-rl;-webkit-writing-mode:vertical-rl;text-orientation:upright;text-combine-upright:all', 'writing-mode:vertical-rl;-webkit-writing-mode:vertical-rl;text-orientation:upright;text-combine-upright:all');
+  kept('animation-name:blink-anim-1-90;animation-duration:5s;animation-iteration-count:900;animation-delay:2s;animation-timing-function:ease', 'animation-name:blink-anim-1-90;animation-duration:5s;animation-iteration-count:900;animation-delay:2s;animation-timing-function:ease');
+  kept('filter:blur(2px)', 'filter:blur(2px)');
+  kept('filter:opacity(0.50)', 'filter:opacity(0.50)');
+  kept('-webkit-text-stroke:1px #0000FF', '-webkit-text-stroke:1px #0000FF');
+  kept('background-image:linear-gradient(to right, #FF0000 50%,#FFFFFF 50%);background-size:200% 200%;background-clip: text;-webkit-background-clip:text', 'background-image:linear-gradient(to right, #FF0000 50%,#FFFFFF 50%);background-size:200% 200%;background-clip:text;-webkit-background-clip:text');
+  // 通さない物
+  dropped('color:url(javascript:alert(1))');
+  dropped('background-image:url(https://evil.example/x.png)');
+  dropped('background-image:linear-gradient(to right, red 50%, url(x) 50%)');
+  dropped('position:fixed'); // 画面に固定して、読む画面を覆えてしまう
+  dropped('z-index:99'); // バー (10) の上には出さない
+  dropped('display:none');
+  dropped('width:calc(100% - 1px)');
+  dropped('filter:drop-shadow(0 0 1px red)');
+  dropped('filter:url(#x)');
+  dropped('transform:matrix(1,2,3,4,5,6)');
+  dropped('animation-name:a b');
+  dropped('animation-name:1abc');
+  dropped('content:"x"');
+  dropped('behavior:url(x.htc)');
+  // 継承されたプロパティの名前 (constructor など) が、許可表に当たって例外にならない
+  dropped('constructor:1');
+  dropped('__proto__:1');
+  dropped('toString:1');
+  dropped('background-color:expression(alert(1))');
+  dropped('color:"><script>');
+  dropped('font-size:9em'); // 極端な大きさ
+  dropped('font-size:1px'); // 単位は em と % だけ
+  dropped('-webkit-text-stroke:1px url(x)');
+});
+
+test('cleanNode 書式: クラスは許可した物だけ (動く装飾・脚注・番号つき)', () => {
+  const { el, txt, run } = fmt();
+  const c = (cls) => run(el('SPAN', { class: cls }, [txt('x')]));
+  assert.equal(c('tag_blink'), '<span class="tag_blink">x</span>');
+  assert.equal(c('shake-1 tag_shake'), '<span class="shake-1 tag_shake">x</span>');
+  assert.equal(c('vib-12 tag_vib'), '<span class="vib-12 tag_vib">x</span>');
+  assert.equal(c('inner_marquee tag_inview'), '<span class="inner_marquee tag_inview">x</span>');
+  assert.equal(c('shake-123'), 'x'); // 数字が長い
+  assert.equal(c('evil webfont_subset'), 'x'); // 許可していないクラス
+  assert.equal(c('tag_blink onclick'), '<span class="tag_blink">x</span>');
+});
+
+test('cleanNode 書式: 脚注 (a.footnote_number / a.footnote_link) とページ内ジャンプ。ほかのリンクは文字だけ', () => {
+  const { el, txt, run } = fmt();
+  assert.equal(run(el('A', { class: 'footnote_number', href: '#fn_V2iCKpPW1', id: 'f_V2iCKpPW1' }, [txt('注')])), '<a class="footnote_number" href="#fn_V2iCKpPW1" id="f_V2iCKpPW1">注</a>');
+  assert.equal(run(el('A', { class: 'footnote_link', href: '#f_V2iCKpPW1', id: 'fn_V2iCKpPW1' }, [txt('注')])), '<a class="footnote_link" href="#f_V2iCKpPW1" id="fn_V2iCKpPW1">注</a>');
+  assert.equal(run(el('A', { class: 'footnote_number', href: 'javascript:alert(1)', id: 'f_x' }, [txt('注')])), '注'); // 行き先が違う
+  assert.equal(run(el('A', { class: 'footnote_number', href: '#fn_x', id: 'bad id' }, [txt('注')])), '注'); // ID が違う
+  assert.equal(run(el('A', { class: 'jump_link', href: '#jump.uenohou' }, [txt('上へ')])), '<a class="jump_link" href="#jump.uenohou">上へ</a>');
+  assert.equal(run(el('A', { class: 'jump_link', href: 'https://syosetu.org/?mode=url_jump&url=https%3A%2F%2Fyahoo.co.jp%2F', target: '_blank' }, [txt('外部')])), '外部'); // 外部サイトへのリンクは文字だけ
+  assert.equal(run(el('A', { href: 'https://evil.example/' }, [txt('link')])), 'link');
+  assert.equal(run(el('SPAN', { id: 'jump.uenohou' }, [])), '<span id="jump.uenohou"></span>'); // 行き先の目印
+});
+
+test('cleanNode 書式: カクヨムの傍点 (em.emphasisDots) は印を残す。ただの em は今までどおり', () => {
+  const { el, txt, run } = fmt();
+  assert.equal(run(el('EM', { class: 'emphasisDots' }, [el('SPAN', {}, [txt('傍')]), el('SPAN', {}, [txt('点')])])), '<em class="emphasisDots">傍点</em>');
+  assert.equal(run(el('EM', {}, [txt('強調')])), '<em>強調</em>');
+  assert.equal(run(el('EM', { class: 'evil emphasisDots2' }, [txt('x')])), '<em>x</em>');
+});
+
+test('cleanNode 書式: 上付き・下付き・表のセルの結合', () => {
+  const { el, txt, run } = fmt();
+  assert.equal(run(el('SUP', {}, [txt('上')]), el('SUB', {}, [txt('下')])), '<sup>上</sup><sub>下</sub>');
+  const th = el('TH', { class: 'bordercolor', style: 'border-color:#00f;text-align:center;', colspan: '3', rowspan: '1', onclick: 'x()' }, [txt('見出し')]);
+  assert.equal(run(th), '<th class="bordercolor" colspan="3" style="border-color:#00f;text-align:center">見出し</th>'); // rowspan="1" は付けない
+  assert.equal(run(el('TD', { colspan: '99999' }, [txt('x')])), '<td>x</td>'); // 桁が多い物は通さない
+});
+
+test('cleanNode 書式: 本文の中の <style> は @keyframes (opacity / transform) だけ残す', () => {
+  const { el, txt, run } = fmt();
+  const css = '@keyframes blink-anim-1-90 {  0%{opacity:0}1%{opacity:1}90%{opacity:1}91%{opacity:0} 100%{opacity:0}}' +
+    '@keyframes evil { 0%{opacity:0;background:url(https://evil.example/x)} 100%{opacity:1}}' + // 外れた宣言がある定義は捨てる
+    'body { display: none } .x { color: red }' + // ふつうの CSS は捨てる
+    '@keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)}}';
+  assert.equal(run(el('STYLE', {}, [txt(css)])), '<style>@keyframes blink-anim-1-90{0%{opacity:0}1%{opacity:1}90%{opacity:1}91%{opacity:0}100%{opacity:0}}@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}</style>');
+  assert.equal(run(el('STYLE', {}, [txt('body{display:none}')])), ''); // 残る物が無ければ <style> も出さない
+  assert.equal(run(el('STYLE', {}, [txt('@keyframes x{0%{opacity:1}} </style><script>alert(1)</script>')])), '<style>@keyframes x{0%{opacity:1}}</style>');
+});
+
+test('cleanNode 書式: 引用元の目印 (jump.rN / jump.rNe)。形が違う物は通さない。>>N のリンクは文字だけ残す', () => {
+  const { el, txt, run } = fmt();
+  assert.equal(run(el('SPAN', { id: 'jump.r233' }, [])), '<span id="jump.r233"></span>');
+  assert.equal(run(el('SPAN', { id: 'jump.r233e' }, [])), '<span id="jump.r233e"></span>');
+  assert.equal(run(el('SPAN', { id: 'x" onclick="alert(1)' }, [txt('a')])), 'a');
+  assert.equal(run(el('P', { id: 'jump.r5' }, [txt('p')])), '<p>p</p>'); // p の id は残さない
+  const a = el('A', { class: 'bbs_template_popup', 'data-res-num': '233', href: '#jump.r233' }, [txt('>>233')]);
+  assert.equal(run(a), '&gt;&gt;233'); // リンクは外し、文字だけ (ページの JS が作ったリンクでも、生の HTML の文字でも、同じになる)
+  assert.equal(run(el('A', { href: 'https://evil.example/' }, [txt('link')])), 'link'); // ふつうのリンクは中身だけ
+});
+
+test('cleanNode 書式: 表 (枠線の色・背景色だけ)。script や属性は落とす', () => {
+  const { el, txt, run } = fmt();
+  const td = el('TD', { class: 'bordercolor bgcolor', style: 'border-color:#a9a9a9;background-color:#ffffff;', onclick: 'x()' }, [txt('セル')]);
+  const t = el('TABLE', { class: 'tag_table bordercolor', style: 'border-color:#a9a9a9', bordercolor: '#000' }, [el('TBODY', {}, [el('TR', {}, [td])]), el('SCRIPT', {}, [txt('alert(1)')])]);
+  assert.equal(run(t), '<table class="tag_table bordercolor" style="border-color:#a9a9a9"><tbody><tr><td class="bordercolor bgcolor" style="border-color:#a9a9a9;background-color:#ffffff">セル</td></tr></tbody></table>');
 });
 
 test('epNumber: なろう・ハーメルンは ep、カクヨムは no (目次の並びの番号)。短編・分からないものは null', () => {
@@ -909,6 +1085,9 @@ test('fetchListDoc: 403/429/503・確認画面は challenge、それ以外の 4x
   for (const code of [404, 500, 502]) { const NH = mk(code); NH.sleep = async () => {}; await assert.rejects(() => NH.fetchListDoc('https://syosetu.com/x', 1), new RegExp('http ' + code)); }
   const NH2 = mk(200, 'Just a moment...'); NH2.sleep = async () => {};
   await assert.rejects(() => NH2.fetchListDoc('https://syosetu.com/x', 1), /challenge/);
+  // R18 の年齢確認の画面も、人が通す画面として止める (なろう = 「年齢確認」、ハーメルン = 「R18閲覧確認ページ」)
+  for (const title of ['年齢確認', 'R18閲覧確認ページ']) { const NH3 = mk(200, title); NH3.sleep = async () => {}; await assert.rejects(() => NH3.fetchListDoc('https://syosetu.com/x', 1), /challenge/); }
+  const NH4 = mk(200, '年齢確認のお知らせ'); NH4.sleep = async () => {}; assert.equal((await NH4.fetchListDoc('https://syosetu.com/x', 1)).title, '年齢確認のお知らせ'); // 似たタイトルは止めない
 });
 
 test('watchWork: 作品 / 話が変わったときだけ 1 度呼ぶ (一覧どうしの移動・同じ URL は呼ばない)', () => {
@@ -996,6 +1175,68 @@ test('NH.flag / flagOf: 未設定は既定 (既定はオン)。書かれてい�
   assert.equal(NH.flagOf({ x: false }, 'x'), false);
   assert.equal(NH.historyOn({ settings: { history: false } }), false);
   assert.equal(NH.statsOn({}), true);
+});
+
+test('mergeUpdates: サイトの一覧から外れても、アプリで読んでいる途中の作品は読了にしない (読み終えたら読了)', () => {
+  const t0 = Date.now() - 100000;
+  const mk = () => makeStore({ readLater: [
+    { key: 'hameln:1', site: 'hameln', id: '1', title: 'A', done: false, kind: 'update', unread: 1, lastEp: 5, urlAt: t0 },
+    { key: 'hameln:2', site: 'hameln', id: '2', title: 'B', done: false, kind: 'update', unread: 1, lastEp: 5, urlAt: t0 },
+    { key: 'hameln:3', site: 'hameln', id: '3', title: 'C', done: false, kind: 'update', unread: 1, lastEp: 5, urlAt: t0 },
+  ], progress: {
+    'hameln:1': { url: 'u', ep: '5', y: 0.4, done: false, at: Date.now() }, // 読んでいる途中
+    'hameln:2': { url: 'u', ep: '5', y: 1, done: true, at: Date.now() },    // 読み終えた
+  } });
+  const st = mk();
+  const NH = loadCore(st);
+  NH.mergeUpdates('hameln', []); // 3 作品とも、サイトの未読の一覧には無い
+  const d = JSON.parse(st.raw);
+  const done = Object.fromEntries(d.readLater.map((x) => [x.id, x.done]));
+  assert.deepEqual(done, { 1: false, 2: true, 3: true });
+});
+
+test('読了から「後で読む」に戻すと「後で読む」へ移る。古い読了の時刻が残っていても、読了にした直後に消えない', () => {
+  const NH = loadCore(makeStore({ readLater: [] }));
+  const w = { site: 'hameln', id: '1', url: 'https://syosetu.org/novel/1/' };
+  // 更新の確認で読了に回った「更新」の作品を、「後で読む」にする (「更新」のままだと、次の確認でまた読了に回る)
+  const d = { readLater: [{ key: 'hameln:1', site: 'hameln', id: '1', kind: 'update', done: true, doneAt: 1, manualKind: true }], progress: {} };
+  assert.equal(NH.addLater(d, w, '作品'), 'revived');
+  assert.deepEqual([d.readLater[0].kind, d.readLater[0].done, 'doneAt' in d.readLater[0], 'manualKind' in d.readLater[0]], ['later', false, false, false]);
+  // 読了でない作品に古い doneAt が残っていても、読了にしたら今から数える (すぐ「30 日たった」と見なして消さない)
+  const x = { key: 'a:1', done: false, doneAt: 1 };
+  NH.setDone(x, true);
+  assert.ok(x.doneAt > Date.now() - 5000);
+  const d2 = { readLater: [x], settings: {} };
+  assert.equal(NH.pruneDone(d2), 0);
+  // すでに読了の作品を読了にし直しても、時刻は変えない
+  const y = { key: 'a:2', done: true, doneAt: 1234 };
+  NH.setDone(y, true);
+  assert.equal(y.doneAt, 1234);
+});
+
+test('tagsOf: スペース・読点・カンマで区切って複数のタグ。以前の 1 つだけの値もそのまま。重複・空は除く', () => {
+  const NH = loadCore(makeStore({ readLater: [] }));
+  assert.deepEqual([...NH.tagsOf({ tag: '異世界 恋愛、ざまぁ,  異世界' })], ['異世界', '恋愛', 'ざまぁ']);
+  assert.deepEqual([...NH.tagsOf({ tag: 'ラブコメ' })], ['ラブコメ']);
+  assert.deepEqual([...NH.tagsOf({})], []);
+  assert.deepEqual([...NH.tagsOf(null)], []);
+});
+
+test('「更新」の作品を「後で読む」にすると、外さずにタブを移す (消えない)', () => {
+  const NH = loadCore(makeStore({ readLater: [] }));
+  const w = { site: 'narou', id: 'n1', url: 'https://ncode.syosetu.com/n1/' };
+  const d = { readLater: [{ key: 'narou:n1', site: 'narou', id: 'n1', title: '作品', kind: 'update', unread: 3, manualKind: true, memo: 'メモ', done: false }], progress: { 'narou:n1': { y: 0.4 } } };
+  assert.equal(NH.inLater(d, w), false); // 「更新」の作品は「後で読む」に入っていない
+  const t = NH.toggleLater(d, w, '作品');
+  assert.equal(t.result, 'moved');
+  assert.equal(t.removed, null);
+  assert.deepEqual([d.readLater.length, d.readLater[0].kind, 'manualKind' in d.readLater[0], d.readLater[0].memo, d.progress['narou:n1'].y], [1, 'later', false, 'メモ', 0.4]);
+  assert.equal(NH.inLater(d, w), true);
+  assert.equal(NH.toggleLater(d, w, '作品').result, 'removed'); // 「後で読む」に入ったあとは、押すと外れる
+  // メニューからの追加 (addLater) も同じ
+  const d2 = { readLater: [{ key: 'narou:n1', site: 'narou', id: 'n1', kind: 'update', done: false }], progress: {} };
+  assert.equal(NH.addLater(d2, w, '作品'), 'moved');
+  assert.equal(NH.addLater(d2, w, '作品'), 'exists');
 });
 
 test('「後で読む」の追加・削除・元に戻す (addLater / toggleLater / removeItem / restoreItem)', () => {

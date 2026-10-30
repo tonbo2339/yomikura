@@ -1,6 +1,8 @@
 package com.tonbo2339.yomikura
 
+import android.content.ActivityNotFoundException
 import android.content.Context
+import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
 import android.util.Log
@@ -22,6 +24,7 @@ class NovelClient(
     private val cfg: AppSettings,
     private val hostFilter: HostFilter,
     private val offline: OfflineStore,
+    private val fonts: CustomFonts,
     /** 対応サイトのページに注入する JS (AppAssets.siteScripts) */
     private val injectedJs: String,
     private val events: Host,
@@ -46,6 +49,7 @@ class NovelClient(
     private var historyPath: String? = null
 
     override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
+        NetLog.page("view", request)
         val host = request.url.host
         val main = request.isForMainFrame
         // 起動して最初のページは、onPageStarted (画面のスレッド) より先にページの JS が動くことがある (インストール直後など、画面のスレッドが混んでいるとき)。
@@ -66,6 +70,18 @@ class NovelClient(
             // (サイトのページが <img> で保存した作品の有無を探れないようにする)
             if (path.startsWith("/offline-img/")) {
                 return if (gate.app) AppAssets.offlineImage(offline, path.removePrefix("/offline-img/")) else AppAssets.forbidden()
+            }
+            // 自分で入れたフォント。対応サイトのページの @font-face からも読まれる (信用しないページには返さない)。
+            // サイトのページには、端末ごとの id を見せない (ページの広告・解析の JS から見える): サイトは /font/current (いま選んでいるフォント)、id で読めるのはアプリ内ページだけ
+            if (path.startsWith("/font/")) {
+                if (!gate.trusted) return AppAssets.forbidden()
+                val name = path.removePrefix("/font/")
+                val id = when {
+                    name == "current" -> FontSelection.idOf(cfg.settings().optString("font")).orEmpty()
+                    gate.app -> name
+                    else -> ""
+                }
+                return AppAssets.customFont(fonts, id)
             }
             return AppAssets.appAsset(ctx, path.trimStart('/').ifEmpty { "list.html" })
         }
@@ -92,7 +108,22 @@ class NovelClient(
             events.onR18LinkBlocked()
             return cancelled(view, request)
         }
+        // 対応サイト以外 (広告の転送先・本文中の外部リンク) へ、タップして移るときは、既定のブラウザで開く (読んでいる画面を広告に置き換えない)。
+        // タップによらない移動 (サイトの転送・ページの JS) は今まで通り。アプリ内ページ・対応サイトは上で信頼済み
+        if (cfg.externalLinksInBrowser() && request.isForMainFrame && request.hasGesture() && !TrustGate.classify(request.url.toString()).trusted &&
+            !SiteUrls.isSupportedHost(request.url.host.orEmpty().lowercase())) {
+            openExternal(request.url)
+            return cancelled(view, request)
+        }
         return false
+    }
+
+    private fun openExternal(url: Uri) {
+        try {
+            ctx.startActivity(Intent(Intent.ACTION_VIEW, url).addCategory(Intent.CATEGORY_BROWSABLE).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        } catch (e: ActivityNotFoundException) {
+            Messages.show(ctx, "ブラウザを開けませんでした")
+        }
     }
 
     /**
@@ -106,12 +137,30 @@ class NovelClient(
 
     // 読み込みに失敗したとき (電波が無い・タイムアウトなど): 英語のエラー画面の代わりに、アプリの画面を出す
     override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
+        if (request.isForMainFrame) Log.d(TAG, "error ${error.errorCode} ${error.description} ${request.url}")
         if (!request.isForMainFrame || request.url.host == TrustGate.APP_HOST) return
         val why = error.description?.toString().orEmpty()
         // 読み込み中に別のページへ移ったとき・ダウンロードなど (失敗ではない)。
         // 窓口はここでは戻さない (次の移動が先に窓口を閉じていたら、開け直してしまうため。ダウンロードは setDownloadListener が戻す)
         if ("ERR_ABORTED" in why) return
-        view.loadUrl("https://${TrustGate.APP_HOST}/error.html?u=${Uri.encode(request.url.toString())}&m=${Uri.encode(why)}")
+        showError(view, request.url.toString(), why)
+    }
+
+    // 本文の無い HTTP のエラー (広告の転送先など) は onReceivedError が呼ばれず、Chromium のエラー画面のまま残る。
+    // 状態の番号だけ覚えておき、終わったページがそのエラー画面なら (onPageFinished)、アプリの画面に替える
+    private var lastHttpError: Pair<String, Int>? = null
+
+    override fun onReceivedHttpError(view: WebView, request: WebResourceRequest, response: WebResourceResponse) {
+        NetLog.webError("view", request, response.statusCode, response.responseHeaders)
+        if (request.isForMainFrame) lastHttpError = request.url.toString() to response.statusCode
+    }
+
+    // onReceivedError がアプリのエラー画面を出したページ。onPageFinished の置き換えで、理由なしにもう一度出さない
+    private var shownErrorFor: String? = null
+
+    private fun showError(view: WebView, url: String, why: String) {
+        shownErrorFor = url
+        view.loadUrl("https://${TrustGate.APP_HOST}/error.html?u=${Uri.encode(url)}&m=${Uri.encode(why)}")
     }
 
     override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
@@ -124,6 +173,7 @@ class NovelClient(
         Log.d(TAG, "page $url")
         gate.set(url)
         gate.started = true
+        if (url != null && Uri.parse(url).host != TrustGate.APP_HOST) shownErrorFor = null // 新しく読み込む (「もう一度読み込む」も) ので、置き換えの判定をやり直す
         events.onPageStarted()
     }
 
@@ -137,6 +187,13 @@ class NovelClient(
     }
 
     override fun onPageFinished(view: WebView, url: String?) {
+        // エラー画面のとき、url は chrome-error://… のことがある (読み込めなかった URL は view.url に残る)
+        view.evaluateJavascript("location.protocol") { p ->
+            val failed = view.url
+            if (p != "\"chrome-error:\"" || failed == null || failed == shownErrorFor || !failed.startsWith("https://") || Uri.parse(failed).host == TrustGate.APP_HOST) return@evaluateJavascript
+            Log.d(TAG, "error page for $failed (finished $url)")
+            showError(view, failed, lastHttpError?.takeIf { it.first == failed }?.let { "HTTP ${it.second}" }.orEmpty())
+        }
         // 合言葉と画面の部品は、対応サイトの https のページにだけ入れる (アプリ内ページは core/ と app.js を自分で読み込むので入れない)。
         // サーバー側の転送で別のサイトに着いていることもあるので、終わったときの URL でもう一度確かめる
         val page = TrustGate.classify(url)

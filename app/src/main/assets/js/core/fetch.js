@@ -11,7 +11,9 @@ window.NH.define('fetch', function (NH) {
   NH.POLITE_MS = { min: 1500, jitter: 1500 };
   NH.pauseMs = (random = Math.random()) => NH.POLITE_MS.min + (Number.isFinite(random) ? Math.min(Math.max(random, 0), 0.999999) : 0) * NH.POLITE_MS.jitter;
   NH.pause = () => NH.sleep(NH.pauseMs());
-  NH.isChallenge = (doc) => /Just a moment|しばらくお待ちください/.test((doc && doc.title) || '');
+  // 確認画面 (Cloudflare) と、R18 の年齢確認 (なろうの「年齢確認」・ハーメルンの「R18閲覧確認ページ」。2026-10-27 に実機で確認したタイトル) は、
+  // どちらも人が通す画面。巡回は止まって、アプリが画面に出して通してもらう (年齢確認はアプリが自動では押さない)
+  NH.isChallenge = (doc) => /Just a moment|しばらくお待ちください|^年齢確認$|^R18閲覧確認ページ$/.test((doc && doc.title) || '');
   // URL を取って HTML の文書にする。止められた (403 / 429 / 503 や確認画面) ときは NH.CHALLENGE の Error、
   // それ以外の 4xx / 5xx は Error('http 状態')。どちらも呼び出し側の catch で扱う (HTML を返して「ログインしていない」と誤判定しない)
   NH.fetchDoc = async function (href) {

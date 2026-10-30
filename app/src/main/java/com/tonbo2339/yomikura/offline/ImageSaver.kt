@@ -65,13 +65,16 @@ object ImageSaver {
             val u = try { URL(cur) } catch (e: Exception) { return "{}" }
             if (blocked(u.host)) return "{}"
             val conn = try { u.openConnection() as HttpURLConnection } catch (e: Exception) { return "{}" }
+            val startedAt = System.currentTimeMillis()
+            var cookieSent = false
             try {
                 conn.connectTimeout = TIMEOUT_MS
                 conn.readTimeout = TIMEOUT_MS
                 conn.instanceFollowRedirects = false
                 conn.setRequestProperty("Referer", referer)
-                CookieManager.getInstance().getCookie(cur)?.let { conn.setRequestProperty("Cookie", it) }
+                CookieManager.getInstance().getCookie(cur)?.let { conn.setRequestProperty("Cookie", it); cookieSent = true }
                 val code = conn.responseCode
+                NetLog.native(conn, cur, startedAt, cookieSent)
                 if (code in 300..399) {
                     val loc = conn.getHeaderField("Location") ?: return "{}"
                     cur = try { URL(u, loc).toString() } catch (e: Exception) { return "{}" }
@@ -81,10 +84,7 @@ object ImageSaver {
                 if (code !in 200..299) return "{}"
                 if (conn.contentLengthLong > OfflineStore.MAX_IMAGE_BYTES) return "{}"
                 val bytes = readLimited(conn.inputStream, OfflineStore.MAX_IMAGE_BYTES) ?: return "{}"
-                val ext = kindOf(bytes) ?: return "{}"
-                val name = nameFor(url, ext) // 名前は元の URL で決める (話の本文の img と対応させるため)
-                val b64 = java.util.Base64.getEncoder().encodeToString(bytes)
-                return if (store.putImage(site, id, name, b64)) """{"name":"$name","bytes":${bytes.size}}""" else "{}"
+                return keep(store, site, id, url, bytes)
             } catch (e: Exception) {
                 return "{}"
             } finally {
@@ -92,6 +92,27 @@ object ImageSaver {
             }
         }
         return "{}" // 転送が多すぎる
+    }
+
+    /** 取った中身 (bytes) の種類を確かめて保存し、結果の JSON を返す (save と saveData の共通部分) */
+    private fun keep(store: OfflineStore, site: String, id: String, url: String, bytes: ByteArray): String {
+        val ext = kindOf(bytes) ?: return "{}"
+        val name = nameFor(url, ext) // 名前は元の URL で決める (話の本文の img と対応させるため)
+        val b64 = java.util.Base64.getEncoder().encodeToString(bytes)
+        return if (store.putImage(site, id, name, b64)) """{"name":"$name","bytes":${bytes.size}}""" else "{}"
+    }
+
+    /**
+     * ページの中 (WebView) で取った挿絵 (base64) を保存する。url は取った場所 (名前を決めるのと、https・blocked の確認に使う)。
+     * 本文と同じサイトにある挿絵は、アプリ自身の通信だと Cloudflare に止められる (403) ので、WebView の fetch で取り、ここへ渡す。
+     * 結果は save と同じ形。
+     */
+    fun saveData(store: OfflineStore, site: String, id: String, url: String, base64: String, blocked: (String) -> Boolean = { false }): String {
+        if (!url.startsWith("https://")) return "{}"
+        val host = try { URL(url).host } catch (e: Exception) { return "{}" }
+        if (blocked(host) || base64.length > OfflineStore.MAX_IMAGE_BASE64) return "{}"
+        val bytes = try { java.util.Base64.getDecoder().decode(base64) } catch (e: IllegalArgumentException) { return "{}" }
+        return keep(store, site, id, url, bytes)
     }
 
     /** 上限を超えたら null (大きすぎる物は読み切らない) */

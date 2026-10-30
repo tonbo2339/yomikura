@@ -65,6 +65,9 @@ class MainActivity : AppCompatActivity(), BridgeHost {
     private val collect by lazy { CollectController(this, cfg, hostFilter, collectUi) }
     /** バックアップのファイルへの書き出し・読み込み (設定の「データの管理」)。registerForActivityResult のため、onCreate より前に作る */
     private val backupFiles = BackupFiles(this, ::evalJs, ::emitJs)
+    /** 自分で入れたフォント (設定の「本文の文字」)。ファイルを選ぶ画面も registerForActivityResult なので、ここで作る */
+    private val fonts by lazy { CustomFonts(java.io.File(filesDir, "fonts")) }
+    private val fontFiles = FontFiles(this, { fonts }, ::emitJs)
 
     override val updater: Updater by lazy { Updater(this, Edition.UPDATE_REPO, Edition.UPDATE_NEEDS_LOGIN) }
     override val launcherIcon: LauncherIcon by lazy { LauncherIcon(this) }
@@ -125,14 +128,19 @@ class MainActivity : AppCompatActivity(), BridgeHost {
 
     // ---- 起動・終了 ----
 
+    // 保存済みのテーマは、画面の部品 (Resources) を作る前に適用する。マニフェストで uiMode の変化を自分で受けている (configChanges) ので、
+    // onCreate で決めても起動時の画面には効かない (システムがダークで、設定がライトのとき暗いまま出ていた)
+    override fun attachBaseContext(newBase: Context) {
+        // 入れ直した直後 (保存データが空) なら、Android のバックアップから戻った設定の写しを使う (SettingsBackup)
+        SettingsBackup.restoreIfEmpty(newBase)
+        currentTheme = AppSettings(newBase).settings().optString("theme", "auto")
+        applyTheme(currentTheme)
+        super.attachBaseContext(newBase)
+    }
+
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         Diag.init(this) // エラーの記録 (診断情報に載せる)
-        // 入れ直した直後 (保存データが空) なら、Android のバックアップから戻った設定の写しを使う (SettingsBackup)
-        SettingsBackup.restoreIfEmpty(this)
-        // 保存済みのテーマは、画面を作る前に適用する (起動時の作り直しを避ける)
-        currentTheme = cfg.settings().optString("theme", "auto")
-        applyTheme(currentTheme)
         super.onCreate(savedInstanceState)
         backupFiles.restore(savedInstanceState)
         launcherIcon.applyPending() // 「後で」で覚えたランチャーアイコンを、この起動で適用する
@@ -140,6 +148,7 @@ class MainActivity : AppCompatActivity(), BridgeHost {
         // (ショートカットは、その時に有効な別名に付き、別名を無効にすると消えるため)
         runBackground("Yomikura-shortcuts") { Shortcuts.publish(this) }
 
+        FontSelection.repair(this, fonts) // 設定にあるフォントが端末に無ければ (入れ直したあと) サイト標準に戻す。ページを開く前に
         hostFilter = Edition.hostFilter(this)
         injectedJs = NHData.tokenJs + AppAssets.siteScripts(this)
 
@@ -155,7 +164,7 @@ class MainActivity : AppCompatActivity(), BridgeHost {
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                if (findBar.isShowing) findBar.hide() else if (webView.canGoBack()) webView.goBack() else finish()
+                if (findBar.isShowing) findBar.hide() else goBackInWeb()
             }
         })
         openFirstPage(savedInstanceState)
@@ -170,10 +179,11 @@ class MainActivity : AppCompatActivity(), BridgeHost {
             addJavascriptInterface(StoreBridge(this@MainActivity), "NHStore")
             addJavascriptInterface(DiagBridge(this@MainActivity), "NHDiag")
             addJavascriptInterface(TotpBridge(this@MainActivity), "NHTotp")
+            addJavascriptInterface(FontBridge(this@MainActivity, fonts, fontFiles), "NHFonts")
             addJavascriptInterface(OfflineBridge(this@MainActivity, offline, saveQueue, hostFilter), "NHOffline")
             // 版によってだけある連携 (Edition.installExtras)。公開版は何もしない
             extras = Edition.installExtras(this@MainActivity, this, offline, ::emitJs) { gate.app }
-            webViewClient = NovelClient(this@MainActivity, gate, cfg, hostFilter, offline, injectedJs, clientHost)
+            webViewClient = NovelClient(this@MainActivity, gate, cfg, hostFilter, offline, fonts, injectedJs, clientHost)
             // ダウンロードになるリンク (アプリでは保存しない): ページは移らないので、窓口を今のページの扱いに戻す (NovelClient.cancelled と同じ)
             setDownloadListener { _, _, _, _, _ -> gate.set(url) }
             // WebChromeClient が無いと、サイトの確認ダイアログ (「本当に削除しますか？」など) が出ない。進み具合も受け取る
@@ -187,9 +197,10 @@ class MainActivity : AppCompatActivity(), BridgeHost {
         if (WebViewFeature.isFeatureSupported(WebViewFeature.ALGORITHMIC_DARKENING)) {
             WebSettingsCompat.setAlgorithmicDarkeningAllowed(web.settings, true)
         }
+        applyTextZoom(web)
         // ヘッダー / フッターを隠す CSS は、ちらつかないようページ描画前に入れる
         if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
-            val origins = setOf("https://*.syosetu.com", "https://syosetu.com", "https://syosetu.org", "https://kakuyomu.jp")
+            val origins = SiteUrls.INJECT_ORIGINS
             WebViewCompat.addDocumentStartJavaScript(
                 web, AppAssets.earlyScripts(this), origins
             )
@@ -233,14 +244,46 @@ class MainActivity : AppCompatActivity(), BridgeHost {
             // 起動時の自動チェック: 起動ページを開いたまま、画面に出さずに確認する。ログインしているサイトだけが対象なので、
             // 先にログインの控え (logins) を最新にする (無いと、ログインしていない初回の起動でも確認が始まってしまう)
             LoginCookies.sync(this)
-            if (cfg.autoCheckDue()) collect.start(auto = true)
+            val ac = cfg.autoCheck()
+            DevLog.eventOf(DevLog.Category.CHECK, "launch auto-check", "due" to ac.due, "enabled" to ac.enabled, "sites" to ac.anySite, "sinceMin" to ac.sinceMin, "hours" to ac.hours)
+            if (ac.due) collect.start(auto = true)
             // アプリを更新したあとの最初の起動なら、この版の変更点を 1 回だけ出す (リンクから開いた起動などでは出さず、次のふつうの起動に回す)
             ReleaseNotes.takeOnce(this, prefs)?.let { ReleaseNotesDialog.show(this, theme.dp, it) }
         }
     }
 
+    /**
+     * 画面を消す・別のアプリから戻ったとき、ダークテーマのカクヨムなどで WebView が真っ黒のままになることがある (スクロールすると直る。Pixel 11 で再現しやすい)。
+     * 描画の更新を促すため、1px だけ動かして戻す。上部バーを隠す判断の幅 (16〜24dp) より小さく、読書位置も変えない。
+     */
+    private fun nudgeRepaint() {
+        webView.post {
+            val x = webView.scrollX
+            val y = webView.scrollY
+            webView.scrollTo(x, if (y > 0) y - 1 else y + 1)
+            webView.scrollTo(x, y)
+            webView.invalidate()
+        }
+    }
+
+    /** 文字の大きさ: 設定でオフなら、Android の「文字サイズ」の設定にかかわらず標準の大きさ (100%) にする */
+    private fun applyTextZoom(web: WebView) {
+        val scale = resources.configuration.fontScale
+        // WebView の既定の倍率は、端末の文字サイズそのもの (0.85 倍なら 85)。合わせないときだけ 100 に固定する
+        web.settings.textZoom = if (cfg.followSystemTextSize() && scale > 0f) Math.round(scale * 100f) else 100
+    }
+
+    /** 最後に画面を離れた時刻 (開発用ログの「復帰」に、離れていた長さを添える) */
+    private var pausedAt = 0L
+
     override fun onResume() {
         super.onResume()
+        applyTextZoom(webView)
+        val repaint = cfg.repaintOnResume()
+        DevLog.eventOf(DevLog.Category.SCREEN, "resume", "pausedSec" to if (pausedAt > 0L) (System.currentTimeMillis() - pausedAt) / 1000L else null, "repaint" to repaint, "host" to webView.url?.let { android.net.Uri.parse(it).host })
+        if (repaint) nudgeRepaint()
+        RenderProbe.check(this, webView, "resume+1.5s", 1_500L) // 表示が一色のまま残っていないか (真っ黒の件)。開発用ログがオンのときだけ
+        RenderProbe.check(this, webView, "resume+6s", 6_000L)
         BgCheck.foreground = true
         OfflineStatus.onChange = { runOnUiThread { refreshSaveStrip() } }
         OfflineService.resumeIfPending(this, saveQueue) // 途中で止まった保存を続きから
@@ -252,13 +295,22 @@ class MainActivity : AppCompatActivity(), BridgeHost {
     override fun onPause() {
         super.onPause()
         SettingsBackup.save(this) // Android のバックアップの対象は設定の写しだけ。裏に回るときに写す
+        pausedAt = System.currentTimeMillis()
+        DevLog.eventOf(DevLog.Category.SCREEN, "pause")
         BgCheck.foreground = false
         OfflineStatus.onChange = null
     }
 
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        DevLog.eventOf(DevLog.Category.SCREEN, "trimMemory", "level" to level)
+    }
+
     override fun onStop() {
         super.onStop()
-        aids.stopReading() // 画面を離れたら、読み上げは止める
+        DevLog.eventOf(DevLog.Category.SCREEN, "stop")
+        // 画面を離れても読み上げは続ける (前景サービスの通知・ロック画面から止められる)。通知を出せないとき (許可が無い) は、止められなくなるので止める
+        if (!Notices.allowed(this)) aids.stopReading()
     }
 
     override fun onDestroy() {
@@ -349,7 +401,22 @@ class MainActivity : AppCompatActivity(), BridgeHost {
 
     private fun onWebScroll(scrollY: Int, oldY: Int) {
         if (gate.reader) return // 読書画面の出し入れは reader.js (readerBar) が決める
-        topBar.scroll.onScroll(scrollY, oldY, locked = gate.app || !cfg.hideBarOnScroll())
+        // 読み上げ中は段落に合わせてページが動き続けるので、バーを隠さない (⋮ の「読み上げを止める」を押せるように)
+        topBar.scroll.onScroll(scrollY, oldY, locked = gate.app || !cfg.hideBarOnScroll() || aids.speaking)
+    }
+
+    /**
+     * 戻る。アプリのエラー画面 (error.html) からは、失敗したページ (履歴でエラー画面の 1 つ前) を飛ばして戻る
+     * (失敗したページへ戻ると、もう一度失敗してエラー画面に戻り、いつまでも前のページへ戻れないため)。
+     * 失敗したページが履歴の先頭 (ほかのアプリのリンクで開いた直後など) で、その前が無いときは、アプリを閉じる。
+     */
+    private fun goBackInWeb() {
+        val onError = webView.url?.startsWith("https://${TrustGate.APP_HOST}/error.html") == true
+        when {
+            onError -> if (webView.canGoBackOrForward(-2)) webView.goBackOrForward(-2) else finish()
+            webView.canGoBack() -> webView.goBack()
+            else -> finish()
+        }
     }
 
     /**
@@ -429,6 +496,8 @@ class MainActivity : AppCompatActivity(), BridgeHost {
     override fun wipeAll() {
         NHData.set(this, "")
         SettingsBackup.clear(this) // 設定の写しも消す (残すと、消したあとの再起動や入れ直しで設定が戻る)
+        runCatching { TotpVault(this).clear() } // なろうの 2 段階認証の鍵も消す (保存データとは別の保管庫なので、ここで消さないと残る)
+        runCatching { fonts.clear() } // 入れたフォントも消す (設定の font は保存データと一緒に消えるので、ファイルだけ残さない)
         // オフライン保存も消す。ファイルが多いと時間がかかるので、ファイルを消すのは裏のスレッドで (画面を止めない)
         saveQueue.clearAll()
         stopService(Intent(this, OfflineService::class.java))
@@ -467,6 +536,7 @@ class MainActivity : AppCompatActivity(), BridgeHost {
 
     /** 保存データが変わったとき: バッジ、上部バー (表示サイト)、テーマを反映する。 */
     override fun onDataChanged() {
+        applyTextZoom(webView) // 設定の「端末の文字サイズに合わせる」を、すぐ効かせる
         topBar.updateListCount()
         if (topBar.scroll.hidden && !cfg.hideBarOnScroll()) topBar.scroll.showNow() // 「スクロールで隠す」をオフにしたら、すぐ出す
         val bg = cfg.bgSignature()

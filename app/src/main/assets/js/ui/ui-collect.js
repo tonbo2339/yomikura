@@ -6,7 +6,9 @@ window.NH_UI_COLLECT = function (ctx) {
   const { adapter, challenge } = ctx;
   const SEQ = NH.COLLECT_ORDER; // 巡回の順 (core/collect-rules.js)
   const hashM = location.hash.match(/^#nh-collect-(bg|fg|fg-auto)$/);
-  if (!(hashM && adapter.collectUpdates && adapter.onCollectPage && adapter.onCollectPage(location))) return false;
+  // 一覧のページ、または一覧を開いたらログイン (2 段階認証を含む) のページへ転送されたとき (adapter.onLoginPage)。後者は何も取れないので、すぐ「ログイン切れ」として次へ進む
+  const onLoginPage = !!(adapter.onLoginPage && adapter.onLoginPage(location));
+  if (!(hashM && adapter.collectUpdates && adapter.onCollectPage && (adapter.onCollectPage(location) || onLoginPage))) return false;
   const mode = hashM[1];
   const auto = mode !== 'fg'; // 自動 (起動時 / 裏): 止められたサイトの休止を長めにする
   const bg = mode === 'bg'; // アプリを開いていないときの確認 (lastCollectFg を付けない)
@@ -17,7 +19,9 @@ window.NH_UI_COLLECT = function (ctx) {
   const d0 = NH.load();
   const usable = SEQ.filter((id) => NH.collectActive(d0, id) && NH.adapters.some((a) => a.id === id && a.collectUpdates));
   // 直前に止められた (Cloudflare の確認など) サイトは、しばらく取りに行かない
-  const resting = usable.filter((id) => NH.isResting(d0, id, auto));
+  // デバッグのスイッチ (設定 forceManualCheck。デバッグ用の機能がある版だけ = NH_EDITION.debugTools。Kotlin の AppSettings.forceManualCheck) がオンのときの手動 (fg) は、休止を見ずに確認する。確認画面が出たら、下の challenge の流れで人間に通してもらう
+  const forceManual = !!(window.NH_EDITION || {}).debugTools && !!(d0.settings || {}).forceManualCheck && mode === 'fg';
+  const resting = forceManual ? [] : usable.filter((id) => NH.isResting(d0, id, auto));
   const enabled = usable.filter((id) => !resting.includes(id));
   const here = enabled.includes(adapter.id);
   // 確認画面で止まったこのページを画面に出して通してもらうとき、次のサイトからの巡回は別の WebView が続けている (Collector の split)。
@@ -54,6 +58,12 @@ window.NH_UI_COLLECT = function (ctx) {
   if (!here) { go(0); return true; }
   // 確認の進み具合 (リスト画面の「1 / 4」): 対象のサイトの何番目か
   if (window.NHStore && NHStore.progress) NHStore.progress(String(enabled.indexOf(adapter.id) + 1), String(enabled.length));
+  // ログイン (2 段階認証を含む) のページへ転送された: 一覧を読めないので、止まって待たず (90 秒で諦めるのを待たず)、ログイン切れと残して次のサイトへ
+  if (onLoginPage) {
+    logErr(adapter.id, 'login');
+    go(2500);
+    return true;
+  }
   // 確認画面のままなら少し待つ (自然に通過すれば読み込み直されて、ここは消える)。まだ止まっているなら、このサイトは休止して、
   // アプリに知らせる。アプリが画面に出して通してもらうと答えた (hold) ら、この WebView はそのまま待ち (通れば読み込み直されて、続きを取得する)、
   // 次のサイトからはアプリが別の WebView で続ける。答えが無い (裏の確認など) ときは、ここで諦めて次へ進む
@@ -74,10 +84,10 @@ window.NH_UI_COLLECT = function (ctx) {
         return go(2500);
       }
       // 「後で読む」に置いた作品は数えない (未読の更新には出さない)
-      const { added, updates, fresh } = NH.mergeUpdates(adapter.id, r.items, { truncated: !!r.truncated, readIds: r.readIds, cats: r.cats });
+      const { added, updates, fresh, freshKeys } = NH.mergeUpdates(adapter.id, r.items, { truncated: !!r.truncated, readIds: r.readIds, cats: r.cats });
       NH.update((d) => {
         d.collectLog = d.collectLog || {};
-        d.collectLog[adapter.id] = { n: updates, added, fresh };
+        d.collectLog[adapter.id] = { n: updates, added, fresh, keys: freshKeys }; // keys = 新しい話が出た作品 (保存済みなら Kotlin の OfflineAutoUpdate が追加で保存する)
       });
       go(1500 + Math.random() * 1000); // サイトからサイトへ移るときも間をあける
     },

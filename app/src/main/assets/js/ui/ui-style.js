@@ -22,6 +22,7 @@ window.NH_UI_STYLE = function () {
     .nh-ov button.sub{background:#2a2520;color:#f2ede7}
     .nh-ov button.small{padding:7px 14px;font-size:13px}
     .nh-ov .seg{display:flex;gap:4px;background:#1c1916;border-radius:12px;padding:3px;border:1px solid #3a342d}
+    .nh-ov .seg[hidden]{display:none}
     .nh-ov .seg button{background:none;color:#ab9f94;padding:8px 16px;border-radius:9px;font-size:14px;font-weight:600}
     .nh-ov .seg button.on{background:#3fae73;color:#06210f;font-weight:800}
     .nh-ov .panel{display:flex;flex-direction:column;align-items:center;gap:10px}
@@ -97,6 +98,8 @@ window.NH_UI_STYLE = function () {
     .nh-filter{position:fixed;left:12px;right:12px;bottom:max(14px,env(safe-area-inset-bottom));z-index:2147483646;display:flex;gap:2px;padding:3px;
       border-radius:12px;background:#f2f2f7;box-shadow:0 6px 24px rgba(0,0,0,.18);font:500 13px/1 "Noto Sans JP",sans-serif}
     .nh-filter[hidden]{display:none}
+    /* 下の絞り込みが出ているときは、お知らせ・ミュートの印をその上に出す (重ねて隠さない) */
+    body:has(.nh-filter:not([hidden])) :is(.nh-toast,.nh-banner,.nh-mute-pill){bottom:calc(max(14px,env(safe-area-inset-bottom)) + 50px)}
     .nh-filter button{flex:1;border:0;background:none;color:#000;padding:9px 2px;border-radius:9px;font:inherit;cursor:pointer;white-space:nowrap}
     .nh-filter button.on{background:#fff;font-weight:700;box-shadow:0 2px 6px rgba(0,0,0,.12)}
     .nh-has-filter .nh-mute-pill{bottom:calc(max(14px,env(safe-area-inset-bottom)) + 56px)}
@@ -110,7 +113,7 @@ window.NH_UI_STYLE = function () {
     .nh-sheet-label{font-size:13px;color:rgba(60,60,67,.6);margin:16px 4px 8px}
     .nh-sheet-group{border-radius:12px;overflow:hidden}
     .nh-sheet-row{display:block;width:100%;min-height:50px;border:0;background:#fff;color:#ff3b30;font:500 16px "Noto Sans JP",sans-serif;cursor:pointer}
-    .nh-sheet-group .nh-sheet-row+.nh-sheet-row{border-top:.5px solid rgba(60,60,67,.18)}
+    .nh-sheet-group .nh-sheet-row+.nh-sheet-row{border-top:1px solid rgba(60,60,67,.3)} /* ダーク (サイトを暗くする表示) でも境目が見える濃さ */
     .nh-sheet-link{margin-top:16px;border-radius:12px;color:#1e9a55}
     .nh-sheet-cancel{margin-top:8px;border-radius:12px;color:#1e9a55;font-weight:700}
     .nh-dialog{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:2147483647;width:min(300px,86vw);overflow:hidden;

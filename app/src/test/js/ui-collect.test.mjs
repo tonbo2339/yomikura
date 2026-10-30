@@ -21,12 +21,13 @@ function makeStore() {
 }
 
 // 巡回のページ (hostname / pathname / hash) を開いた状態で、アダプターを読み込む。timers = setTimeout に渡された処理 (手で進める)
-function load(href, store, { title = 'ブックマーク' } = {}) {
+function load(href, store, { title = 'ブックマーク', edition = {} } = {}) {
   const u = new URL(href);
   const timers = [];
   const replaced = [];
   const ctx = {
     __nhT: 'tok',
+    NH_EDITION: edition,
     NHStore: store.api,
     localStorage: { getItem: () => null, setItem: () => {} },
     location: { href, hostname: u.hostname, pathname: u.pathname, search: u.search, hash: u.hash, origin: u.origin, replace: (x) => replaced.push(x) },
@@ -119,6 +120,48 @@ test('ログインしていない (取れなかった) サイトは結果に log
   await flush();
   assert.deepEqual(JSON.parse(st.raw).collectLog.narou, { err: 'login' });
   assert.equal(timers[0][1], 2500);
+});
+
+test('一覧がログイン・2 段階認証のページへ転送された (ログイン切れ・2 段階認証の途中): 止まって待たず、login と残して次へ進む', async () => {
+  for (const path of ['/login/input/', '/user2stepauth/input/authtoken/AbC/', '/user2stepauth/totpinput/authtoken/AbC/']) {
+    const st = makeStore();
+    const { ctx, timers } = load('https://syosetu.com' + path + '#nh-collect-bg', st);
+    const adapter = ctx.NH.adapter();
+    let fetched = false;
+    adapter.collectUpdates = async () => { fetched = true; return { ok: true, items: [] }; };
+    assert.equal(ctx.NH_UI_COLLECT({ adapter, challenge: false }), true, path); // 処理した (ui.js はこのページに何も出さない)
+    await flush();
+    assert.equal(fetched, false, path); // 一覧ではないので、取りに行かない
+    assert.deepEqual(JSON.parse(st.raw).collectLog.narou, { err: 'login' }, path);
+    assert.equal(timers[0][1], 2500, path);
+  }
+});
+
+test('ログインのページでも、巡回のページ (hash) でなければ何もしない (ふつうに開いたログイン画面を邪魔しない)', () => {
+  const st = makeStore();
+  const { ctx } = load('https://syosetu.com/login/input/', st); // hash が無い
+  assert.equal(ctx.NH_UI_COLLECT({ adapter: ctx.NH.adapter(), challenge: false }), false);
+});
+
+test('デバッグのスイッチ (forceManualCheck) がオンの版の手動 (fg) は、休んでいるサイトも休止と書かず確認する。裏 (bg)・自動・スイッチがオフ・デバッグ用の機能が無い版は、今までどおり休ませる', async () => {
+  const cases = [
+    ['fg', { debugTools: true }, true, false],  // デバッグ用の機能あり + スイッチオン + 手動 = 休止を見ない
+    ['fg', { debugTools: true }, false, true],  // スイッチがオフ = 今までどおり
+    ['fg', {}, true, true],                      // デバッグ用の機能が無い版 (公開版) は、設定が残っていても休ませる
+    ['bg', { debugTools: true }, true, true],    // スイッチがオンでも、裏は休ませる
+    ['fg-auto', { debugTools: true }, true, true], // 起動時の自動も
+  ];
+  for (const [mode, edition, force, rested] of cases) {
+    const st = makeStore();
+    st.raw = JSON.stringify({ readLater: [], settings: { forceManualCheck: force }, rest: { hameln: Date.now() - 5 * 60000 } }); // ハーメルンは 5 分前に止められた
+    const { ctx } = load('https://syosetu.com/favnovelmain/list/?nowcategory=1#nh-collect-' + mode, st, { edition });
+    const adapter = ctx.NH.adapter();
+    adapter.collectUpdates = async () => ({ ok: true, items: [] });
+    ctx.NH_UI_COLLECT({ adapter, challenge: false });
+    await flush();
+    const log = JSON.parse(st.raw).collectLog || {};
+    assert.equal((log.hameln || {}).err === 'rest', rested, mode + ' ' + JSON.stringify(edition) + ' force=' + force);
+  }
 });
 
 test('止められた (CHALLENGE) サイトは休止して blocked と残す', async () => {

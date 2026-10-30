@@ -9,19 +9,22 @@ import org.json.JSONObject
 object DiagReport {
     /** 保存データの要約に載せてよい設定 (数・真偽・短い選択肢だけ)。成人向けに関わる設定やタブの名前などは載せない */
     private val SETTING_KEYS = listOf(
-        "theme", "font", "size", "lh", "start", "autoCheck", "autoCheckHours", "listArrows", "dimRead",
+        "theme", "font", "size", "lh", "start", "autoCheck", "autoCheckHours", "listArrows", "listSwipe", "repaintOnResume", "forceManualCheck", "netLog", "dimRead",
         "pruneDone", "pruneDays", "historyMax", "historyDays",
     )
+
+    /** 載せてよい設定の、`key=値` の並び (値が無いものは飛ばす)。診断情報と、開発用ログの起動の行が使う */
+    fun shownSettings(s: JSONObject?): List<String> = SETTING_KEYS.mapNotNull { key ->
+        val v = s?.opt(key)
+        if (v == null || v == JSONObject.NULL) null else "$key=$v"
+    }
 
     /** 保存データの件数と、載せてよい設定。中身 (題名など) は出さない */
     fun dataSummary(d: JSONObject): List<String> {
         fun n(name: String) = d.optJSONArray(name)?.length() ?: 0
         fun k(name: String) = d.optJSONObject(name)?.length() ?: 0
         val s = d.optJSONObject("settings")
-        val shown = SETTING_KEYS.mapNotNull { key ->
-            val v = s?.opt(key)
-            if (v == null || v == JSONObject.NULL) null else "$key=$v"
-        }
+        val shown = shownSettings(s)
         return listOf(
             "リスト ${n("readLater")} 作品 / 履歴 ${n("history")} 作品 / 読書位置 ${k("progress")} 作品",
             "設定 ${s?.length() ?: 0} 項目" + if (shown.isEmpty()) "" else " (" + shown.joinToString(", ") + ")",

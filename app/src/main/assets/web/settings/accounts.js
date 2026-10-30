@@ -56,11 +56,11 @@ function paintAccounts() {
     row.append(el('span', 'text', st === 'out' ? '未ログイン' : st === 'expired' ? 'ログイン切れの可能性' : 'ログイン済み'));
     if (st === 'expired') row.lastChild.style.color = 'var(--danger, #d33)';
     g.appendChild(row);
-    // ボタンは 2 つを同じ幅で並べる (ログインとログアウトは、状態に関係なく両方出す。デバッグ用)
+    // ボタンは状態に合わせる: 未ログインはログインだけ、ログイン済みはログアウトだけ、ログイン切れの可能性は両方 (入り直すか、いったん出るか)
     const actions = el('div', 'cell');
     actions.style.cssText = 'gap:10px;justify-content:center;padding:12px 16px';
     const login = el('button', 'btn tonal block', 'ログインする'); login.style.flex = '1'; login.onclick = () => { location.href = a[3]; };
-    actions.appendChild(login);
+    if (st !== 'in') actions.appendChild(login);
     // 押したあとは、終わるまでと終わってから少しの間 (アプリが決める。logoutWait) は押せなくする。画面を開き直しても同じ
     const wait = window.NHStore && NHStore.logoutWait ? NHStore.logoutWait(a[0]) : 0;
     const running = loggingOut.has(a[0]) || wait < 0;
@@ -80,7 +80,7 @@ function paintAccounts() {
       }
       if (NHStore.logoutSite(a[0])) { dropLogins(); snack(a[1] + 'からログアウトしました'); refreshLogins(); }
     });
-    actions.appendChild(logout);
+    if (st !== 'out') actions.appendChild(logout);
     g.appendChild(actions);
     if (a[2]) box.appendChild(el('div', 'hint', a[2] + '。'));
   });

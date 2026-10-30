@@ -1,12 +1,44 @@
 <!-- ===== 話ページの下の欄 ===== -->
 <section class="page" role="main" id="p-fold" hidden>
   <div class="group" style="margin-top:16px">
-    <label class="cell"><span class="text">感想・レビュー・作者のお知らせを畳む</span><input type="checkbox" class="switch" id="foldComments" data-setting="foldComments"></label>
-    <label class="cell"><span class="text">おすすめ作品の欄を畳む</span><input type="checkbox" class="switch" id="foldRecommend" data-setting="foldRecommend"></label>
-    <label class="cell"><span class="text">作者・共有・リンクを畳む</span><input type="checkbox" class="switch" id="foldLinks" data-setting="foldLinks"></label>
-    <label class="cell"><span class="text">ポイント・リアクションの応援を畳む</span><input type="checkbox" class="switch" id="foldReactions" data-setting="foldReactions"></label>
-    <label class="cell"><span class="text">開き具合をサイトごとに覚える</span><input type="checkbox" class="switch" id="foldRemember" data-setting="foldRemember"></label>
+    <label class="cell"><span class="text"><span data-fold-label="comments"></span>を畳む</span><input type="checkbox" class="switch" id="foldComments" data-setting="foldComments"></label>
+    <label class="cell"><span class="text"><span data-fold-label="recommend"></span>を畳む</span><input type="checkbox" class="switch" id="foldRecommend" data-setting="foldRecommend"></label>
+    <label class="cell"><span class="text"><span data-fold-label="links"></span>を畳む</span><input type="checkbox" class="switch" id="foldLinks" data-setting="foldLinks"></label>
+    <label class="cell"><span class="text"><span data-fold-label="reactions"></span>を畳む</span><input type="checkbox" class="switch" id="foldReactions" data-setting="foldReactions"></label>
+    <label class="cell"><span class="text">開いた欄をサイトごとに覚える</span><input type="checkbox" class="switch" id="foldRemember" data-setting="foldRemember"></label>
   </div>
-  <details class="more"><summary>話ページの下の欄を、普段は畳んで「▼ …を表示」のボタンにします。</summary>
-    <p>「応援・リアクション」はなろうの応援ポイントと顔文字、「作者・共有・リンク」は作者マイページ・共有・誤字報告・応援などの欄です。押すと、そのまま開いて読めます。なろうの「感想を書く」を押すと、畳んだ感想欄も開きます。ハーメルンの感想はページ内に出ないので対象外、カクヨムの応援コメントはもともと畳まれています。最終話の「関連小説」などは、おすすめとして畳みます。「開き具合を覚える」がオンなら、開いた欄は次の話でも開いたままです。</p></details>
+  <div class="hint">話ページの下の欄を、普段は畳んで、下のようなボタンにします。押すと開きます。</div>
+  <details class="more fold-like"><summary>くわしい説明</summary>
+    <ul>
+      <li>「▼ <span data-fold-label="comments"></span>を表示」
+        <ul>
+          <li>なろう: 「新着の感想」、「感想一覧」、「感想を書く」を隠します。最終話では「イチオシレビューを書く」も隠します。</li>
+          <li>ハーメルン: 出ません。</li>
+          <li>カクヨム: 出ません。</li>
+        </ul>
+      </li>
+      <li>「▼ <span data-fold-label="recommend"></span>を表示」
+        <ul>
+          <li>なろう: 最終話だけ、「ブックマークに登録している人はこんな作品も読んでいます」を隠します。</li>
+          <li>ハーメルン: 最終話だけ、「この作品が紹介された捜索」を隠します。</li>
+          <li>カクヨム: 「こちらもおすすめ」、「関連小説」を隠します。</li>
+        </ul>
+      </li>
+      <li>「▼ <span data-fold-label="links"></span>を表示」
+        <ul>
+          <li>なろう: 「作者マイページ」、「縦書きPDF」、「誤字報告」、「情報提供」、「Tweet」、「LINE」、「コピー」を隠します。</li>
+          <li>ハーメルン: 「Xで読了報告」、「アプリでシェア」、「感想を書く」、「評価する」、「推薦する」を隠します。</li>
+          <li>カクヨム: シェアのボタン、「応援する」、「応援コメント」、ログインを促す囲みを隠します。</li>
+        </ul>
+      </li>
+      <li>「▼ <span data-fold-label="reactions"></span>を表示」
+        <ul>
+          <li>なろう: ポイントの星 (★)、顔文字のリアクションを隠します。</li>
+          <li>ハーメルン: 出ません。</li>
+          <li>カクヨム: 出ません。</li>
+        </ul>
+      </li>
+    </ul>
+    <p>どのボタンも、押すと欄が開き、「▲ …を隠す」に変わります。なろうで「感想を書く」を押すと、畳んだ感想欄も開きます。「開いた欄をサイトごとに覚える」がオンなら、開いた欄は次の話でも開いたままです。</p>
+  </details>
 </section>

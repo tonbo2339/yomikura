@@ -25,6 +25,7 @@ function paintNamesPage() {
     box.appendChild(c);
   });
   if (!all.length) box.appendChild(el('div', 'cell', 'まだありません'));
+  $('namesQ').closest('.group').hidden = !all.length; // 空のときは探す欄を出さない
   $('namesHint').textContent = !all.length ? '' : q ? hit.length + ' 件 (全 ' + all.length + ' 件のうち)' : all.length + ' 件';
 }
 $('namesQ').addEventListener('input', paintNamesPage);

@@ -14,7 +14,14 @@
     const adapter = NH.adapter();
     if (!adapter) return native.finished(JSON.stringify({ error: 'サイトを判別できません' }), T);
     const w = { id: job.id, url: job.url };
-    const plan = NH.offlinePlanFrom(adapter, w, job.eps, job.title, job.total, job.images);
+    // 自動更新 (job.refresh): 話の一覧は渡されないので、この作品のページ (目次) を読んで、保存していない話を求める
+    let plan;
+    if (job.refresh) {
+      plan = await NH.offlinePlan(adapter, w);
+      plan.images = job.images !== false;
+    } else {
+      plan = NH.offlinePlanFrom(adapter, w, job.eps, job.title, job.total, job.images);
+    }
     const st = await NH.offlineRun(adapter, w, plan, plan.todo, {
       shouldStop: () => native.stopRequested(T),
       offline: () => !!(native.offline && native.offline(T)),

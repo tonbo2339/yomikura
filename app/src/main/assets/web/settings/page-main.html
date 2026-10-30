@@ -15,6 +15,15 @@
     <button class="cell has-icon" data-go="bg"><span class="ico red" data-icon="bell"></span><span class="text">裏での確認と通知</span><span class="value" id="v-bg"></span></button>
   </div>
 
+  <div class="section-label">サイト</div>
+  <div class="group">
+    <button class="cell has-icon" data-go="sites"><span class="ico brown" data-icon="globe"></span><span class="text">表示するサイト</span><span class="value" id="v-sites"></span></button>
+    <label class="cell has-icon" id="adultRow"><span class="ico pink" data-icon="person"></span><span class="text">18 歳以上</span><input type="checkbox" class="switch" id="adult"></label>
+    <label class="cell has-icon"><span class="ico red lock" id="nsfwIco"><svg viewBox="0 0 24 24"><path class="shackle" d="M8.5 14V8a3.5 3.5 0 0 1 7 0v3.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><rect x="5" y="11" width="14" height="10" rx="2"/></svg></span><span class="text" id="nsfwLabel">NSFW モード</span><input type="checkbox" class="switch" id="nsfw"></label>
+    <button class="cell has-icon" data-go="accounts"><span class="ico blue" data-icon="person"></span><span class="text">ログイン</span><span class="value" id="v-accounts"></span></button>
+    <button class="cell has-icon" data-go="links"><span class="ico gray" data-icon="link"></span><span class="text">リンクの扱い</span><span class="value" id="v-links"></span></button>
+  </div>
+
   <div class="section-label">読む</div>
   <div class="group">
     <button class="cell has-icon" data-go="list"><span class="ico blue" data-icon="book"></span><span class="text">リスト</span><span class="value" id="v-list"></span></button>
@@ -22,9 +31,14 @@
     <button class="cell has-icon" data-go="ranking"><span class="ico orange" data-icon="trophy"></span><span class="text">ランキングの行き先</span><span class="value" id="v-ranking"></span></button>
     <button class="cell has-icon" data-go="mute"><span class="ico red" data-icon="mute"></span><span class="text">ミュート・ブロック・既読</span><span class="value" id="v-mute"></span></button>
     <button class="cell has-icon" data-go="reading"><span class="ico blue" data-icon="tune"></span><span class="text">読書の補助</span><span class="value">読み上げ・自動スクロール</span></button>
+    <a class="cell has-icon" href="offline.html" id="offlineLink" style="text-decoration:none"><span class="ico teal" data-icon="download"></span><span class="text">オフライン保存</span><span class="value" id="v-offline"></span></a>
+    <button class="cell has-icon" data-go="offlineset"><span class="ico teal" data-icon="tune"></span><span class="text">オフライン保存の設定</span><span class="value" id="v-offlineset"></span></button>
+  </div>
+
+  <div class="section-label">記録</div>
+  <div class="group">
     <button class="cell has-icon" data-go="stats"><span class="ico teal" data-icon="chart"></span><span class="text">読書の統計</span><span class="value" id="v-stats"></span></button>
     <button class="cell has-icon" data-go="history"><span class="ico pink" data-icon="history"></span><span class="text">閲覧履歴</span><span class="value" id="v-history"></span></button>
-    <a class="cell has-icon" href="offline.html" id="offlineLink" style="text-decoration:none"><span class="ico teal" data-icon="download"></span><span class="text">オフライン保存</span><span class="value" id="v-offline"></span></a>
   </div>
 
   <div class="section-label">見た目</div>
@@ -35,35 +49,22 @@
     <button class="cell has-icon" data-go="bar"><span class="ico gray" data-icon="top"></span><span class="text">上部バー</span><span class="value" id="v-bar"></span></button>
     <button class="cell has-icon" data-go="icon"><span class="ico teal" data-icon="apps"></span><span class="text">アプリのアイコン</span><span class="value"></span></button>
   </div>
-  <div class="hint">ダークのときは、サイトの表示も暗くします。「操作部分の大きさ」は、リストなどのボタンやタブに効きます。</div>
 
-  <div class="section-label">サイト</div>
-  <div class="group">
-    <button class="cell has-icon" data-go="sites"><span class="ico brown" data-icon="globe"></span><span class="text">表示するサイト</span><span class="value" id="v-sites"></span></button>
-    <label class="cell has-icon" id="adultRow"><span class="ico pink" data-icon="person"></span><span class="text">18 歳以上</span><input type="checkbox" class="switch" id="adult"></label>
-    <label class="cell has-icon"><span class="ico red lock" id="nsfwIco"><svg viewBox="0 0 24 24"><path class="shackle" d="M8.5 14V8a3.5 3.5 0 0 1 7 0v3.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><rect x="5" y="11" width="14" height="10" rx="2"/></svg></span><span class="text" id="nsfwLabel">NSFW モード</span><input type="checkbox" class="switch" id="nsfw"></label>
-    <button class="cell has-icon" data-go="accounts"><span class="ico blue" data-icon="person"></span><span class="text">ログイン</span><span class="value" id="v-accounts"></span></button>
-  </div>
-  <div class="hint" id="siteHint">「18 歳以上」をオフにすると、R18 のサイト (ノクターン・ムーンライト・ミッドナイト) は選べなくなります。「NSFW モード」をオンにすると、R18 のサイトにアクセスせず、リスト・履歴・ランキングにも R18 の作品を出しません。</div>
-
-  <div class="section-label">バックアップ</div>
+  <div class="section-label">データ</div>
   <div class="group">
     <button class="cell has-icon" data-go="export"><span class="ico green" data-icon="download"></span><span class="text">書き出す</span><span class="value">ファイルに保存</span></button>
     <button class="cell has-icon" id="importBtn"><span class="ico blue" data-icon="inbox"></span><span class="text">読み込む</span><span class="value">ファイルから復元</span></button>
     <button class="cell has-icon" id="undoRestoreBtn" hidden><span class="ico orange" data-icon="inbox"></span><span class="text">復元前の状態に戻す</span><span class="value" id="undoRestoreWhen"></span></button>
+    <button class="cell has-icon" data-go="data"><span class="ico red" data-icon="del"></span><span class="text">初期化と消去</span><span class="value"></span></button>
   </div>
-  <div class="hint">設定・リスト・読書位置・閲覧履歴・ミュートを、項目を選んで書き出せます。読み込むと、ファイルに入っている項目だけを置き換えます。ログイン情報とオフライン保存の本文は含みません。</div>
 
   <div class="section-label">このアプリ</div>
   <div class="group">
     <button class="cell has-icon" data-go="update"><span class="ico gray" data-icon="info"></span><span class="text">アプリの更新</span><span class="value" id="v-update"></span></button>
-    <button class="cell has-icon" data-system="links"><span class="ico gray" data-icon="link"></span><span class="text">外部リンクを開く</span><span class="value">Android の設定</span></button>
     <button class="cell has-icon" data-go="licenses"><span class="ico gray" data-icon="doc"></span><span class="text">オープンソースライセンス</span><span class="value"></span></button>
     <button class="cell has-icon" data-go="privacy"><span class="ico gray" data-icon="lock"></span><span class="text">プライバシー</span><span class="value">データの扱い</span></button>
     <button class="cell has-icon" data-go="diag"><span class="ico gray" data-icon="bug"></span><span class="text">診断情報</span><span class="value">不具合の報告用</span></button>
-    <button class="cell has-icon" data-go="data"><span class="ico red" data-icon="download"></span><span class="text">初期化と消去</span><span class="value"></span></button>
   </div>
-  <div class="hint">「外部リンクを開く」: ほかのアプリのリンクをここで開くには、Android の設定の「デフォルトで開く」→「リンクを追加」で、サイトをすべて選びます。共有メニューからは設定なしで送れます。</div>
 
   <div class="version" id="version"></div>
 </section>

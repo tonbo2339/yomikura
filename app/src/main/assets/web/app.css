@@ -94,6 +94,9 @@ svg { display: block; }
 /* グループの見出しと注記 (iOS の Section header / footer) */
 .section-label { font-size: 13px; font-weight: 400; color: var(--sub); margin: 24px 16px 7px; }
 .hint { font-size: 13px; color: var(--sub); line-height: 1.5; margin: 7px 16px 0; }
+.hint ul, .hint ol { margin: 6px 0 0; padding-left: 1.4em; }
+.hint li { margin: 0 0 4px; }
+.hint > div { margin-top: 6px; }
 
 /* ボタン */
 .btn {
@@ -119,6 +122,17 @@ details.more summary::-webkit-details-marker { display: none; }
 details.more summary::after { content: " くわしく ▾"; color: var(--accent-strong); font-weight: 600; white-space: nowrap; }
 details.more[open] summary::after { content: " 閉じる ▴"; }
 details.more p { margin: 6px 0 0; }
+/* 畳みのページの説明: サイトのページ側の「▼ …を表示」のボタン (js/ui/ui-style.js の .nh-fold) と同じ見た目で開閉する。大きさ・枠・色はそれと揃える */
+details.more.fold-like { margin: 10px 16px 0; }
+details.more.fold-like summary { display: flex; align-items: center; justify-content: center; box-sizing: border-box; height: 42px; border: 1.5px solid rgba(128,128,134,.3); border-radius: 12px; color: #85858b; font-size: 14px; font-weight: 600; }
+details.more.fold-like summary:active { opacity: .6; }
+details.more.fold-like summary::before { content: "▼ "; white-space: pre; }
+details.more.fold-like summary::after { content: "を表示"; color: inherit; }
+details.more.fold-like[open] summary::before { content: "▲ "; }
+details.more.fold-like[open] summary::after { content: "を隠す"; }
+details.more.fold-like ul { margin: 10px 4px 0; padding-left: 1.4em; }
+details.more.fold-like li { margin: 0 0 6px; }
+details.more.fold-like li ul { margin: 6px 0 0; padding-left: 1.2em; }
 .icon-btn svg { width: 24px; height: 24px; fill: currentColor; }
 
 /* カード (白い角丸)。iOS と同じく影は付けない */

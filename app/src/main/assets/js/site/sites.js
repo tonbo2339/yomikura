@@ -5,9 +5,9 @@
 //  bars   = ヘッダー・フッター (とその分の余白)。読書ページ (episode) のときだけ隠し、ほかのページ (トップ・一覧・作品の目次・作者ページ) では出す。
 //           書き方は hide と同じ。ページ内の移動 (カクヨム) でも、移るたびに early.js が切り替える
 //  episode = 読書ページ (話ページ) の pathname
-//  body   = 本文。box = 文字サイズ (zoom) の対象、text = フォント・行間の対象
+//  body   = 本文。box = 文字サイズの対象、text = フォント・行間の対象
 //  fold   = 話ページの下で普段は畳む欄 (開閉のボタンは ui.js)。comments = 感想・レビュー、recommend = おすすめ、links = 作者ページ・共有など、
-//           reactions = 応援・リアクション (ポイント・顔文字)
+//           reactions = ポイント・リアクション (なろうのポイント ★・顔文字)
 //           (空文字なら、そのサイトには無い / 畳む必要が無い)。設定 foldComments / foldRecommend / foldLinks / foldReactions で切り替わる
 //
 // ブラウザの DevTools (CDP) で確かめるときは、実機の WebView の UA で開くこと (特に R18 は UA で作りが変わる)。
@@ -36,8 +36,8 @@ window.NH_SITES = {
     bars:
       '#worksEpisodesEpisodeHeader,[class*="GlobalHeader_"],[class*="GlobalFooter_globalFooter"],' +
       '[class*="CompactMediaGlobalHeader_"]{display:none!important}' +
-      // 固定ヘッダーの高さ分に取ってあった上の余白を詰める
-      '[class*="DefaultTemplate_fixed"],[class*="SubHeaderSpacer_"]{padding-top:0!important}',
+      // 固定ヘッダーの高さ分に取ってあった上の余白を詰める (話ページは本文の枠 #contentMain が 50px あけている)
+      '[class*="DefaultTemplate_fixed"],[class*="SubHeaderSpacer_"],#page-works-episodes-episode #contentMain{padding-top:0!important}',
     episode: /^\/works\/\d+\/episodes\/\d+/,
     body: { box: '.widget-episodeBody', text: '.widget-episodeBody,.widget-episodeBody p' },
     // 最新話 (最終話) は下に「関連小説」(#episodeFooter-related)・作者・作品情報・アプリ宣伝 (#episodeFooter-readWithApp。常に隠す) が増える。
@@ -70,10 +70,10 @@ window.NH_SITES = {
 // 畳む欄の種類の表 (key = fold のキー、flag = 設定の項目 (既定オン)、label = 開閉のボタンの名前)。early.js (畳む CSS) と ui.js (開閉のボタン) が共通で使う。
 // 設定画面の項目 (settings/page-fold.html) と、畳んでいる数の数え方 (settings/repaint.js) は、同じ flag を使う
 window.NH_FOLDS = [
-  { key: 'comments', flag: 'foldComments', label: '感想・お知らせ' },
-  { key: 'recommend', flag: 'foldRecommend', label: 'おすすめ' },
+  { key: 'comments', flag: 'foldComments', label: '感想・レビュー' },
+  { key: 'recommend', flag: 'foldRecommend', label: 'おすすめ・関連作品' },
   { key: 'links', flag: 'foldLinks', label: '作者・共有・リンク' },
-  { key: 'reactions', flag: 'foldReactions', label: '応援・リアクション' },
+  { key: 'reactions', flag: 'foldReactions', label: 'ポイント・リアクション' },
 ];
 
 // 一覧 (ランキング・検索) の作品の囲みを探す (ui-list.js) ときの、サイトの作りに依存するセレクター。

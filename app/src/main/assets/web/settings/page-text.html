@@ -4,6 +4,11 @@
   <div class="preview" id="preview">夜明け前の駅には、まだ誰もいなかった。<ruby>改札<rt>かいさつ</rt></ruby>を抜けると、冷たい風が頬をなでる。彼女は小さく息を吐いて、始発を待つベンチに腰を下ろした。</div>
   <div class="section-label">フォント</div>
   <div class="group" id="fontList"></div>
+  <div class="group" style="margin-top:16px">
+    <button class="cell accent" id="fontAdd">フォントを追加</button>
+  </div>
+  <div class="group" id="fontDelGroup" style="margin-top:16px" hidden><div id="fontDelList"></div></div>
+  <div class="hint">端末に保存した一般的な「.ttf」「.otf」「.ttc」のファイルから、フォントを追加できます。追加したフォントは、サイトの本文と、保存した話の両方に使います。名前は、フォントに入っている名前が初めに付き、あとから変えられます。入っていない字は、ゴシックで表示します。</div>
   <div class="section-label">大きさと行間</div>
   <div class="group">
     <div class="cell"><div class="slider"><span class="name">サイズ</span>
@@ -11,10 +16,9 @@
     <div class="cell"><div class="slider"><span class="name">行間</span>
       <button class="step" data-t="lh" data-d="-1" aria-label="狭く">−</button><input type="range" id="lh" min="11" max="30" step="1" aria-label="行間 (左端は標準)"><button class="step" data-t="lh" data-d="1" aria-label="広く">＋</button><span class="val" id="lhV"></span></div></div>
   </div>
-  <div class="hint">なろう・ハーメルン・カクヨムの本文と、オフラインで読むときに使います。100% は端末の標準の文字の大きさです。次に開くページから反映されます。</div>
-  <div class="section-label">オフラインで読むとき</div>
-  <div class="group">
-    <label class="cell"><span class="text">縦書きで表示</span><input type="checkbox" class="switch" id="vertical" data-setting="vertical" data-default="off"></label>
+  <div class="group" style="margin-top:16px">
+    <label class="cell"><span class="text">端末の文字サイズに合わせる</span><input type="checkbox" class="switch" id="followSystemTextSize" data-setting="followSystemTextSize"></label>
   </div>
-  <div class="hint">オフライン保存した作品の読み画面だけが縦書きになります。</div>
+  <div class="hint">オフにすると、Android の「文字サイズ」の設定にかかわらず、サイトとアプリの画面の文字を標準の大きさにします。</div>
+  <div class="hint">なろう・ハーメルン・カクヨムの本文と、オフラインの読み画面に使います。100% は端末の標準の大きさです。テーマがダークのときは、サイトの表示も暗くなります。次に開くページから反映されます。縦書きは、設定の「オフライン保存の設定」にあります。</div>
 </section>

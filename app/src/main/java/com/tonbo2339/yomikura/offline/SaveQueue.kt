@@ -44,8 +44,16 @@ class SaveQueue(private val file: File) {
         val status: Status = Status.WAITING,
         val note: String = "",
         val addedAt: Long = 0L,
+        /**
+         * 自動更新: 更新の確認で新しい話が出た保存済みの作品。話の一覧 (eps) は空で、保存を始めるとき作品のページ (目次) を読んで、
+         * 保存していない話を求める。「Wi-Fi のときだけ」の設定に関係なく、従量課金の回線では保存しない
+         */
+        val refresh: Boolean = false,
     ) {
         val key: String get() = "$site:$id"
+
+        /** この作品は、従量課金の回線では保存を始めない (設定の「Wi-Fi のときだけ」がオンか、自動更新で、「今回だけモバイル」が無いとき) */
+        fun needsUnmetered(wifiOnlySetting: Boolean): Boolean = !mobileOk && (wifiOnlySetting || refresh)
     }
 
     /**
@@ -72,6 +80,7 @@ class SaveQueue(private val file: File) {
         if (!isSafe(job.site) || !isSafe(job.id)) return@synchronized 0
         val jobs = all().toMutableList()
         val i = jobs.indexOfFirst { it.key == job.key }
+        if (job.refresh && i >= 0 && jobs[i].status.active) return@synchronized 0 // もうキューにある (その保存が新しい話も取る)
         if (i >= 0 && jobs[i].status.active) {
             val have = jobs[i].eps.map { it.ep }.toSet()
             val fresh = job.eps.filter { it.ep !in have }
@@ -81,7 +90,7 @@ class SaveQueue(private val file: File) {
         }
         if (i >= 0) jobs.removeAt(i)
         jobs.add(job.copy(status = Status.WAITING, note = ""))
-        if (write(jobs)) job.eps.size else 0
+        if (write(jobs)) (if (job.refresh) 1 else job.eps.size) else 0
     }
 
     /** 作品の状態や話を書き換える。無い作品なら何もしない。書けたら true */
@@ -91,6 +100,7 @@ class SaveQueue(private val file: File) {
         if (i < 0) return@synchronized false
         val next = change(jobs[i])
         if (next == jobs[i]) return@synchronized true // 変わらなければ書かない (回線の知らせのたびに、ファイルを書き直さない)
+        if (next.status != jobs[i].status) DevLog.eventOf(DevLog.Category.OFFLINE, "queue", "key" to key, "from" to jobs[i].status.name, "to" to next.status.name, "note" to next.note.takeIf { it.isNotEmpty() })
         jobs[i] = next
         write(jobs)
     }
@@ -193,7 +203,8 @@ class SaveQueue(private val file: File) {
                         .put("images", j.images)
                         .put("status", j.status.name)
                         .put("note", j.note)
-                        .put("addedAt", j.addedAt),
+                        .put("addedAt", j.addedAt)
+                        .put("refresh", j.refresh),
                 )
             }
             return arr.toString()
@@ -227,6 +238,7 @@ class SaveQueue(private val file: File) {
                             status = Status.valueOf(o.getString("status")),
                             note = o.optString("note"),
                             addedAt = o.optLong("addedAt"),
+                            refresh = o.optBoolean("refresh"),
                         ),
                     )
                 } catch (e: Exception) {

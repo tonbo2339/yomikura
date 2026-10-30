@@ -36,6 +36,30 @@ class AppSettings(private val ctx: Context) {
     /** 上部バー: 左端に再読み込みを出すか (既定オン) */
     fun showReload(): Boolean = settings().optBoolean("showReload", true)
 
+    /** 対応サイト以外のリンク (広告など) をタップしたとき、端末のブラウザで開くか (settings.externalLinks が "app" 以外。既定は端末のブラウザ。"app" はアプリの中で開く) */
+    fun externalLinksInBrowser(): Boolean = settings().optString("externalLinks", "browser") != "app"
+
+    /** 画面 (サイト・アプリ内ページ) の文字を、Android の「文字サイズ」の設定に合わせるか (既定オン。オフなら、その設定にかかわらず標準の大きさ) */
+    fun followSystemTextSize(): Boolean = settings().optBoolean("followSystemTextSize", true)
+
+    /** 画面に戻ったとき、WebView の描画を促す (スクロール位置を 1px 動かして戻す) か (既定オン。切り分けのため、診断情報のページの差し込みでオフにできる版がある) */
+    fun repaintOnResume(): Boolean = settings().optBoolean("repaintOnResume", true)
+
+    /** 開発用ログ ([DevLog]) を取るか (既定オフ。Edition.DEBUG_TOOLS が true の版の、設定の「デバッグ」のスイッチ。設定名 `netLog` は前の名前のまま) */
+    fun devLogOn(): Boolean = Edition.DEBUG_TOOLS && settings().optBoolean("netLog", false)
+
+    /** 開発用ログの分類 ([DevLog.Category.key]) ごとのスイッチ (既定オン。全体のスイッチがオンのときだけ効く) */
+    fun devLogCategory(key: String): Boolean = settings().optBoolean(key, true)
+
+    /** 開発用ログを残す大きさ (MB。この大きさを超えたら、古い分を 1 つ前のファイルに回す。最大で 2 倍まで使う) */
+    fun devLogMaxMb(): Int = settings().optInt("devLogMaxMb", 2).coerceIn(1, 50)
+
+    /** 開発用ログを残す日数 (これより古い行は、起動のときに捨てる) */
+    fun devLogDays(): Int = settings().optInt("devLogDays", 7).coerceIn(1, 365)
+
+    /** 手動の「更新を確認」を、サイトの休止 (SiteRest) と「前回から 10 分」の制限に関わらず行うか (既定オフ。デバッグのスイッチ)。確認画面が出たら、今までどおり画面に出して人間に通してもらう (自動では通さない) */
+    fun forceManualCheck(): Boolean = forceManualCheck(settings())
+
     /** 読み込みの進みの線を出すか (既定オン) */
     fun showLoadBar(): Boolean = settings().optBoolean("showLoadBar", true)
 
@@ -78,16 +102,26 @@ class AppSettings(private val ctx: Context) {
     /** 裏での確認の設定をまとめた文字列 (変わったらアラームを掛け直す)。 */
     fun bgSignature(): String = settings().optJSONObject("bgCheck")?.toString() ?: ""
 
-    /** 起動時の自動チェックをするか (設定が有効で、前回の確認から一定時間たっている)。 */
-    fun autoCheckDue(): Boolean {
-        val st = settings()
-        if (!st.optBoolean("autoCheck", true) || !SiteConfig.collectAnyActive(data())) return false
-        val hours = st.optInt("autoCheckHours", AUTO_DEFAULT_HOURS).coerceAtLeast(1)
-        return System.currentTimeMillis() - data().optLong("lastCollect", 0L) > hours * 3_600_000L
+    /** 起動時の自動チェックをするか (設定が有効で、前回の確認 (始めた時刻も数える。途中で止まった確認のすぐあとにも走らせない) から一定時間たっている)。 */
+    fun autoCheckDue(): Boolean = autoCheck().due
+
+    /** 起動時の自動チェックの判断と、その中身 (開発用ログに残す)。sinceMin = 前回の確認 (始めた時刻も数える) から何分か (一度も無ければ -1) */
+    data class AutoCheck(val enabled: Boolean, val anySite: Boolean, val sinceMin: Long, val hours: Int, val due: Boolean)
+
+    fun autoCheck(): AutoCheck {
+        val enabled = settings().optBoolean("autoCheck", true)
+        val anySite = SiteConfig.collectAnyActive(data())
+        val hours = settings().optInt("autoCheckHours", AUTO_DEFAULT_HOURS).coerceAtLeast(1)
+        val now = System.currentTimeMillis()
+        val last = CollectCooldown.lastOf(data())
+        return AutoCheck(enabled, anySite, if (last > 0L) (now - last) / 60_000L else -1L, hours, enabled && anySite && CollectCooldown.autoDue(last, hours, now))
     }
 
     companion object {
         private val HEX_COLOR = Regex("#[0-9a-fA-F]{6}")
+        /** forceManualCheck の判定だけ (保存データの設定から。窓口 (StoreBridge) も使う) */
+        fun forceManualCheck(settings: JSONObject): Boolean = Edition.DEBUG_TOOLS && settings.optBoolean("forceManualCheck", false)
+
         private const val AUTO_DEFAULT_HOURS = 3 // 自動チェックの最短間隔 (アクセスしすぎを避ける)
     }
 }

@@ -59,6 +59,19 @@ class OfflineStoreTest {
         assertEquals("", s.episode("narou", "n1", "9"))
     }
 
+    // 保存中に消した作品の残り (meta.json が無く挿絵だけ) は消す。meta のある作品は消さない
+    @Test
+    fun dropIfNoMetaRemovesOnlyOrphans() {
+        val s = store()
+        assertTrue(s.putImage("narou", "n1", "i0a1b2c3d.png", b64(png + ByteArray(8))))
+        assertTrue(s.putMeta("narou", "n2", """{"title":"作品"}"""))
+        s.dropIfNoMeta("narou", "n1")
+        s.dropIfNoMeta("narou", "n2")
+        assertFalse(File(File(tmp.root, "offline"), "narou/n1").exists())
+        assertEquals("""{"title":"作品"}""", s.meta("narou", "n2"))
+        s.dropIfNoMeta("narou", "../x") // 変な ID は何もしない
+    }
+
     // 圧縮する前の本文が上限を超えるときは保存しない (圧縮後の大きさではなく文字数で見る)
     @Test
     fun rejectsTooLongText() {

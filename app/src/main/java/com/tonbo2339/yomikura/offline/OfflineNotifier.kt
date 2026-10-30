@@ -42,7 +42,7 @@ class OfflineNotifier(private val ctx: Context) {
             cur == null -> "保存キューは空です"
             p.paused -> "一時停止中 ・ ${p.ok} / ${p.total} 話"
             p.waitingWifi -> "Wi-Fi を待っています ・ ${p.ok} / ${p.total} 話"
-            else -> "${p.ok} / ${p.total} 話" + if (p.title.isNotEmpty() && p.title != cur.title) " ・ ${p.title}" else ""
+            else -> "${p.ok} / ${p.total} 話" + if (p.title.isNotEmpty() && p.title != cur.title) " ・ ${epLabel(p.title)}" else ""
         }
         val b = Notices.builder(ctx, Notices.Channel.OFFLINE_PROGRESS, branded = false)
             .setSmallIcon(R.drawable.ic_download)
@@ -83,5 +83,11 @@ class OfflineNotifier(private val ctx: Context) {
         private const val REQ_PAUSE = 1
         private const val REQ_RESUME = 2
         private const val REQ_CANCEL = 3
+    }
+
+    /** 話の題名。番号だけの題名 (「４」) は「4話目」にする (「1 / 2 話 ・ ４」と出て分かりにくいため) */
+    private fun epLabel(title: String): String {
+        val n = java.text.Normalizer.normalize(title, java.text.Normalizer.Form.NFKC).trim()
+        return if (n.isNotEmpty() && n.all { it in '0'..'9' }) "${n}話目" else title
     }
 }

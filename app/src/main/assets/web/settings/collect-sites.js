@@ -6,14 +6,10 @@ function paintCollectSites(any) {
   box.innerHTML = '';
   COLLECT_SITES.filter(([id]) => collectShown(id)).forEach(([id, label]) => {
     const ok = loggedIn(id);
-    const row = el('label', 'cell');
-    const t = el('span', 'text', label);
-    t.appendChild(el('small', '', ok ? 'ログイン済み' : '未ログイン'));
-    const cb = el('input', 'switch'); cb.type = 'checkbox';
-    cb.checked = ok && (S.collectSites || {})[id] !== false; // ログインしていないサイトは確認しない (オフに見せる。選んでいた値は残す)
-    cb.disabled = !ok;
-    cb.onchange = () => { S.collectSites = Object.assign({}, S.collectSites, { [id]: cb.checked }); commit(); };
-    row.append(t, cb);
+    // ログインしていないサイトは確認しない (オフに見せる。選んでいた値は残す)
+    const row = switchRow(label, ok && (S.collectSites || {})[id] !== false,
+      (on) => { S.collectSites = Object.assign({}, S.collectSites, { [id]: on }); commit(); }, ok ? 'ログイン済み' : '未ログイン');
+    row.cb.disabled = !ok;
     row.inert = !ok; // 押せない (薄く見せる)
     box.appendChild(row);
   });

@@ -37,7 +37,7 @@ class OfflineService : Service() {
     private var web: WebView? = null
     @Volatile private var job: SaveQueue.Job? = null     // いま保存している作品
     private var ok = 0                         // その作品で保存できた話の数
-    private var total = 0                      // その作品で保存する話の数 (通知の分母)
+    private var total = 0                      // その作品で今回保存する話の数 (通知の分母。始めはキューの話数、JS の知らせで直す)
     private var title = ""                     // その作品で保存中の話の題名 (通知に出す)
     @Volatile private var userPaused = false   // 利用者が一時停止した (JS の窓口のスレッドからも読む)
     @Volatile private var cancelRequested = false // 利用者が中止した (同上)
@@ -48,6 +48,7 @@ class OfflineService : Service() {
     private var foreground = false             // 前景サービスに入ったあと (入る前に pump すると、startForeground の前に閉じてしまう)
 
     // 一定時間、進みも待ちもない (JS が止まった) ときは、その作品を打ち切る
+    private var ready: PageReady? = null // 保存中の作品のページの、読み込みの見張り
     private val stall = Runnable { finishJob(JSONObject().put("error", "応答がないので止めました").toString()) }
 
     override fun onCreate() {
@@ -114,14 +115,22 @@ class OfflineService : Service() {
      */
     private fun pump() {
         if (destroyed) return
-        if (web != null) { refreshNotice(); return }
-        val blocked = wifiOnlySetting() && net.metered
+        val wifiOnly = wifiOnlySetting()
+        if (web != null) {
+            // Wi-Fi 待ちで WebView を開いたままの作品があるとき、モバイルで保存してよい作品 (「今回だけモバイル」) が入ったら、待つ作品を順番待ちに戻して先へ進む
+            val cur = job
+            val mobileReady = queue.all().any { it.status == SaveQueue.Status.WAITING && !it.needsUnmetered(wifiOnly) }
+            if (cur == null || !waitingWifi() || !mobileReady) { refreshNotice(); return }
+            endRunner()
+            job = null
+            queue.update(cur.key) { it.copy(status = SaveQueue.Status.WAIT_WIFI, note = "") }
+        }
         // NSFW モード中は R18 の作品を保存しない (R18 のサイトへアクセスしないため)。止めた作品は、モードを切ってから「もう一度」で保存できる
         val nsfw = NHData.nsfwOn(NHData.settings(this))
         if (nsfw) queue.all().filter { it.site == "narou18" && (it.status == SaveQueue.Status.WAITING || it.status == SaveQueue.Status.WAIT_WIFI) }
             .forEach { j -> queue.update(j.key) { it.copy(status = SaveQueue.Status.STOPPED, note = Edition.R18_OFF_WHY + "保存しません") } }
         queue.all().forEach { j ->
-            val wait = blocked && !j.mobileOk
+            val wait = net.metered && j.needsUnmetered(wifiOnly)
             if (j.status == SaveQueue.Status.WAITING && wait) queue.update(j.key) { it.copy(status = SaveQueue.Status.WAIT_WIFI) }
             if (j.status == SaveQueue.Status.WAIT_WIFI && !wait) queue.update(j.key) { it.copy(status = SaveQueue.Status.WAITING) }
         }
@@ -177,12 +186,16 @@ class OfflineService : Service() {
             settings.loadsImagesAutomatically = false
             addJavascriptInterface(BgStore(this@OfflineService) { main.post { BgCheck.onDataChanged?.invoke() } }, "NHStore")
             addJavascriptInterface(Bridge(j), "NHOffline")
-            webViewClient = object : WebViewClient() {
+            val client = object : WebViewClient() {
                 private var injected = false
-                private var failed = false // 読み込みに失敗して、やり直しを待っている
+                var failed = false // 読み込みに失敗して、やり直しを待っている
                 private var tries = 0
 
+                override fun onReceivedHttpError(view: WebView, request: WebResourceRequest, response: WebResourceResponse) =
+                    NetLog.webError("offline", request, response.statusCode, response.responseHeaders)
+
                 override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
+                    NetLog.page("offline", request)
                     // 対応サイト以外のページは開かせない (保存の窓口とトークンを、保存する作品の外へ渡さないため)
                     if (request.isForMainFrame && !SiteUrls.isSupportedHost(request.url.host.orEmpty())) {
                         // WebView の別のスレッドから呼ばれるので、作品の後始末は画面のスレッドで行う
@@ -195,7 +208,15 @@ class OfflineService : Service() {
                 // 作品のページの中から別のページへは行かせない (保存の窓口を、保存する作品の外へ広げないため)
                 override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest) = true
 
+                override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) { ready?.started(url) }
+
                 override fun onPageFinished(view: WebView, url: String?) {
+                    if (ready?.finished(url) == true) return // 見張り (PageReady) がもう入れた
+                    inject(view, url)
+                }
+
+                /** 作品のページに保存の JS を入れる (onPageFinished か、完了の来ないときの見張りから) */
+                fun inject(view: WebView, url: String?) {
                     if (injected || failed) return
                     // 対応サイトの https のページにだけ入れる (別のページへ飛ばされていたら、合言葉を渡さず打ち切る)
                     val u = Uri.parse(url.orEmpty())
@@ -230,6 +251,7 @@ class OfflineService : Service() {
                     else if (web === view) finishJob(JSONObject().put("error", "ページを開けませんでした").toString())
                 }
             }
+            webViewClient = client
             // 対応サイトの URL だけ開く (javascript: などは shouldInterceptRequest を通らないので、ここで落とす)
             val url = SiteUrls.safeNavUrl(j.url)?.takeIf { SiteUrls.isSupportedHost(SiteUrls.hostOf(it)) }
             if (url == null) {
@@ -237,6 +259,8 @@ class OfflineService : Service() {
                 return@apply
             }
             loadUrl(url)
+            // 公開版は広告を止めないので、広告の枠が終わらず onPageFinished が来ないことがある。本文が読めたら入れる
+            ready = PageReady(main, { v -> if (web === v && !client.failed && !cancelRequested && !removedRequested) v.loadUrl(url) }) { v, u -> if (web === v) client.inject(v, u) }.also { it.watch(this) }
         }
     }
 
@@ -281,8 +305,12 @@ class OfflineService : Service() {
                 .forEach { j -> queue.update(j.key) { it.copy(status = SaveQueue.Status.NEEDS_CHECK, note = REST_NOTE) } }
         }
         job = null
+        // 保存中に作品を消した (キューから外した): 消したあとに書かれた挿絵などのフォルダを残さない
+        if (removedRequested && latest == null) store.dropIfNoMeta(cur.site, cur.id)
         val done = status == SaveQueue.Status.DONE
-        if (!again) notifier.done(
+        // 自動更新で新しい話が無かった (または 1 話も保存しなかった) ときは、通知しない
+        val quiet = cur.refresh && ok == 0 && done
+        if (!again && !quiet) notifier.done(
             if (done) "保存しました: ${cur.title}" else "保存を止めました: ${cur.title}",
             "$ok 話を保存しました。$note".trimEnd(),
             cur.title,
@@ -293,6 +321,8 @@ class OfflineService : Service() {
     /** 作品の JS を止めて、WebView を片付ける。止めるだけで、キューの状態は変えない */
     private fun endRunner() {
         main.removeCallbacks(stall)
+        ready?.stop()
+        ready = null
         web?.let { it.stopLoading(); it.destroy() }
         web = null
     }
@@ -310,7 +340,7 @@ class OfflineService : Service() {
     }
 
     /** 「Wi-Fi のときだけ保存する」の設定がオンで、いまの回線が従量課金か */
-    private fun waitingWifi(): Boolean = wifiOnlySetting() && net.metered && job?.mobileOk != true
+    private fun waitingWifi(): Boolean = net.metered && job?.needsUnmetered(wifiOnlySetting()) == true
 
     private fun wifiOnlySetting(): Boolean =
         NHData.settings(this).optBoolean("offlineWifiOnly", false)
@@ -387,6 +417,11 @@ class OfflineService : Service() {
         fun saveImage(site: String, id: String, url: String, referer: String, t: String?): String =
             if (authed(t) && mine(site, id)) ImageSaver.save(store, site, id, url, referer) { blocker.shouldBlock(it) } else "{}"
 
+        /** ページの中で取った挿絵 (base64) を保存する (本文と同じサイトの挿絵用。ImageSaver.saveData を参照) */
+        @JavascriptInterface
+        fun saveImageData(site: String, id: String, url: String, base64: String, t: String?): String =
+            if (authed(t) && mine(site, id)) ImageSaver.saveData(store, site, id, url, base64) { blocker.shouldBlock(it) } else "{}"
+
         @JavascriptInterface
         fun onUnmetered(): Boolean = Connectivity.unmetered(this@OfflineService)
 
@@ -413,6 +448,8 @@ class OfflineService : Service() {
                 if (job !== forJob) return@post // 前の作品の知らせ (もう終わっている)
                 val r = try { JSONObject(json) } catch (e: Exception) { return@post }
                 ok = r.optInt("ok", ok)
+                // 分母は、今回保存する話の数 (保存済みを飛ばした数。JS が目次を読んで決める)。キューに入れたときの話数のままだと「もう一度」で「3 / 50」で終わる
+                r.optInt("total", 0).takeIf { it > 0 }?.let { total = it }
                 title = r.optString("title", title)
                 // 保存中の作品がキューから外された (作品の保存を消した・キューを空にした) ら、続きを保存しない
                 job?.let { cur -> if (!queue.contains(cur.key)) removedRequested = true }

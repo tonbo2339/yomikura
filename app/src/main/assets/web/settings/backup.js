@@ -14,12 +14,7 @@ function paintExport() {
   const d = load(), box = $('exportList');
   box.innerHTML = '';
   BACKUP.forEach(([k, label]) => {
-    const row = el('label', 'cell');
-    const t = el('span', 'text', label); t.appendChild(el('small', '', BACKUP_COUNT[k](d)));
-    const cb = el('input', 'switch'); cb.type = 'checkbox'; cb.checked = exportSel.has(k);
-    cb.onchange = () => { cb.checked ? exportSel.add(k) : exportSel.delete(k); paintExport(); };
-    row.append(t, cb);
-    box.appendChild(row);
+    box.appendChild(switchRow(label, exportSel.has(k), (on) => { on ? exportSel.add(k) : exportSel.delete(k); paintExport(); }, BACKUP_COUNT[k](d)));
   });
   $('exportOne').disabled = $('exportMany').disabled = !exportSel.size || !(window.NHStore && NHStore.exportFiles);
 }

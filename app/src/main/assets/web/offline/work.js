@@ -41,7 +41,8 @@ async function work(key) {
   const g = addGroup(root, '保存した話');
   eps.forEach((e, i) => {
     const c = el('button', 'cell ep');
-    c.append(el('span', 'text ep-title', e.title || (i + 1) + '話'));
+    const t = (e.title || '').normalize('NFKC').trim();
+    c.append(el('span', 'text ep-title', !t ? (i + 1) + '話' : /^\d+$/.test(t) ? t + '話' : e.title)); // 題名が番号だけ (「２」) の作品は「2話」
     if (p && p.ep === e.ep) c.appendChild(el('span', 'state', p.done ? '読了' : Math.round(p.y * 100) + '%'));
     c.onclick = () => (location.href = here(key, e.ep));
     g.appendChild(c);

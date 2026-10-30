@@ -12,7 +12,12 @@ window.NH_UI_SAVE = function (ctx, w) {
   const body = mk('div', 'nh-save');
   ov.appendChild(body);
   (document.body || document.documentElement).appendChild(ov);
-  const back = () => { if (history.length > 1) history.back(); else location.replace(NH.LIST_URL); };
+  // 戻る: 前のページへ。前が同じ作品のページ (⋮ の保存で #nh-save を付けただけ) なら、ハッシュが外れるだけで画面が残るので、読み込み直す
+  const back = () => {
+    if (history.length <= 1) return location.replace(NH.LIST_URL);
+    window.addEventListener('hashchange', () => { if (location.hash !== '#nh-save') location.reload(); }, { once: true });
+    history.back();
+  };
   const open = () => location.replace(NH.OFFLINE_URL + '?w=' + encodeURIComponent(key));
   // 画面を作り直す。buttons: [[文字, 押したとき, 'sub' (控えめ)]]
   const screen = (title, lines, buttons, spin) => {
@@ -55,11 +60,14 @@ window.NH_UI_SAVE = function (ctx, w) {
     const go = mk('button', '', '保存する');
     const refresh = () => {
       const n = selected().length;
-      summary.textContent = n ? n + ' 話 ・ 推定 約 ' + NH.fmtBytes(n * avg) + ' (見本の 1 話から計算)' : '保存する話がありません';
+      summary.textContent = n ? n + ' 話 ・ 推定 約 ' + NH.fmtBytes(n * avg) + ' (見本の 1 話から計算)'
+        : st.mode === 'range' && st.from > st.to ? '「から」の話が「まで」より後になっています'
+        : '保存する話がありません';
       go.disabled = !n;
       go.style.opacity = n ? '' : '.4';
     };
     const seg = mk('div', 'seg');
+    seg.hidden = plan.todo.length < 2; // 保存する話が 1 つだけなら、選び方は要らない
     const modes = [['all', 'すべて'], ['range', '範囲'], ['pick', 'えらぶ']];
     const panel = mk('div', 'panel');
     const draw = () => {
@@ -96,7 +104,10 @@ window.NH_UI_SAVE = function (ctx, w) {
           c.checked = have || st.picked.has(e.ep);
           c.disabled = have;
           c.onchange = () => { if (c.checked) st.picked.add(e.ep); else st.picked.delete(e.ep); refresh(); };
-          lab.append(c, mk('span', '', (i + 1) + '. ' + (e.title || '(題名なし)') + (have ? ' (保存済み)' : '')));
+          const t = (e.title || '').trim();
+          // 題名が番号そのもの (「1」「１」…) の作品は、番号だけにする (「1. 1」と重ねない)
+          const name = !t ? '(題名なし)' : t.normalize('NFKC') === String(i + 1) ? '' : t;
+          lab.append(c, mk('span', '', (i + 1) + '話目' + (name ? '　' + name : '') + (have ? ' (保存済み)' : '')));
           box.appendChild(lab);
         });
         panel.append(tools, box);
@@ -149,12 +160,8 @@ window.NH_UI_SAVE = function (ctx, w) {
 
     // 「Wi-Fi のときだけ」の設定: 従量課金の回線なら、キューに入れる前に聞く。待つ場合は、サービスが Wi-Fi になるまで待つ
     let mobileOk = false;
-    // (暫定) キューに待ちがあるときは「今回だけモバイル」を出さない。待機中の作品と競合して今すぐ始まらないため (→ CLAUDE.md の「保存キュー」)
     if (NH.flag(d0, 'offlineWifiOnly', false) && !NH.off.onUnmetered()) {
-      const queued = NH.off.queueList().some(NH.queueActive);
-      const pick = queued
-        ? await askDialog('すでにキューに入っています', 'キューの後に入ります。今すぐ (モバイル回線) では保存できません。', [['キューに入れる', 'wait'], ['キャンセル', 'cancel']])
-        : await askDialog('Wi-Fi につながっていません', '「Wi-Fi のときだけ保存する」がオンです。', [['あとで (Wi-Fi になってから)', 'wait'], ['今すぐ (モバイル回線で)', 'mobile'], ['キャンセル', 'cancel']]);
+      const pick = await askDialog('Wi-Fi につながっていません', '「Wi-Fi のときだけ保存する」がオンです。', [['あとで (Wi-Fi になってから)', 'wait'], ['今すぐ (モバイル回線で)', 'mobile'], ['キャンセル', 'cancel']]);
       if (!pick || pick === 'cancel') return back();
       mobileOk = pick === 'mobile';
     }

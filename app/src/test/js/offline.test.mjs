@@ -9,7 +9,7 @@ const OFFLINE = fileURLToPath(new URL('../../main/assets/js/offline/offline.js',
 
 // 1 回の取り込み (fetch) の結果を決める。status を省くと 200 (本文あり)。challenge なら確認画面
 function makeEnv({ status = 200, meta = null, fetchFor = null, imageFor = null } = {}) {
-  const log = { stored: [], meta: [], rest: [], fetched: 0, urls: [], images: [], imageFor };
+  const log = { stored: [], meta: [], rest: [], fetched: 0, urls: [], images: [], data: [], imageFor };
   const NH = {
     CHALLENGE: 'challenge',
     sleep: async () => {},
@@ -32,6 +32,15 @@ function makeEnv({ status = 200, meta = null, fetchFor = null, imageFor = null }
       putEpisode: (site, id, ep, rec) => { log.stored.push(ep); return true; },
       putMeta: (site, id, meta) => { log.meta.push(meta); return true; },
       meta: () => meta,
+      // ページの中で取った挿絵 (base64) の保存。名前は saveImage と同じ決め方
+      saveImageData: (site, id, url, base64) => {
+        const bytes = Buffer.from(base64, 'base64');
+        if (bytes[0] !== 0xff) return {}; // JPEG だけ通す (本物は ImageSaver.kindOf が種類を確かめる)
+        const name = 'i' + url.length.toString(16).padStart(8, '0') + '.jpg';
+        log.images.push(name);
+        log.data.push({ url, bytes: bytes.length });
+        return { name, bytes: bytes.length };
+      },
       saveImage: (site, id, url, referer) => {
         const r = log.imageFor ? log.imageFor(url) : { status: 200, ok: true, type: 'image/jpeg', bytes: 50 };
         if (r.status === 403 || r.status === 429 || r.status === 503) return { error: 'challenge' };
@@ -53,7 +62,10 @@ function makeEnv({ status = 200, meta = null, fetchFor = null, imageFor = null }
     Math,
     console,
     document: { querySelectorAll: () => [], body: null },
-    location: { href: 'https://example.test/work/1/' },
+    location: { href: 'https://example.test/work/1/', origin: 'https://example.test' },
+    btoa: (x) => Buffer.from(x, 'binary').toString('base64'),
+    Uint8Array,
+    String,
     fetch: async (url) => {
       log.fetched++;
       log.urls.push(url);
@@ -208,7 +220,7 @@ const ok = (bytes = 100, type = 'image/jpeg') => ({ status: 200, ok: true, type,
 
 test('挿絵あり: 取って保存し、本文は保存した名前で指す', async () => {
   const { NH, log } = makeEnv({ imageFor: () => ok() });
-  const e = epWith([imgEl('/a.jpg'), imgEl('/b.jpg')]);
+  const e = epWith([imgEl('https://img.example.net/a.jpg'), imgEl('https://img.example.net/b.jpg')]);
   const rec = await NH.offlineGet(adapter, w, e, true);
   assert.equal(rec.withImages, true);
   assert.equal(rec.imgSaved, 2);
@@ -224,7 +236,7 @@ test('挿絵あり: 同じ挿絵は 1 回だけ取る。画像でない物・大
     if (url.endsWith('/html.jpg')) return ok(10, 'text/html');
     return ok(50);
   } });
-  const e = epWith([imgEl('/a.jpg'), imgEl('/a.jpg'), imgEl('/svg.svg'), imgEl('/big.jpg'), imgEl('/html.jpg')]);
+  const e = epWith([imgEl('https://img.example.net/a.jpg'), imgEl('https://img.example.net/a.jpg'), imgEl('https://img.example.net/svg.svg'), imgEl('https://img.example.net/big.jpg'), imgEl('https://img.example.net/html.jpg')]);
   const rec = await NH.offlineGet(adapter, w, e, true);
   assert.equal(rec.imgSaved, 1);
   assert.equal(log.images.length, 1);
@@ -232,12 +244,103 @@ test('挿絵あり: 同じ挿絵は 1 回だけ取る。画像でない物・大
 
 test('挿絵の取得で確認画面 (403) が出たら、話ごと止める', async () => {
   const { NH } = makeEnv({ imageFor: () => ({ status: 403, ok: false }) });
-  await assert.rejects(NH.offlineGet(adapter, w, epWith([imgEl('/a.jpg')]), true), (err) => err.message === NH.CHALLENGE);
+  await assert.rejects(NH.offlineGet(adapter, w, epWith([imgEl('https://img.example.net/a.jpg')]), true), (err) => err.message === NH.CHALLENGE);
+});
+
+// 画像へのリンク (ハーメルンの「【挿絵表示】」): アダプターの imageLinkSel で見つけて、画像として取る
+const linkEl = (href, withImg = false) => {
+  const marks = {};
+  return { nodeType: 1, tagName: 'A', childNodes: [], marks, getAttribute: (k) => (k === 'href' ? href : null), setAttribute: (k, v) => { marks[k] = v; }, querySelector: () => (withImg ? {} : null) };
+};
+const linkDoc = (imgs, links) => ({ querySelectorAll: (sel) => (sel === '.body' ? [{ nodeType: 1, tagName: 'DIV', childNodes: [{ nodeType: 3, nodeValue: '本文' }], querySelectorAll: (s) => (s === 'img' ? imgs : s === 'a.pic' ? links : []) }] : []) });
+const linkAdapter = { id: 'hameln', bodySel: '.body', imageLinkSel: 'a.pic' };
+
+test('挿絵のリンク: リンク先の画像を取り (http は https にして)、保存した印を付ける', async () => {
+  const { NH, log } = makeEnv({ imageFor: () => ok() });
+  const a = linkEl('http://syosetu.org/img/user/v2/1/2/3.jpg');
+  const e = { ep: '1', url: 'https://syosetu.org/novel/1/1.html', title: '第1話', doc: linkDoc([], [a]) };
+  const rec = await NH.offlineGet(linkAdapter, w, e, true);
+  assert.equal(rec.imgCount, 1);
+  assert.equal(rec.imgSaved, 1);
+  assert.match(a.marks['data-nh-local'], /^img\/i[0-9a-f]{8}\.jpg$/);
+  assert.equal(log.images.length, 1);
+});
+
+test('挿絵のリンク: 取るのは https だけ (http のリンクは https で取りに行く)', async () => {
+  const urls = [];
+  const { NH } = makeEnv({ imageFor: (u) => { urls.push(u); return ok(); } });
+  const e = { ep: '1', url: 'https://syosetu.org/novel/1/1.html', title: '第1話', doc: linkDoc([], [linkEl('http://syosetu.org/img/user/a.jpg'), linkEl('//syosetu.org/img/user/b.jpg')]) };
+  await NH.offlineGet(linkAdapter, w, e, true);
+  assert.deepEqual(urls, ['https://syosetu.org/img/user/a.jpg', 'https://syosetu.org/img/user/b.jpg']);
+});
+
+test('挿絵のリンク: アダプターの imageUrl で、取りに行く URL を変えられる (名前も変えた URL で決まる)', async () => {
+  const urls = [];
+  const { NH } = makeEnv({ imageFor: (u) => { urls.push(u); return ok(); } });
+  const a = { ...linkAdapter, imageUrl: (u) => u.replace('//syosetu.org/img/', '//img.syosetu.org/img/') };
+  await NH.offlineGet(a, w, { ep: '1', url: 'https://syosetu.org/novel/1/1.html', title: '第1話', doc: linkDoc([], [linkEl('http://syosetu.org/img/user/a.jpg')]) }, true);
+  assert.deepEqual(urls, ['https://img.syosetu.org/img/user/a.jpg']);
+});
+
+test('挿絵のリンク: 画像を含むリンクは、画像の方だけ数える。挿絵なしの取り込みでは取りに行かない', async () => {
+  const { NH, log } = makeEnv({ imageFor: () => ok() });
+  const e = { ep: '1', url: 'https://syosetu.org/novel/1/1.html', title: '第1話', doc: linkDoc([imgEl('https://img.example.net/a.jpg')], [linkEl('http://syosetu.org/img/user/a.jpg', true)]) };
+  const plain = await NH.offlineGet(linkAdapter, w, e, false);
+  assert.equal(plain.imgCount, 1); // 画像を含むリンクは数えない
+  assert.equal(log.images.length, 0);
+});
+
+test('挿絵のリンク: imageLinkSel を持たないサイトは、リンクを画像として扱わない', async () => {
+  const { NH, log } = makeEnv({ imageFor: () => ok() });
+  const e = { ep: '1', url: 'https://example.test/work/1/1/', title: '第1話', doc: linkDoc([], [linkEl('http://example.test/x.jpg')]) };
+  const rec = await NH.offlineGet({ id: 'narou', bodySel: '.body' }, w, e, true);
+  assert.equal(rec.imgCount, 0);
+  assert.equal(log.images.length, 0);
+});
+
+// 本文と同じサイトの挿絵: ページの fetch (WebView の通信) で取り、中身を窓口へ渡して保存する。アプリ自身の通信 (saveImage) は使わない
+const jpegBlob = (n = 4) => ({ size: n, arrayBuffer: async () => Uint8Array.from([0xff, 0xd8, 0xff, ...new Array(n - 3).fill(1)]).buffer });
+const here = (url) => (url.startsWith('https://example.test/img/') ? { status: 200, ok: true, blob: async () => jpegBlob() } : null);
+
+test('同じサイトの挿絵: ページの fetch で取って、中身を渡して保存する (アプリの通信は使わない)', async () => {
+  let native = 0;
+  const { NH, log } = makeEnv({ fetchFor: here, imageFor: () => { native++; return ok(); } });
+  const a = linkEl('http://example.test/img/user/1.jpg');
+  const rec = await NH.offlineGet({ id: 'hameln', bodySel: '.body', imageLinkSel: 'a.pic' }, w, { ep: '1', url: 'https://example.test/novel/1/1.html', title: '第1話', doc: linkDoc([], [a]) }, true);
+  assert.equal(rec.imgSaved, 1);
+  assert.deepEqual(log.urls, ['https://example.test/img/user/1.jpg']); // https で取る
+  assert.equal(log.data.length, 1);
+  assert.equal(log.data[0].bytes, 4);
+  assert.equal(native, 0);
+  assert.match(a.marks['data-nh-local'], /^img\/i[0-9a-f]{8}\.jpg$/);
+});
+
+test('同じサイトの挿絵: 確認画面 (403) なら話ごと止める。404 なら挿絵だけ飛ばす。大きすぎる物は取らない', async () => {
+  const hameln = { id: 'hameln', bodySel: '.body', imageLinkSel: 'a.pic' };
+  const epOf = (href) => ({ ep: '1', url: 'https://example.test/novel/1/1.html', title: '第1話', doc: linkDoc([], [linkEl(href)]) });
+  let r = makeEnv({ fetchFor: (u) => (u.endsWith('/403.jpg') ? { status: 403, ok: false } : null) });
+  await assert.rejects(r.NH.offlineGet(hameln, w, epOf('https://example.test/img/user/403.jpg'), true), (err) => err.message === r.NH.CHALLENGE);
+  r = makeEnv({ fetchFor: (u) => (u.endsWith('/gone.jpg') ? { status: 404, ok: false } : null) });
+  const rec = await r.NH.offlineGet(hameln, w, epOf('https://example.test/img/user/gone.jpg'), true);
+  assert.equal(rec.imgSaved, 0);
+  assert.equal(r.log.data.length, 0);
+  r = makeEnv({ fetchFor: () => ({ status: 200, ok: true, blob: async () => ({ size: 9 * 1048576, arrayBuffer: async () => { throw new Error('読まない'); } }) }) });
+  assert.equal((await r.NH.offlineGet(hameln, w, epOf('https://example.test/img/user/big.jpg'), true)).imgSaved, 0);
+});
+
+test('別のサイトの挿絵 (CORS でページから読めない物) は、アプリが取る', async () => {
+  let page = 0;
+  const { NH, log } = makeEnv({ fetchFor: () => { page++; return null; }, imageFor: () => ok() });
+  const rec = await NH.offlineGet({ id: 'narou', bodySel: '.body' }, w, epWith([imgEl('https://img1.mitemin.net/x/y.jpg')]), true);
+  assert.equal(rec.imgSaved, 1);
+  assert.equal(page, 0); // ページの fetch は使わない
+  assert.equal(log.images.length, 1);
+  assert.equal(log.data.length, 0);
 });
 
 test('挿絵が取れなくても、話は保存できる (挿絵だけ飛ばす)', async () => {
   const { NH, log } = makeEnv({ imageFor: () => ({ status: 404, ok: false }) });
-  const rec = await NH.offlineGet(adapter, w, epWith([imgEl('/gone.jpg')]), true);
+  const rec = await NH.offlineGet(adapter, w, epWith([imgEl('https://img.example.net/gone.jpg')]), true);
   assert.equal(rec.imgSaved, 0);
   assert.equal(log.images.length, 0);
   assert.ok(rec.html.includes('本文'));
@@ -245,7 +348,7 @@ test('挿絵が取れなくても、話は保存できる (挿絵だけ飛ばす
 
 test('挿絵なし: 挿絵を取りに行かない。挿絵ありの取り込みは使い回さず作り直す', async () => {
   const { NH, log } = makeEnv({ imageFor: () => ok() });
-  const e = epWith([imgEl('/a.jpg')]);
+  const e = epWith([imgEl('https://img.example.net/a.jpg')]);
   const plain = await NH.offlineGet(adapter, w, e, false);
   assert.equal(plain.withImages, false);
   assert.equal(log.images.length, 0);

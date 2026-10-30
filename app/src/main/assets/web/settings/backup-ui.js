@@ -31,13 +31,9 @@ function paintBackupKeep(opts) {
   };
   box.innerHTML = '';
   // 送るかどうか (オフのときは残す数を出さない)
-  const sw = el('label', 'cell');
-  sw.appendChild(el('span', 'text', 'バックアップする'));
-  const cb = el('input', 'switch'); cb.type = 'checkbox'; cb.checked = !!(st.enabled || {})[kind];
-  cb.onchange = () => { api.setEnabled(kind, cb.checked); repaint(); };
-  sw.appendChild(cb);
+  const sw = switchRow('バックアップする', (st.enabled || {})[kind], (on) => { api.setEnabled(kind, on); repaint(); });
   box.appendChild(sw);
-  if (!cb.checked) return;
+  if (!sw.cb.checked) return;
 
   const known = Number.isInteger(cur); // 古い版の送り先の状態には keep が無い
   const preset = BACKUP_KEEP_PRESETS.some(([n]) => n === cur);

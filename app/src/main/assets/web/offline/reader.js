@@ -1,6 +1,18 @@
 // offline.html: 本文の画面 (読む・表示の設定)
 // ---- 本文 ----
-const FONTS = { gothic: '"Noto Sans CJK JP","Noto Sans JP",sans-serif', mincho: '"Noto Serif CJK JP","Noto Serif JP",serif' };
+// 書体の表は site/fonts.js (NH_FONTS)。自分で入れたフォントの一覧は NHFonts (アプリ側)
+const READER_FONTS = [['site', '標準'], ['gothic', 'ゴシック'], ['mincho', '明朝']];
+function readerFonts() {
+  let custom = [];
+  try { custom = JSON.parse(window.NHFonts ? NHFonts.list() : '[]'); } catch (e) { /* 入れたフォントなし */ }
+  return READER_FONTS.concat(custom.map((f) => [NH_FONTS.valueOf(f.id), f.name]));
+}
+// 入れたフォントの @font-face (読む画面の中で 1 つだけ。話を移るたびに作り直さない)
+function setFontFace(font) {
+  let st = document.getElementById('nhFontFace');
+  if (!st) { st = el('style'); st.id = 'nhFontFace'; document.head.appendChild(st); }
+  st.textContent = NH_FONTS.face(font);
+}
 async function reader(key, ep) {
   const { site, id } = NH.splitKey(key);
   let meta, rec, i;
@@ -39,7 +51,8 @@ async function reader(key, ep) {
   article.classList.toggle('no-img', !NH.flagOf(S, 'offlineImages')); // 挿絵の表示 (既定は表示)
   const h = el('h2', '', rec.title);
   const fs = 17 * ((S.size || 100) / 100);
-  const css = 'font-size:' + fs + 'px;line-height:' + (S.lh || 1.9) + ';' + (FONTS[S.font] ? 'font-family:' + FONTS[S.font] + ';' : '');
+  setFontFace(S.font);
+  const css = 'font-size:' + fs + 'px;line-height:' + (S.lh || 1.9) + ';' + (NH_FONTS.family(S.font) ? 'font-family:' + NH_FONTS.family(S.font) + ';' : '');
   let scroller;
   if (vertical) {
     scroller = el('div'); scroller.id = 'vwrap';
@@ -51,6 +64,7 @@ async function reader(key, ep) {
     page.append(h, article);
     root.append(top, page, bottom);
   }
+  RICH.apply(article); // 書式 (色・>>N の吹き出し。richtext.js)。色を読むので、画面に付けたあとで
 
   // 読書位置: 本文の進み具合 (0〜1)。縦書きは右から左へ進む (scrollLeft は 0 から負へ)
   // 1 画面に収まる短い話は、動かせないので「最後まで見た」(max が 0) として 1 にする
@@ -64,7 +78,9 @@ async function reader(key, ep) {
     if (!armed) return;
     const m = metrics();
     const y = ratio(m);
-    pos.textContent = (i + 1) + ' / ' + eps.length + ' ・ ' + Math.round(y * 100) + '%';
+    // 一部の話だけ保存した作品では、順番は保存した中でのもの (2 話目しか無いのに「1 / 2」と出て紛らわしいので「保存 1 / 2」)
+    const partial = !!meta.total && eps.length < meta.total;
+    pos.textContent = (partial ? '保存 ' : '') + (i + 1) + ' / ' + eps.length + ' ・ ' + Math.round(y * 100) + '%';
     NH.update((d) => {
       d.progress = d.progress || {};
       const prev = d.progress[key]; // 同じ話なら、カクヨムの目次の番号 (no) を引き継ぐ (サイトで読んだときに控えたもの)
@@ -75,15 +91,22 @@ async function reader(key, ep) {
   const target = vertical ? scroller : window;
   // 進む向きへ動かすと上部バーを隠し、戻すと出す (サイトのページと同じ)。進む = 縦書きは左へ、横書きは下へ
   let lastPos = metrics().pos, acc = 0, barHidden = false, mute = 0;
-  const setBar = (h) => { barHidden = h; acc = 0; mute = Date.now() + 450; NH.off.readerBar(h); }; // バーの出入りで画面の広さが変わり、スクロールの知らせが出るので、しばらく無視する
+  const setBar = (h) => { barHidden = h; acc = 0; mute = Date.now() + 450; document.body.classList.toggle('bars-hidden', h); NH.off.readerBar(h); }; // バーの出入りで画面の広さが変わり、スクロールの知らせが出るので、しばらく無視する
   const barScroll = () => {
-    const p = metrics().pos, dy = p - lastPos; lastPos = p;
+    const m = metrics(), p = m.pos, dy = p - lastPos; lastPos = p;
     if (Date.now() < mute) return;
     if (p <= 0) { acc = 0; if (barHidden) setBar(false); return; }
+    if (m.max > 8 && m.max - p < 6) { // 最後まで来たら出す (前後の話へ行けるように)。バーが出ると画面が縮むので、出し終えてから、もう一度最後まで進める
+      acc = 0;
+      if (barHidden) { setBar(false); setTimeout(() => seek(1), 520); }
+      return;
+    }
     if (dy > 0) { acc = Math.max(0, acc) + dy; if (!barHidden && acc > 24 && p > 56) setBar(true); }
     else if (dy < 0) { acc = Math.min(0, acc) + dy; if (barHidden && acc < -16) setBar(false); }
   };
   target.addEventListener('scroll', () => { barScroll(); clearTimeout(timer); timer = setTimeout(write, 600); }, { passive: true });
+  // 本文のタップで、バーを出し入れする (リンク・ボタンのタップは除く)
+  target.addEventListener('click', (e) => { if (!e.target.closest('a,button,.rbar')) setBar(!barHidden); });
   window.addEventListener('pagehide', write);
   document.addEventListener('visibilitychange', () => { if (document.hidden) write(); });
   ['touchstart', 'wheel'].forEach((ev) => target.addEventListener(ev, () => { armed = true; }, { passive: true }));
@@ -114,13 +137,22 @@ async function reader(key, ep) {
     sw.onchange = () => setSetting('vertical', sw.checked);
     vr.append(el('span', 'lbl', '縦書き'), sw);
     const fr = el('div', 'setrow');
-    const seg = el('div', 'seg');
-    [['site', '標準'], ['gothic', 'ゴシック'], ['mincho', '明朝']].forEach(([v, t]) => {
-      const b = el('button', (S.font || 'site') === v ? 'on' : '', t);
-      b.onclick = () => { setSetting('font', v); seg.querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b)); };
-      seg.appendChild(b);
-    });
-    fr.append(el('span', 'lbl', '書体'), seg);
+    const fonts = readerFonts();
+    if (fonts.length <= READER_FONTS.length) {
+      const seg = el('div', 'seg');
+      fonts.forEach(([v, t]) => {
+        const b = el('button', (S.font || 'site') === v ? 'on' : '', t);
+        b.onclick = () => { setSetting('font', v); seg.querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b)); };
+        seg.appendChild(b);
+      });
+      fr.append(el('span', 'lbl', '書体'), seg);
+    } else {
+      // 入れたフォントがあるときは、並べきれないので選ぶ形にする
+      const sel = el('select', 'picker');
+      fonts.forEach(([v, t]) => { const o = el('option', '', t); o.value = v; o.selected = (S.font || 'site') === v; sel.appendChild(o); });
+      sel.onchange = () => setSetting('font', sel.value);
+      fr.append(el('span', 'lbl', '書体'), sel);
+    }
     const ir = el('label', 'setrow');
     const isw = el('input', 'switch'); isw.type = 'checkbox'; isw.checked = NH.flagOf(S, 'offlineImages');
     isw.onchange = () => setSetting('offlineImages', isw.checked);

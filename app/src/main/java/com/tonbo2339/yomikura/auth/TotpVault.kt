@@ -56,9 +56,10 @@ class TotpVault(ctx: Context) {
         }
     }
 
-    private fun aesKey(): SecretKey {
+    // 保管庫は使う側ごとに作られる (窓口など) ので、初めて鍵を作るときに 2 か所が重なると、あとから作った鍵が先の鍵を上書きして、先に暗号化した鍵が読めなくなる。作るところだけ 1 つずつにする
+    private fun aesKey(): SecretKey = synchronized(LOCK) {
         val ks = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
-        (ks.getKey(ALIAS, null) as? SecretKey)?.let { return it }
+        (ks.getKey(ALIAS, null) as? SecretKey)?.let { return@synchronized it }
         val gen = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore")
         gen.init(
             KeyGenParameterSpec.Builder(ALIAS, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
@@ -67,10 +68,11 @@ class TotpVault(ctx: Context) {
                 .setKeySize(256)
                 .build(),
         )
-        return gen.generateKey()
+        gen.generateKey()
     }
 
     private companion object {
+        val LOCK = Any()
         const val PREFS = "nh_totp"
         const val ENTRY = "secret"
         const val ALIAS = "nh_totp_key"

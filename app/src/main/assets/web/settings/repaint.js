@@ -9,13 +9,15 @@ function paintTop() {
   const on = SITES.filter(([k]) => siteOn(k));
   $('v-start').textContent = S.start === 'list' ? 'リスト' : S.start === 'last' ? '最後のページ' : nameOf(START, S.start) + '・' + nameOf(SITES, startSiteOf());
   const collectOn = NH.collectAny({ settings: S });
-  $('v-auto').textContent = !collectOn ? '確認しない' : !activeAny() ? 'ログインが必要' : S.autoCheck ? '起動時' : 'オフ';
+  $('v-auto').textContent = !collectOn ? '確認しない' : !activeAny() ? 'ログインが必要' : S.autoCheck ? '起動時に確認' : '手動のみ';
   $('v-bg').textContent = bgConf().on ? 'オン' : 'オフ';
+  $('v-offlineset').textContent = NH.flagOf(S, 'offlineWifiOnly', false) ? 'Wi-Fi のみ' : '';
+  $('v-links').textContent = S.externalLinks === 'app' ? 'アプリの中' : 'ブラウザ';
   $('v-bar').textContent = NH.flagOf(S, 'hideBarOnScroll') ? 'スクロールで隠す' : '常に表示';
   $('v-list').textContent = S.pruneDone ? '読了を ' + S.pruneDays + ' 日で削除' : '読了を残す';
   const folded = ['foldComments', 'foldRecommend', 'foldLinks', 'foldReactions'].concat(EXTRA_FOLD).filter((k) => NH.flagOf(S, k)).length;
   $('v-fold').textContent = folded ? folded + ' 種類を畳む' : '畳まない';
-  $('v-text').textContent = nameOf(FONT_NAMES, S.font) + '・' + S.size + '%';
+  $('v-text').textContent = fontLabel(S.font) + '・' + S.size + '%';
   $('v-sites').textContent = on.length + ' サイト';
   const hn = (load().history || []).length;
   $('v-history').textContent = !NH.flagOf(S, 'history') ? '記録しない' : hn ? hn + ' 作品' : '';
@@ -48,6 +50,7 @@ function paintStart() {
   $('startSiteLabel').hidden = $('startSiteList').hidden = S.start === 'list' || S.start === 'last';
   pickList($('startSiteList'), on, startSiteOf(), (k) => { S.startSite = k; commit(); });
 }
+function paintLinks() { pickList($('linkModeList'), LINK_MODES, S.externalLinks === 'app' ? 'app' : 'browser', (k) => { S.externalLinks = k; commit(); }); }
 function paintAuto() {
   paintCollectSites(NH.collectAny({ settings: S }));
   $('autoHoursBox').hidden = !S.autoCheck;
@@ -86,25 +89,27 @@ function paintHistoryPage() {
   pickList($('historyDaysList'), HISTORY_DAYS, S.historyDays, (n) => setHistoryLimit('historyDays', n));
 }
 function paintTextPage() {
-  pickList($('fontList'), FONT_NAMES, S.font, (k) => { S.font = k; commit(); });
+  paintFontFace();
+  pickList($('fontList'), fontNames(), S.font, (k) => { S.font = k; commit(); });
+  paintFontManage();
   $('size').value = S.size;
   $('lh').value = lhPos();
   $('lh').setAttribute('aria-valuetext', S.lh ? S.lh.toFixed(1) : '標準');
   $('sizeV').textContent = S.size + '%';
   $('lhV').textContent = S.lh ? S.lh.toFixed(1) : '標準';
   const p = $('preview');
-  p.style.fontFamily = FONTS[S.font];
+  p.style.fontFamily = NH_FONTS.family(S.font) || 'inherit';
   p.style.fontSize = (16 * S.size / 100) + 'px';
   p.style.lineHeight = S.lh || 1.8;
 }
 function paintSitesPage() {
   $$('#siteList input').forEach((cb) => (cb.checked = siteOn(cb.dataset.k)));
   $$('#siteList [data-r18]').forEach((row) => (row.hidden = !r18Usable()));
-  $('r18Tip').hidden = !r18Usable();
+  $('r18Tip').hidden = !r18Usable() || (S.r18Mode || 'menu') !== 'menu'; // 「なろう」を 2 回タップする出し方のときだけ (タブで出すときは、普通に押せる)
 }
 // 画面ごとの描き方 (rank-<サイト> は paintPage で)
 const PAGE_PAINT = {
-  start: paintStart, auto: paintAuto, bg: paintBg, list: paintListPage, bar: paintBarPage, history: paintHistoryPage, text: paintTextPage,
+  start: paintStart, links: paintLinks, auto: paintAuto, bg: paintBg, list: paintListPage, bar: paintBarPage, history: paintHistoryPage, text: paintTextPage,
   sites: paintSitesPage, icon: paintIcons, mute: paintMute, ranking: paintRanking, accounts: paintAccounts, export: paintExport, update: paintGithub, reading: paintReading,
 };
 function paintPage(id) {
@@ -114,6 +119,7 @@ function paintPage(id) {
 }
 function paint(full) {
   paintToggles(S);
+  applySiteColors(S);
   paintTop();
   paintPage(curPage);
   if (full && curPage === 'main') paintMainHeavy();
@@ -131,3 +137,4 @@ if (directPage && TITLES[directPage] && !(history.state && history.state.page)) 
 show((history.state && history.state.page) || 'main'); // テーマを変えると画面が読み込み直されるので、開いていた詳細画面に戻す (show が描く)
 // 読み込みのあとに読み直したときの知らせ
 showFlash();
+if (NH.unreadable) snack('保存データを読めませんでした。消さないよう、書き込みを止めています。下の「バックアップ」の「読み込む」で、バックアップから復元できます');

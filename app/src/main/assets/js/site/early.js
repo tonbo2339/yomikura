@@ -1,6 +1,6 @@
 // ページ描画前に入れる CSS。ロジックは含めない。
 //  - 読書ページのヘッダー / フッターの非表示 (ほかのページでは出す)
-//  - 設定画面で選んだ本文のフォント / 文字サイズ / 行間
+//  - 設定画面で選んだ本文のフォント (自分で入れたフォントは @font-face で読む。書体の表は fonts.js) / 文字サイズ / 行間
 (function () {
   const h = location.hostname;
   // 保存データの窓口に添える合言葉 (core/base.js と同じ。アプリがこのスクリプトの前に入れる)
@@ -37,24 +37,25 @@
   }
 
   // 本文の文字サイズ: 「100%」がどのサイトでも端末の標準の文字の大きさ (font-size: medium) になるよう、
-  // サイトの本文の元の大きさとの比 (なろう系は本文が小さめ) を掛けて zoom する。
-  // 比はページが読めてから測り (fitSize)、この origin の localStorage に控えて次のページでは描画前から使う。
+  // サイトの本文の元の大きさとの比 (なろう系は本文が小さめ) を掛けて大きくする。方法は 2 つ (どのサイトも同じ処理):
+  //  - font-size (はじめはこちら): zoom と違い、本文の中の位置の計算 (ハーメルンの「>>233」を押している間の吹き出しなど、サイトの JS が座標を出す物) をずらさない
+  //  - zoom: サイトが本文の囲みの文字の大きさを !important で決めている (なろうの「表示調整」) と font-size は効かない。そのときは、サイトの大きさに重ねて効く zoom にする
+  // font-size が効いたかは、ページが読めてから測る (fitSize)。効かなければ zoom に切り替え、控えて、次のページから最初から使う。
+  // 比もページが読めてから測り、この origin の localStorage に控えて次のページでは描画前から使う。
   // 測るのは本文の囲みの親 (なろうの「表示調整」など、サイト側で本文に付けた大きさはそのまま活かす)
-  let size = null; // {want: 設定の倍率, ratio: 控えてあった比}
+  let size = null; // {want: 設定の倍率, ratio: 控えてあった比, mode: 'font' | 'zoom'}
   const SIZE_KEY = 'nh-size-ratio';
+  const MODE_KEY = 'nh-size-mode';
   const sizeCss = () => {
     const z = Math.round(size.want * size.ratio * 1000) / 1000;
-    return z === 1 ? '' : body.box + '{zoom:' + z + '}';
+    if (z === 1) return '';
+    return body.box + (size.mode === 'zoom' ? '{zoom:' + z + '}' : '{font-size:calc(1em * ' + z + ')}');
   };
 
   // 設定 (NHStore が document-start で使えない場合は何もしない)
   try {
     const raw = window.NHStore && window.NHStore.get(T);
     const s = (raw && JSON.parse(raw).settings) || {};
-    const FONTS = {
-      gothic: '"Noto Sans CJK JP","Noto Sans JP",sans-serif',
-      mincho: '"Noto Serif CJK JP","Noto Serif JP",serif',
-    };
     if (fold) {
       const hide = (sel) => sel.split(',').map((x) => x + ':not([data-nh-open])').join(',') + '{display:none!important}';
       // 「開き具合を覚える」(foldRemember、既定オン) のとき、前に開いたままにした欄は畳まない
@@ -62,10 +63,14 @@
       (window.NH_FOLDS || []).forEach((f) => { if (fold[f.key] && s[f.flag] !== false && !kept[f.key]) css += hide(fold[f.key]); });
     }
     if (body) {
-      let ratio = 1;
-      try { ratio = Number(localStorage.getItem(SIZE_KEY)) || 1; } catch (e) { /* 使えない */ }
-      size = { want: (s.size || 100) / 100, ratio };
-      if (FONTS[s.font]) css += body.text + '{font-family:' + FONTS[s.font] + '!important}';
+      let ratio = 1, mode = 'font';
+      try {
+        ratio = Number(localStorage.getItem(SIZE_KEY)) || 1;
+        if (localStorage.getItem(MODE_KEY) === 'zoom') mode = 'zoom';
+      } catch (e) { /* 使えない */ }
+      size = { want: (s.size || 100) / 100, ratio, mode };
+      const F = window.NH_FONTS; // 書体の表 (site/fonts.js)
+      if (F && F.family(s.font)) css += F.face(s.font, true) + body.text + '{font-family:' + F.family(s.font) + '!important}';
       if (s.lh) css += body.text + '{line-height:' + s.lh + '!important}';
     }
   } catch (e) { /* 設定なし */ }
@@ -78,7 +83,7 @@
     (document.head || document.documentElement).appendChild(el);
     return el;
   };
-  // 本文の元の大きさを測って比を控え、控えと違っていれば (初めてのサイト・サイト側の変更) zoom を直す
+  // 本文の元の大きさを測って比を控え、控えと違っていれば (初めてのサイト・サイト側の変更) 直す。font-size が効いていなければ zoom に切り替える
   const fitSize = () => {
     const box = document.querySelector(body.box);
     if (!box || !box.parentElement || !document.body) return;
@@ -91,9 +96,29 @@
     if (!std || !base) return;
     const ratio = Math.round((std / base) * 1000) / 1000;
     try { localStorage.setItem(SIZE_KEY, String(ratio)); } catch (e) { /* 使えない */ }
-    if (ratio === size.ratio) return;
-    size.ratio = ratio;
-    (document.getElementById('nh-size') || add('', 'nh-size')).textContent = sizeCss();
+    if (ratio !== size.ratio) { size.ratio = ratio; applySize(); }
+    checkMode(box);
+    watchMode(box);
+  };
+  const applySize = () => { (document.getElementById('nh-size') || add('', 'nh-size')).textContent = sizeCss(); };
+  // font-size が効いているか: 本文の囲みの文字の大きさが、親の大きさ × 倍率になっているか (2% まで許す)。効いていなければ zoom にする
+  const checkMode = (box) => {
+    const z = size.want * size.ratio;
+    if (size.mode !== 'font' || z === 1 || !box.parentElement) return;
+    const base = parseFloat(getComputedStyle(box.parentElement).fontSize), got = parseFloat(getComputedStyle(box).fontSize), want = base * z;
+    if (!base || !got || Math.abs(got - want) <= want * 0.02) return;
+    size.mode = 'zoom';
+    try { localStorage.setItem(MODE_KEY, 'zoom'); } catch (e) { /* 使えない */ }
+    applySize();
+  };
+  // サイトの JS が、ページが読めたあとで本文の囲みに大きさを付ける (なろうの「表示調整」は style 属性に font-size: 100%) ので、
+  // 読み込みが終わったとき・囲みの style / class が変わったときにも確かめる
+  let watching = false;
+  const watchMode = (box) => {
+    if (watching) return;
+    watching = true;
+    window.addEventListener('load', () => checkMode(box));
+    if (typeof MutationObserver === 'function') new MutationObserver(() => checkMode(box)).observe(box, { attributes: true, attributeFilter: ['style', 'class'] });
   };
   // カクヨムは話から目次へ、ページを読み込み直さずに移る (Next.js)。history の書き換えと戻る操作のたびに切り替える
   const putBars = () => {

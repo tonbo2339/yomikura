@@ -27,7 +27,7 @@ window.NH_UI_NEXT = function (ctx) {
     } else if (seq) {
       b.append(mk('span', 't1', '読み切りました'), mk('span', 't2', 'リストの並びの最後です'), mk('span', 't3', 'リストに戻ります'));
     } else {
-      b.append(mk('span', 't1', '読み切りました'), mk('span', 't2', 'これで最後です'), mk('span', 't3', 'リストに戻ります'));
+      b.append(mk('span', 't1', '読み切りました'), mk('span', 't2', 'リストに次の作品はありません'), mk('span', 't3', 'リストに戻ります'));
     }
     const markRead = () => NH.update((dd) => { const x = NH.findItem(dd, cur); if (x) NH.setDone(x, true); });
     b.addEventListener('click', () => {

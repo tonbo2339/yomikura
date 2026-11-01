@@ -9,7 +9,7 @@ import org.json.JSONObject
 object DiagReport {
     /** 保存データの要約に載せてよい設定 (数・真偽・短い選択肢だけ)。成人向けに関わる設定やタブの名前などは載せない */
     private val SETTING_KEYS = listOf(
-        "theme", "font", "size", "lh", "start", "autoCheck", "autoCheckHours", "listArrows", "listSwipe", "repaintOnResume", "forceManualCheck", "netLog", "dimRead",
+        "theme", "font", "readBg", "size", "lh", "start", "autoCheck", "autoCheckHours", "listArrows", "listSwipe", "repaintOnResume", "forceManualCheck", "netLog", "dimRead",
         "pruneDone", "pruneDays", "historyMax", "historyDays",
     )
 

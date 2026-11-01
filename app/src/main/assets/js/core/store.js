@@ -12,7 +12,7 @@ window.NH.define('store', function (NH, T) { // T = 保存データの窓口に�
   //              sub: R18 (site narou18) のサイト noc | mnlt | mid (NH.r18Sub。分かったときだけ。history とオフラインの meta にも)
   //   logins:    {narou, hameln, kakuyomu: bool}   各サイトのログインの印 (Cookie) の有無。Kotlin が写す (NH.collectActive)
   //   progress:  {key: {url, ep, no, y, done, next, at}}   話ごとの読書位置。no = 何話目か (カクヨムなど話 ID が連番でないサイトだけ。目次の並びから数える。NH.epNumber)
-  //   settings:  {theme, font, size, lh, vertical, offlineWifiOnly, dimRead, start, startSite, autoCheck, autoCheckHours, sites:{...}, history, rankings:{site:{url,label,spec|custom}}, statusFilter,
+  //   settings:  {theme, font, readBg, size, lh, vertical, offlineWifiOnly, dimRead, start, startSite, autoCheck, autoCheckHours, sites:{...}, history, rankings:{site:{url,label,spec|custom}}, statusFilter,
   //               historyMax (履歴に残す作品数。未設定は 300、0 = 無制限) / historyDays (履歴に残す日数。未設定・0 = 無期限),
   //               bgCheck (裏での確認、BgCheck.kt), bookmarkCats:{narou|narou18: [カテゴリ番号]}, r18Mode, siteNames, siteColors, tabsOneRow, tabsTinted,
   //               uiSize (アプリ内ページの操作部分の大きさ。compact | standard | large。未設定は standard),

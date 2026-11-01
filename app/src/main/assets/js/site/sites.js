@@ -5,7 +5,8 @@
 //  bars   = ヘッダー・フッター (とその分の余白)。読書ページ (episode) のときだけ隠し、ほかのページ (トップ・一覧・作品の目次・作者ページ) では出す。
 //           書き方は hide と同じ。ページ内の移動 (カクヨム) でも、移るたびに early.js が切り替える
 //  episode = 読書ページ (話ページ) の pathname
-//  body   = 本文。box = 文字サイズの対象、text = フォント・行間の対象
+//  body   = 本文。box = 文字サイズの対象、text = フォント・行間・文字色 (背景色。site/readbg.js) の対象。ページの地・白い面・その上の文字は、セレクターを持たず ui/ui-readbg.js が判定する
+//  still  = 終わらない CSS アニメーションを止める要素 (セレクター。画面の外の見えないスピナーなど。WebView が一色のまま残る件の対処)
 //  fold   = 話ページの下で普段は畳む欄 (開閉のボタンは ui.js)。comments = 感想・レビュー、recommend = おすすめ、links = 作者ページ・共有など、
 //           reactions = ポイント・リアクション (なろうのポイント ★・顔文字)
 //           (空文字なら、そのサイトには無い / 畳む必要が無い)。設定 foldComments / foldRecommend / foldLinks / foldReactions で切り替わる
@@ -38,6 +39,9 @@ window.NH_SITES = {
       '[class*="CompactMediaGlobalHeader_"]{display:none!important}' +
       // 固定ヘッダーの高さ分に取ってあった上の余白を詰める (話ページは本文の枠 #contentMain が 50px あけている)
       '[class*="DefaultTemplate_fixed"],[class*="SubHeaderSpacer_"],#page-works-episodes-episode #contentMain{padding-top:0!important}',
+    // 画面の外にあるスピナー (サイドパネルの中。無限に回る) のアニメーションを止める。回り続けると、画面を消して点け直したときに
+    // WebView が一色のまま描き直さないことがある (DEV-NOTES の「一色 (真っ黒) になる件」)
+    still: '.ui-loading-large-beige',
     episode: /^\/works\/\d+\/episodes\/\d+/,
     body: { box: '.widget-episodeBody', text: '.widget-episodeBody,.widget-episodeBody p' },
     // 最新話 (最終話) は下に「関連小説」(#episodeFooter-related)・作者・作品情報・アプリ宣伝 (#episodeFooter-readWithApp。常に隠す) が増える。

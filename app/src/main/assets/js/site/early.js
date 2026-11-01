@@ -7,6 +7,7 @@
   const T = window.__nhT || '';
   try { delete window.__nhT; } catch (e) { /* 消せなくても動く */ }
   let css = '';
+  let readBgCss = ''; // 読書ページの背景色 (bars と同じく、読書ページだけに効かせる別の <style id="nh-readbg">)
   // ページの下の欄を畳む対象 (sites.js の fold。ui.js が開閉のボタンを置く)。開いているものは data-nh-open が付く
   let foldSite = ''; // 開き具合を覚えるときのサイト名 (settings.foldOpen[サイト][欄])
   let fold = null; // {comments, recommend, links, reactions: セレクター}
@@ -18,6 +19,7 @@
   const site = SITES[siteKey];
   if (site) {
     css = site.hide;
+    if (site.still) css += site.still + ',' + site.still + ' *{animation:none!important}';
     body = site.body;
     fold = site.fold;
     foldSite = siteKey;
@@ -72,10 +74,11 @@
       const F = window.NH_FONTS; // 書体の表 (site/fonts.js)
       if (F && F.family(s.font)) css += F.face(s.font, true) + body.text + '{font-family:' + F.family(s.font) + '!important}';
       if (s.lh) css += body.text + '{line-height:' + s.lh + '!important}';
+      if (window.NH_READBG) readBgCss = window.NH_READBG.css(s.readBg, body); // 読書ページの背景色 (site/readbg.js)
     }
   } catch (e) { /* 設定なし */ }
 
-  if (!css && !bars && !cover && !size) return;
+  if (!css && !bars && !readBgCss && !cover && !size) return;
   const add = (text, id) => {
     const el = document.createElement('style');
     if (id) el.id = id;
@@ -120,10 +123,10 @@
     window.addEventListener('load', () => checkMode(box));
     if (typeof MutationObserver === 'function') new MutationObserver(() => checkMode(box)).observe(box, { attributes: true, attributeFilter: ['style', 'class'] });
   };
-  // カクヨムは話から目次へ、ページを読み込み直さずに移る (Next.js)。history の書き換えと戻る操作のたびに切り替える
-  const putBars = () => {
-    const el = add(bars, 'nh-bars');
-    const sync = () => { el.media = isReading() ? 'all' : 'not all'; };
+  // カクヨムは話から目次へ、ページを読み込み直さずに移る (Next.js)。history の書き換えと戻る操作のたびに切り替える。onSync(読書ページか) は切り替えのたびに呼ぶ
+  const putReadingOnly = (text, id, onSync) => {
+    const el = add(text, id);
+    const sync = () => { const on = isReading(); el.media = on ? 'all' : 'not all'; if (onSync) onSync(on); };
     sync();
     ['pushState', 'replaceState'].forEach((m) => {
       const orig = history[m];
@@ -134,7 +137,17 @@
   };
   const put = () => {
     if (css) add(css);
-    if (bars) putBars();
+    if (bars) putReadingOnly(bars, 'nh-bars');
+    if (readBgCss) {
+      // アプリの自動ダークモード (ダークテーマ) は、選んだ色も暗くしてしまう。「ライトとダークの両方に対応」と宣言したページは、変換されない
+      // (読書ページにいる間だけ。meta は読書ページを離れたら外す)
+      let meta = null;
+      putReadingOnly(readBgCss, 'nh-readbg', (on) => {
+        if (on && !meta) { meta = document.createElement('meta'); meta.name = 'color-scheme'; meta.content = 'light dark'; (document.head || document.documentElement).appendChild(meta); }
+        else if (!on && meta) { meta.remove(); meta = null; }
+        document.documentElement.toggleAttribute('data-nh-readbg', on); // ui/ui-readbg.js が、読書ページかどうかをここで見る
+      });
+    }
     if (size) {
       const sc = sizeCss();
       if (sc) add(sc, 'nh-size');

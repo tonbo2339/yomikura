@@ -21,7 +21,7 @@
 - **アプリのアイコン**: 積んだ本の絵を、12 種から選べます。
 - **ほかのアプリから**: 共有した URL やリンクを開くと、作品を「後で読む」に追加できます。
 
-<table><tr><td align="center"><img src="docs/images/text.png" width="220" alt="本文の文字の設定"><br><sub>本文の文字</sub></td><td align="center"><img src="docs/images/fold.png" width="220" alt="話ページの下の欄の設定"><br><sub>話ページの下の欄</sub></td><td align="center"><img src="docs/images/mute.png" width="220" alt="ミュートの設定"><br><sub>ミュート</sub></td></tr></table>
+<table><tr><td align="center"><img src="docs/images/text.png" width="220" alt="本文の見た目の設定"><br><sub>本文の見た目</sub></td><td align="center"><img src="docs/images/fold.png" width="220" alt="話ページの下の欄の設定"><br><sub>話ページの下の欄</sub></td><td align="center"><img src="docs/images/mute.png" width="220" alt="ミュートの設定"><br><sub>ミュート</sub></td></tr></table>
 
 ## インストール
 

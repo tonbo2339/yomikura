@@ -10,7 +10,7 @@ import java.nio.file.StandardCopyOption
 import java.security.SecureRandom
 
 /**
- * 自分で入れたフォント (設定の「本文の文字」)。アプリの中のフォルダ [dir] に、ファイル `<id>.<拡張子>` と一覧 `index.json` ([{id, name, ext}]) を置く。
+ * 自分で入れたフォント (設定の「本文の見た目」)。アプリの中のフォルダ [dir] に、ファイル `<id>.<拡張子>` と一覧 `index.json` ([{id, name, ext}]) を置く。
  * 一覧と名前の持ち主はここ (設定の font には `custom:<id>` だけを置く)。Android には依存しない。
  * name = 一覧に出す名前 (初めはフォントの中の名前。利用者が変えられる)、family = フォントの中の英語の名前 (内部用。変えない。読めなければ空)。
  * 読む・追加・削除は、別のスレッドから同時に来ても壊れないよう [lock] で守る。

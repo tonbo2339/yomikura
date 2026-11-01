@@ -132,6 +132,9 @@
   // ---- ページの下の欄 (感想・おすすめなど) を畳む (ui-fold.js) ----
   NH_UI_FOLD({ adapter, mk });
 
+  // ---- 読書ページの背景色の仕上げ: 白い面と、その上の文字を合わせる (ui-readbg.js) ----
+  NH_UI_READBG();
+
   // ---- 外部のリンクから開いた作品を「後で読む」に追加 (LinkOpener.open が #nh-later[-back] を付けて開く) ----
   // -back は追加したらすぐ、読んでいた作品に戻る (このページは読んでいないので閲覧履歴にも残さない)
   const laterM = cur && location.hash.match(/^#nh-later(-back)?$/);

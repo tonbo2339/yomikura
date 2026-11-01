@@ -1,7 +1,8 @@
 {
   "_about": "注入・読み込みする JS の一覧と順番の、唯一の定義。Kotlin (AppAssets) と HTML (<!--#scripts 名前-->) とテストがここから読む。'@名前' はそのグループを展開する。JS の追加・順番の変更はここだけを直す。",
   "fonts": ["site/fonts.js"],
-  "early": ["@fonts", "site/sites.js", "site/early.js"],
+  "readbg": ["site/readbg.js"],
+  "early": ["@fonts", "@readbg", "site/sites.js", "site/early.js"],
   "core": [
     "core/base.js",
     "core/store.js",
@@ -39,6 +40,7 @@
     "ui/ui-list-sheet.js",
     "ui/ui-list.js",
     "ui/ui-fold.js",
+    "ui/ui-readbg.js",
     "ui/ui-work.js",
     "ui/ui-readpos.js",
     "ui/ui-next.js",

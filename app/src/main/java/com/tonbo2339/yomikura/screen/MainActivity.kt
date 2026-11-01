@@ -65,7 +65,7 @@ class MainActivity : AppCompatActivity(), BridgeHost {
     private val collect by lazy { CollectController(this, cfg, hostFilter, collectUi) }
     /** バックアップのファイルへの書き出し・読み込み (設定の「データの管理」)。registerForActivityResult のため、onCreate より前に作る */
     private val backupFiles = BackupFiles(this, ::evalJs, ::emitJs)
-    /** 自分で入れたフォント (設定の「本文の文字」)。ファイルを選ぶ画面も registerForActivityResult なので、ここで作る */
+    /** 自分で入れたフォント (設定の「本文の見た目」)。ファイルを選ぶ画面も registerForActivityResult なので、ここで作る */
     private val fonts by lazy { CustomFonts(java.io.File(filesDir, "fonts")) }
     private val fontFiles = FontFiles(this, { fonts }, ::emitJs)
 
@@ -253,16 +253,21 @@ class MainActivity : AppCompatActivity(), BridgeHost {
     }
 
     /**
-     * 画面を消す・別のアプリから戻ったとき、ダークテーマのカクヨムなどで WebView が真っ黒のままになることがある (スクロールすると直る。Pixel 11 で再現しやすい)。
-     * 描画の更新を促すため、1px だけ動かして戻す。上部バーを隠す判断の幅 (16〜24dp) より小さく、読書位置も変えない。
+     * 画面を消す・別のアプリから戻ったとき、WebView が背景の色だけの一色のままになることがある (触ると直る)。カクヨムの話ページで起き、なろう・ハーメルンでは出ない。
+     * 原因 (Pixel 9 の実機で確かめた。DEV-NOTES の「一色 (真っ黒) になる件」): カクヨムのページは終わらない CSS アニメーション (見えないスピナー) を持つ。
+     * 画面を消すと Android が描画の入れ物 (GPU) を捨てて、復帰で作り直すが、Chromium の描画役 (cc) は「見た目が変わっていない」と見て、作り直した入れ物に新しい画面を送らない。
+     * 直し方: ページ全体の見た目を一瞬だけ変えて、全面の再描画を強いる。ページの長さに関係なく、スクロールの通知も出さない (20 回中 0 回。何もしないと 9 回)。
+     * 効かなかった方法 (同じ実機): View の invalidate / requestLayout・レイヤーの種類の切り替え・WebView.onPause/onResume (どれも Android の側だけの操作で、Chromium に届かない)。
+     * 元に戻すのを同じ処理の中で行うと、描画から見て何も変わらず効かないので、数コマあとにする。
+     * 根の側の対処は、見えないスピナーの回転を止めること (site/sites.js の kakuyomu.still を early.js が差し込む。ゆすりを切っても 0 回)。
+     * これは、ほかのサイトの終わらないアニメーションにも効く保険として残す。
      */
     private fun nudgeRepaint() {
         webView.post {
-            val x = webView.scrollX
-            val y = webView.scrollY
-            webView.scrollTo(x, if (y > 0) y - 1 else y + 1)
-            webView.scrollTo(x, y)
-            webView.invalidate()
+            webView.evaluateJavascript(
+                "(function(){var d=document.documentElement;if(!d)return;var p=d.style.opacity;d.style.opacity='0.999';setTimeout(function(){d.style.opacity=p},$NUDGE_RETURN_MS)})()",
+                null,
+            )
         }
     }
 
@@ -562,5 +567,8 @@ class MainActivity : AppCompatActivity(), BridgeHost {
     private companion object {
         const val TAG = "Yomikura"
         const val REQ_NOTIFY = 1
+
+        /** 復帰時にページの見た目を一瞬変えて戻すまでの時間 (ミリ秒。数コマ分。短いと、変えたことが描画に出ない) */
+        const val NUDGE_RETURN_MS = 80
     }
 }

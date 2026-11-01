@@ -92,6 +92,7 @@ function paintTextPage() {
   paintFontFace();
   pickList($('fontList'), fontNames(), S.font, (k) => { S.font = k; commit(); });
   paintFontManage();
+  pickList($('readBgList'), NH_READBG.choices(), S.readBg || NH_READBG.SITE, (k) => { S.readBg = k; commit(); });
   $('size').value = S.size;
   $('lh').value = lhPos();
   $('lh').setAttribute('aria-valuetext', S.lh ? S.lh.toFixed(1) : '標準');
@@ -101,6 +102,9 @@ function paintTextPage() {
   p.style.fontFamily = NH_FONTS.family(S.font) || 'inherit';
   p.style.fontSize = (16 * S.size / 100) + 'px';
   p.style.lineHeight = S.lh || 1.8;
+  const bg = NH_READBG.colors(S.readBg); // 見本にも背景色を反映する (サイト標準は、画面の標準の色)
+  p.style.background = bg ? bg.bg : '';
+  p.style.color = bg ? bg.fg : '';
 }
 function paintSitesPage() {
   $$('#siteList input').forEach((cb) => (cb.checked = siteOn(cb.dataset.k)));

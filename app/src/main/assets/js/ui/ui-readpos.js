@@ -2,7 +2,8 @@
 // ctx = ui.js の共通の部品 {adapter, cur, isShort (短編か), laterBack (外のリンクを「後で読む」に追加して戻る途中か = 読んでいないので記録しない), moved (ページ内の移動で作品が変わったか)}。
 // 戻り値: 移る直前に位置を書き切る関数 (記録しないページは null)。
 window.NH_UI_READPOS = function (ctx) {
-  const { adapter, cur, isShort, laterBack, moved } = ctx;
+  const { adapter, cur, isShort, laterBack, moved, vertical } = ctx; // vertical = 縦書きの窓口 (ui-vertical.js。縦書きのあいだは、横スクロールの進みを使う)
+  const isV = () => !!(vertical && vertical.active());
   if (!(cur && adapter.bodySel && (cur.episode != null || isShort) && !laterBack)) return null;
   let flush = null;
   const key = NH.workKey(cur);
@@ -32,11 +33,15 @@ window.NH_UI_READPOS = function (ctx) {
   let epOrd = prev && prev.ep === epNo && prev.no ? prev.no : null;
   // 前に最後まで読んだ話を開き直したとき (履歴・続きから読む) は、前回の位置に戻しただけで読了になるので、統計にもう一度数えない
   if (prev && prev.url === epUrl && prev.done) counted = true;
+  let doneSticky = !!(prev && prev.url === epUrl && prev.done); // 同じ話では、一度読み終えたら外さない (読み返しで上へ戻っても、読みかけに戻さない)
   const write = () => {
-    if (!armed || moved()) return;
+    if (!armed || moved() || window.__nhNoPosWrite) return; // リストから外した直後は、読書位置を書き戻さない
     const b = bodyBox();
     if (!b) return;
-    const { y, done } = NH.scrollState(window.scrollY, b.top, b.h, window.innerHeight);
+    const st = isV() ? vertical.state() : NH.scrollState(window.scrollY, b.top, b.h, window.innerHeight);
+    const y = st.y;
+    const done = st.done || doneSticky;
+    if (done) doneSticky = true;
     if (Math.abs(y - lastY) < 0.005 && done === lastDone) return;
     lastY = y; lastDone = done;
     const next = adapter.nextUrl ? adapter.nextUrl() : null;
@@ -45,11 +50,11 @@ window.NH_UI_READPOS = function (ctx) {
     if (note) counted = true;
     NH.update((d) => {
       d.progress = d.progress || {};
+      const hist = (d.history || []).find((x) => x.key === key);
       d.progress[key] = { url: epUrl, ep: epNo, no: epOrd || undefined, y: Math.max(0, y), done, next, at: Date.now() };
       // 履歴にも、何話目かを覚える (リストから外して読書位置が消えても、「さっき何話まで読んだか」が分かるように。カクヨムは目次から求めた番号)
-      const hist = (d.history || []).find((x) => x.key === key);
       const ordinal = NH.epNumber(d.progress[key]);
-      if (hist) hist.pr = { y: Math.round(Math.max(0, y) * 100) / 100, done, ep: epNo }; // 読書位置が消えても (リストから外す・整理) 「途・未」を出せるよう、履歴にも読み具合を覚える (ep = どの話の読み具合か。NH.historyPos)
+      if (hist) hist.pr = { y: Math.round(Math.max(0, y) * 100) / 100, done, ep: epNo }; // 読書位置が消えても (リストから外す・整理) 「途・未」を出せるよう、履歴にも読み具合を覚える
       if (hist && ordinal) { hist.epNo = ordinal; hist.epNoEp = epNo; }
       if (ordinal && (y >= 0.1 || done)) NH.noteEpisodeRead(d, key, ordinal); // 読んだ話 (1 割まで読んだか、最後まで読んだ話) を、その日の記録に足す
       if (note) NH.noteRead(d, key, chars);
@@ -62,7 +67,10 @@ window.NH_UI_READPOS = function (ctx) {
   }
   // 書くたびに保存データ全体を書き直すので、スクロール中は 4 秒に 1 回まで (止まったときの分も含めて遅れて書く)。ページを離れる / 隠れるときは write を直接呼ぶ
   let timer = 0;
-  window.addEventListener('scroll', () => { if (!timer) timer = setTimeout(() => { timer = 0; write(); }, 4000); }, { passive: true });
+  const onScroll = () => { if (!timer) timer = setTimeout(() => { timer = 0; write(); }, 4000); };
+  window.addEventListener('scroll', onScroll, { passive: true });
+  if (vertical) vertical.onScroll(onScroll); // 縦書きの箱 (なろう・ハーメルン) のスクロールは window に届かない
+  window.__nhFlushPos = () => { try { write(); } catch (e) { /* 書けなくても続ける */ } }; // 読書位置を、待たずにいま書く (ui-next.js が、作品をリストから外す前に使う)
   window.addEventListener('pagehide', write);
   document.addEventListener('visibilitychange', () => { if (document.hidden) write(); });
   flush = write;
@@ -73,11 +81,13 @@ window.NH_UI_READPOS = function (ctx) {
   const restore = () => {
     if (touched) return;
     const b = bodyBox();
+    if (isV()) { vertical.seek(saved.y); restoredAt = vertical.pos(); return; }
     if (b) { window.scrollTo(0, b.top + saved.y * b.h); restoredAt = window.scrollY; }
   };
   // 前回の位置まで戻せたか (本文の描画が遅いと、まだ戻せていないことがある)
   const restored = () => {
     const b = bodyBox();
+    if (isV()) return vertical.state().y >= saved.y - 0.02;
     return !!b && NH.scrollState(window.scrollY, b.top, b.h, window.innerHeight).y >= saved.y - 0.02;
   };
   if (restoring) {
@@ -89,7 +99,7 @@ window.NH_UI_READPOS = function (ctx) {
   // 何度か待っても戻せなければ (文字の大きさを変えて、前の位置まで届かないなど)、そのまま記録を始める
   const arm = (tries) => {
     if (armed) return;
-    const userMoved = restoredAt >= 0 && Math.abs(window.scrollY - restoredAt) > 2;
+    const userMoved = restoredAt >= 0 && Math.abs((isV() ? vertical.pos() : window.scrollY) - restoredAt) > 2;
     if (restoring && !touched && !userMoved && !restored() && tries > 0) {
       restore();
       setTimeout(() => arm(tries - 1), 1500);

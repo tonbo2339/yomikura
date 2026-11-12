@@ -166,13 +166,14 @@ test('続けて 3 回失敗したら止める (1 回目の失敗では止まら�
   assert.deepEqual(log.rest, []); // 確認画面ではないので休止はしない
 });
 
-test('最後に目次 (meta) を書く。途中で止まっても、保存済みの話は残る', async () => {
+test('最後に目次 (meta) を書く。途中で止まっても、保存済みの話は残る。1 話も保存していなくて、以前の保存も無いときは、空の作品を作らない', async () => {
   const { NH, log } = makeEnv();
   const list = eps(2);
   await NH.offlineRun(adapter, w, planOf(NH, list), list, { shouldStop: () => true });
-  assert.equal(log.meta.length, 1);
+  assert.equal(log.meta.length, 0); // 1 話も保存していない (以前の保存も無い) ので、meta を書かない
   assert.deepEqual(log.stored, []);
 });
+test('以前の保存がある作品は、1 話も新しく保存しなくても meta を書く (目次の更新を残す)', async () => {  const { NH, log } = makeEnv();  const list = eps(2);  const plan = { ...planOf(NH, list), meta: { eps: [{ ep: '1' }], title: '保存済み' } };  await NH.offlineRun(adapter, w, plan, list, { shouldStop: () => true });  assert.equal(log.meta.length, 1);});
 
 test('wait は話ごとに呼ばれ、止まっている間は次の話へ進まない', async () => {
   const { NH, log } = makeEnv();
@@ -204,6 +205,29 @@ test('offlinePlanFrom: 保存済みの話を除き、全話数 (total) を渡せ
   assert.equal(plan.total, 10);
   assert.equal(plan.title, '保存済みの題名'); // 題名が空なら保存済みの題名
   assert.equal(NH.offlinePlanFrom(adapter, w, list, '題', undefined).total, 4); // 省けば話の数
+});
+
+test('一部の話だけ選んで保存しても、保存した話は番号の順に並ぶ (11〜12 を 1〜2 のあとに保存)', async () => {
+  const { NH, log } = makeEnv({ meta: { eps: [{ ep: '1', title: 'a' }, { ep: '2', title: 'b' }], title: '作品', updatedAt: 5 } });
+  const list = eps(12).slice(10); // 11, 12 だけ (キューから来る選んだ話)
+  const plan = NH.offlinePlanFrom(adapter, w, list, '作品', 12);
+  await NH.offlineRun(adapter, w, plan, plan.todo);
+  assert.deepEqual([...log.meta.at(-1).eps.map((e) => e.ep)], ['1', '2', '11', '12']);
+});
+
+test('なろう: 番号が同じでも題名が変わった話は、別の話として取り直す (途中の話が消えて番号がずれた)', () => {
+  const { NH } = makeEnv({ meta: { eps: [{ ep: '1', title: '第1話' }, { ep: '2', title: '古い2話' }], title: '作品' } });
+  const list = eps(2).map((e, i) => (i === 1 ? { ...e, title: '新しい2話' } : e));
+  assert.deepEqual(NH.offlinePlanFrom(adapter, w, list, '').todo.map((e) => e.ep), ['2']);
+  // ハーメルン・カクヨムの番号は話そのものの ID なので、題名が変わっても取り直さない
+  assert.deepEqual(NH.offlinePlanFrom({ ...adapter, id: 'kakuyomu' }, w, list, '').todo.map((e) => e.ep), []);
+});
+
+test('何も保存しなかった実行では、更新日時を変えない', async () => {
+  const { NH, log } = makeEnv({ meta: { eps: [{ ep: '1', title: '第1話' }], title: '作品', updatedAt: 5 } });
+  const plan = NH.offlinePlanFrom(adapter, w, eps(1), '作品');
+  await NH.offlineRun(adapter, w, plan, plan.todo);
+  assert.equal(log.meta.at(-1).updatedAt, 5);
 });
 
 

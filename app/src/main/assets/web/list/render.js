@@ -4,15 +4,14 @@ function render() {
   const d = load();
   paintCheckRow(d);
   const shown = d.readLater.filter((x) => !NH.nsfwHides(d, x)); // NSFW モードがオンなら R18 の作品は出さない (データは消さない)
-  const active = shown.filter((x) => !x.done);
-  const done = shown.filter((x) => x.done);
-  const cnt = { update: active.filter((x) => kindOf(x) === 'update').length, later: active.filter((x) => kindOf(x) === 'later').length };
-  if (!['update', 'later', 'history'].includes(ui.tab)) ui.tab = cnt.update ? 'update' : 'later';
+  const cnt = { update: shown.filter((x) => kindOf(x) === 'update').length, later: shown.filter((x) => kindOf(x) === 'later').length };
+  const favOn = NH.favOn(d); // 設定「お気に入りを使う」がオフなら、タブも ★ も出さない
+  if (!['update', 'later', 'fav', 'history'].includes(ui.tab) || (ui.tab === 'fav' && !favOn)) ui.tab = cnt.update ? 'update' : 'later';
   // 開いたとき (最初の 1 回だけ): 前回選んだタブが空で、もう一方に作品があるなら、そちらを開く (見えない作品に気づけるように)
   if (!ui.tabChecked) {
     ui.tabChecked = true;
     const other = ui.tab === 'update' ? 'later' : 'update';
-    if (ui.tab !== 'history' && !cnt[ui.tab] && cnt[other]) ui.tab = other;
+    if (ui.tab !== 'history' && ui.tab !== 'fav' && !cnt[ui.tab] && cnt[other]) ui.tab = other;
   }
   // 更新を確認するサイトが 1 つも無いとき、またはその (対象の) どのサイトにもログインしていないときは、
   // 更新アイコンと、(更新の作品が無ければ)「未読の更新」の欄を出さない (ログインの有無は d.logins。Kotlin が写している)
@@ -25,20 +24,24 @@ function render() {
 
   // タブ
   const tabs = $('tabs'); tabs.innerHTML = '';
-  [['update', '更新'], ['later', '後で読む'], ['history', '履歴']].filter(([k]) => k !== 'update' || showUpdateTab).forEach(([k, label]) => {
+  [['update', '更新'], ['later', '後で読む'], ['fav', 'お気に入り'], ['history', '履歴']].filter(([k]) => (k !== 'update' || showUpdateTab) && (k !== 'fav' || favOn)).forEach(([k, label]) => {
     const b = setPressed(el('button', ui.tab === k ? 'on' : '', label), ui.tab === k);
-    if (k !== 'history') b.appendChild(el('span', 'n', String(cnt[k]))); // 履歴は増える一方で数に意味がないので出さない
+    if (k === 'fav') b.appendChild(el('span', 'n', String(NH.favsOf(d).filter((f) => !NH.nsfwHides(d, f)).length)));
+    else if (k !== 'history') b.appendChild(el('span', 'n', String(cnt[k]))); // 履歴は増える一方で数に意味がないので出さない
     b.onclick = () => { ui.tab = k; ui.site = ''; ui.tag = ''; ui.status = ''; try { localStorage.setItem('nh-tab', k); } catch (e) {} render(); };
     tabs.appendChild(b);
   });
 
+  if (ui.tab === 'fav') { $('sortRow').hidden = true; syncSelect(null); return renderFav(d); }
   if (ui.tab === 'history') { $('sortRow').hidden = true; syncSelect(null); return renderHistory(d); } // 並べ替えは作品の一覧だけ
   // 絞り込み (このタブにある分だけ)。検索中も、いまのタブの中だけを探す
   const terms = queryTerms();
-  const inTab = active.filter((x) => kindOf(x) === ui.tab && matchQuery(x, terms));
-  const sites = [...new Set(inTab.map(NH.siteKey))]; // R18 はノクターンなどに分ける
-  const stats = STATUS_CHIPS.filter(([k]) => inTab.some((x) => x.status === k)); // 連載状態が分かっている作品があるものだけ
-  const tags = [...new Set(inTab.flatMap(NH.tagsOf))];
+  const tabItems = shown.filter((x) => kindOf(x) === ui.tab);
+  const inTab = tabItems.filter((x) => matchQuery(x, terms));
+  // 絞り込みの選択肢は、検索で絞る前の、このタブの作品から求める (検索の言葉に合う作品が無い間に、サイト・連載状態・ジャンルの絞り込みが外れて、検索をやめても戻らないため)
+  const sites = [...new Set(tabItems.map(NH.siteKey))]; // R18 はノクターンなどに分ける
+  const stats = STATUS_CHIPS.filter(([k]) => tabItems.some((x) => x.status === k)); // 連載状態が分かっている作品があるものだけ
+  const tags = [...new Set(tabItems.flatMap(NH.tagsOf))];
   if (ui.site && !sites.includes(ui.site)) ui.site = '';
   if (ui.status && !stats.some(([k]) => k === ui.status)) ui.status = '';
   if (ui.tag && !tags.includes(ui.tag)) ui.tag = '';
@@ -85,19 +88,17 @@ function render() {
     // 検索中は、結果を見やすくするため上のカードは出さない
     if (!terms.length) {
       const resume = NH.flag(d, 'heroResume'); // 設定: さっきまで読んでいた作品を出す
-      const pick = (resume ? lastRead(d, isNarrowed() ? visible : active) : null) || visible[0];
+      const pick = (resume ? lastRead(d, isNarrowed() ? visible : shown) : null) || visible[0];
       hero.appendChild(heroCard(d, pick, visible.filter((x) => x !== pick).length, visible));
     }
-    visible.forEach((it) => root.appendChild(card(d, it, true, visible)));
+    visible.forEach((it) => root.appendChild(card(d, it, visible)));
   }
 
-  const doneRoot = $('done'); doneRoot.innerHTML = '';
-  const doneShown = done.filter((x) => (!terms.length || kindOf(x) === ui.tab) && matchQuery(x, terms));
-  doneShown.slice().reverse().forEach((it) => doneRoot.appendChild(card(d, it, false)));
-  $('doneBox').hidden = !doneShown.length;
-  $('doneHead').textContent = '読了 ' + doneShown.length;
-  $('qCount').textContent = terms.length ? visible.length + doneShown.length + ' 件' : '';
-  const st = d.settings || {};
-  $('pruneHint').textContent = !NH.flagOf(st, 'pruneDone') ? '' : '読了から ' + (st.pruneDays || NH.PRUNE_DAYS) + ' 日たつと自動で削除します (設定で変更)';
+  // ヒントは 1 画面に 1 枚だけ (カードが積み重ならないように、「わかった」を押すと、次にこのタブを開いたとき次のヒントが出る): 足し方 → スワイプ・長押し (作品があるとき) → 更新タブの出し方 (ログイン前のとき)
+  if (ui.tab === 'later') {
+    const next = ['list-later', visible.length ? 'list-gestures' : '', showUpdateTab ? '' : 'list-login'].find((id) => id && NH.hintDue(id));
+    if (next) showHint(root, next);
+  } else if (ui.tab === 'update') showHint(root, 'list-update');
+  $('qCount').textContent = terms.length ? visible.length + ' 件' : '';
   paintSelect(); // カードを作り直したあとにも、選んだ作品のチェックを付ける (syncSelect の時点では、まだ古いカード)
 }

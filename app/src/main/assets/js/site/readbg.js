@@ -30,3 +30,16 @@ window.NH_READBG = (function () {
   const colors = (key) => { const c = find(key); return c ? { bg: c[2], fg: c[3] } : null; };
   return { SITE, choices, css, colors };
 })();
+
+// 本文の見た目 (文字の大きさ・行間・書体) の範囲と選択肢。設定の「本文の見た目」と、話ページの TT (表示の設定。ui/ui-viewer.js) が、同じ表を見る。
+// ロジックは持たない (描画前の early.js が読むことも無いが、このファイルを読む場所すべてで同じ値になるよう、ここに置く)。
+window.NH_TEXTLOOK = (function () {
+  const SIZE = { min: 80, max: 250, step: 5, def: 100 }; // 文字の大きさ (%)。100% は端末の標準の大きさ
+  // 行間のスライダー: 位置 std = 標準 (設定の lh = 0)、それより右は 1.2〜3.0 (位置 12〜30 = 値 × 10)。オフラインの読み画面の行の間隔 (1.2〜3.0) と同じ範囲
+  const LH = { std: 11, max: 30 };
+  const lhPos = (v) => (v ? Math.round(v * 10) : LH.std);
+  const lhFromPos = (n) => (n <= LH.std ? 0 : Math.min(LH.max, n) / 10);
+  const lhLabel = (v) => (v ? Number(v).toFixed(1) : '標準');
+  const FONTS = [['site', 'サイト標準'], ['gothic', 'ゴシック'], ['mincho', '明朝']]; // 自分で入れたフォントは、設定の画面で足す
+  return { SIZE, LH, lhPos, lhFromPos, lhLabel, FONTS };
+})();

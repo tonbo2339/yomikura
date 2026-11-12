@@ -4,7 +4,10 @@ const TTS_RATE = { min: 5, max: 20, def: 10 };    // 読み上げの速さ (0.1 
 const clampTo = (r, v) => Math.min(r.max, Math.max(r.min, Math.round(Number.isFinite(v) ? v : r.def)));
 const autoSpeedNow = () => clampTo(AUTO_SPEED, S.autoScrollSpeed == null ? AUTO_SPEED.def : Number(S.autoScrollSpeed));
 const ttsRateNow = () => clampTo(TTS_RATE, S.ttsRate == null ? TTS_RATE.def : Number(S.ttsRate) * 10);
+// 読み上げのタイマー (分。0 = なし)。読み上げを始めてから、この時間がたつと止まる (Kotlin の ReadingAids が設定 ttsTimer を読む)
+const TTS_TIMERS = [[0, 'なし'], [15, '15 分'], [30, '30 分'], [60, '60 分'], [90, '90 分']];
 function paintReading() {
+  pickList($('ttsTimerList'), TTS_TIMERS, Number(S.ttsTimer) || 0, (m) => { S.ttsTimer = m; commit(); });
   $('autoSpeed').value = autoSpeedNow();
   $('autoSpeedV').textContent = autoSpeedNow() + ' / ' + AUTO_SPEED.max;
   $('ttsRate').value = ttsRateNow();

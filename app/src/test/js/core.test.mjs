@@ -33,7 +33,7 @@ function loadCore(store, extra = {}) {
     localStorage: { getItem: () => null, setItem: () => {} },
     location: { href: 'https://yomikura.local/list.html', hostname: 'yomikura.local', pathname: '/list.html' },
     document: { createElement: () => style, head: { appendChild: () => {} }, documentElement: { appendChild: () => {} }, querySelectorAll: () => [] },
-    setTimeout, URL, console,
+    setTimeout, clearTimeout, URL, console,
     ...extra,
   };
   ctx.window = ctx;
@@ -100,18 +100,123 @@ test('mergeUpdates: やり直しても数が二重にならない', () => {
   assert.equal(d.readLater.length, 2);
 });
 
-test('mergeUpdates: 「後で読む」の作品は未読にしない・今回無い更新は読了にする', () => {
+test('mergeUpdates: 「後で読む」の作品は未読にしない。今回の取得に無い「更新」の作品は、何も変えずに残る', () => {
   const st = makeStore({ readLater: [
-    { key: 'hameln:1', site: 'hameln', id: '1', title: 'L', done: false, kind: 'later' },
-    { key: 'hameln:2', site: 'hameln', id: '2', title: 'U', done: false, kind: 'update', unread: 1, lastEp: 3 },
+    { key: 'hameln:1', site: 'hameln', id: '1', title: 'L', kind: 'later' },
+    { key: 'hameln:2', site: 'hameln', id: '2', title: 'U', kind: 'update', unread: 1, lastEp: 3 },
   ] });
   const NH = loadCore(st);
   const r = NH.mergeUpdates('hameln', [{ id: '1', title: 'L', url: 'x', unread: 2, lastEp: 9 }]);
   assert.equal(r.updates, 0);
   const d = JSON.parse(st.raw);
+  assert.equal(d.readLater.length, 2); // 取得に無い「更新」の作品も、消えない
+  assert.deepEqual([d.readLater[0].key, d.readLater[0].kind], ['hameln:1', 'later']);
+  assert.deepEqual([d.readLater[1].key, d.readLater[1].kind, d.readLater[1].unread, d.readLater[1].lastEp], ['hameln:2', 'update', 1, 3]); // そのまま
   assert.equal(d.readLater[0].unread, undefined);
   assert.equal(d.readLater[0].lastEp, 9);
-  assert.equal(d.readLater[1].done, true);
+});
+
+test('mergeUpdates: 最終話が取れなかった回 (カクヨム) は、保存済みの最終話を空で上書きしない', () => {
+  const st = makeStore({ readLater: [
+    { key: 'kakuyomu:1', site: 'kakuyomu', id: '1', title: 'A', kind: 'update', url: 'u', unread: 3, lastEp: 12, urlAt: 100 },
+  ] });
+  const NH = loadCore(st);
+  NH.mergeUpdates('kakuyomu', [{ id: '1', title: 'A', url: 'u', unread: 3, lastEp: null }]);
+  assert.equal(JSON.parse(st.raw).readLater[0].lastEp, 12);
+});
+
+// 読み終えて外した作品の、履歴に覚えた最後の位置 (話番号と読み具合)
+const hist = (key, no, done, last = 0) => ({ key, url: 'https://syosetu.org/novel/' + key.split(':')[1] + '/' + no + '.html', ep: String(no), epNo: no, pr: { y: 1, done, ep: String(no), ...(last ? { last } : {}) }, at: 5 }); // 読み終えて外した作品の、履歴に覚えた最後の位置 (last は、以前の版が付けた印。いまは判断に使わない)
+
+test('mergeUpdates: リストに無い作品 (読み終えて外した作品) は、サイトに未読があれば、新規の「更新」に入る (ハーメルンのしおり 12話／全14話)', () => {
+  const st = makeStore({ readLater: [], history: [hist('hameln:1', 12, true)] });
+  const NH = loadCore(st);
+  const r = NH.mergeUpdates('hameln', [{ id: '1', title: 'A', url: 'https://syosetu.org/novel/1/12.html#nh-next', unread: 2, lastEp: 14 }]);
+  const d = JSON.parse(st.raw);
+  assert.equal(r.added, 1);
+  assert.equal(d.readLater[0].kind, 'update');
+  assert.equal(d.readLater[0].unread, 2);
+});
+
+test('mergeUpdates: リストに無い作品は、履歴や読書位置 (最後まで読んだ・話が増えた・飛ぶ話番号) にかかわらず、サイトに未読があれば新規の「更新」に入る。判断は「後で読む」に入っているかだけ', () => {
+  const url = 'https://syosetu.org/novel/1/31.html#nh-next';
+  const site = [{ id: '1', title: 'A', url, unread: 1, lastEp: 32 }];
+  const cases = [
+    { history: [hist('hameln:1', 12, true)] },                      // 途中まで
+    { history: [hist('hameln:1', 31, true, 31)] },                  // 最新話まで読み終えたが、そのあと話が増えた
+    { history: [hist('hameln:1', 32, true, 32)] },                  // 最新話まで読み終えている
+    { progress: { 'hameln:1': { ep: '32', url: 'https://syosetu.org/novel/1/32.html', y: 1, done: true, next: null, at: 200, lt: 32 } } },
+    {},                                                             // 記録なし
+  ];
+  cases.forEach((c, i) => {
+    const r = loadCore(makeStore({ readLater: [], ...c })).mergeUpdates('hameln', site);
+    assert.equal(r.added, 1, 'case ' + i);
+  });
+  // 「後で読む」に入っていれば、入らない (更新に数えない)
+  const st = makeStore({ readLater: [{ key: 'hameln:1', site: 'hameln', id: '1', title: 'A', kind: 'later', url: 'x', lastEp: 31 }] });
+  assert.equal(loadCore(st).mergeUpdates('hameln', site).updates, 0);
+  assert.equal(JSON.parse(st.raw).readLater[0].kind, 'later');
+});
+
+test('mergeUpdates: 作品ごとの判定を trace で返す (開発用ログ用: 後で読む・新規・既存・一覧に無くて外した)', () => {
+  const st = makeStore({ readLater: [
+    { key: 'hameln:2', site: 'hameln', id: '2', title: 'B', kind: 'later', url: 'x', lastEp: 5 },
+    { key: 'hameln:4', site: 'hameln', id: '4', title: 'D', kind: 'update', url: 'x', unread: 1, lastEp: 3 },
+    { key: 'hameln:5', site: 'hameln', id: '5', title: 'E', kind: 'update', url: 'x', unread: 1, lastEp: 3 },
+  ], history: [hist('hameln:6', 14, true, 14)] });
+  const NH = loadCore(st);
+  const r = NH.mergeUpdates('hameln', [
+    { id: '2', title: 'B', url: 'x', unread: 1, lastEp: 5 },
+    { id: '3', title: 'C', url: 'x', unread: 1, lastEp: 7 },
+    { id: '5', title: 'E', url: 'x', unread: 2, lastEp: 4 },
+    { id: '6', title: 'F', url: 'x', unread: 1, lastEp: 14 },
+  ]);
+  const has = (key, word) => r.trace.some((l) => l.startsWith(key + ' ') && l.includes(word));
+  assert.ok(has('hameln:2', 'later'));
+  assert.ok(has('hameln:3', 'new'));
+  assert.ok(has('hameln:5', 'exist'));
+  assert.ok(has('hameln:6', 'new')); // 履歴で最後まで読んでいても、リストに無ければ入る
+  assert.ok(!r.trace.some((l) => l.startsWith('hameln:4 '))); // 取得に無い作品は、何も変えない (判定も残らない)
+});
+
+test('mergeUpdates: 外した作品が更新に再び入るときも、履歴の連載状態・全話数・R18 の印・掲載サイトを引き継ぐ。ハーメルンの h.syosetu.org は R18 と見なす', () => {
+  const st = makeStore({ readLater: [], history: [{ key: 'narou18:n1', site: 'narou18', id: 'n1', at: 1, status: 'serial', total: 20, totalAt: 5, r18: true, sub: 'mnlt' }] });
+  const NH = loadCore(st);
+  NH.mergeUpdates('narou18', [{ id: 'n1', title: 'N', url: 'https://novel18.syosetu.com/n1/3/', unread: 2, lastEp: 20 }]);
+  const it = JSON.parse(st.raw).readLater[0];
+  assert.deepEqual([it.status, it.total, it.totalAt, it.r18, it.sub], ['serial', 20, 5, true, 'mnlt']);
+  // 履歴に無くても、ハーメルンの R-18 (h.syosetu.org) は r18 の印を付ける (NSFW モードで隠すため)。ふつうの syosetu.org には付けない
+  const st2 = makeStore({ readLater: [] });
+  loadCore(st2).mergeUpdates('hameln', [
+    { id: '1', title: 'R', url: 'https://h.syosetu.org/novel/1/2.html#nh-next', unread: 1, lastEp: 5 },
+    { id: '2', title: 'G', url: 'https://syosetu.org/novel/2/2.html#nh-next', unread: 1, lastEp: 5 },
+  ]);
+  const [a, b] = JSON.parse(st2.raw).readLater;
+  assert.equal(a.r18, true);
+  assert.equal(b.r18, undefined);
+});
+
+test('mergeUpdates: 外した作品が更新に再び入るとき、履歴の全話数より増えていなければ、新着として数えない (確認のたびに通知しない)。増えていれば数える', () => {
+  const hs = [{ key: 'hameln:1', site: 'hameln', id: '1', at: 1, total: 31, status: 'serial' }];
+  const site = (lastEp) => [{ id: '1', title: 'A', url: 'https://syosetu.org/novel/1/31.html#nh-next', unread: 1, lastEp }];
+  const a = loadCore(makeStore({ readLater: [], history: hs })).mergeUpdates('hameln', site(31));
+  assert.deepEqual([a.added, a.updates, a.fresh.length], [1, 1, 0]); // 更新には入る・新着には数えない
+  const b = loadCore(makeStore({ readLater: [], history: hs })).mergeUpdates('hameln', site(32));
+  assert.deepEqual([b.added, b.fresh.length], [1, 1]); // 話が増えた: 新着
+  const c = loadCore(makeStore({ readLater: [] })).mergeUpdates('hameln', site(31));
+  assert.deepEqual([c.added, c.fresh.length], [1, 1]); // 履歴に無い (初めて見る作品): 新着
+});
+
+test('mergeUpdates: 「後で読む」の作品は、サイトに未読があっても更新に数えず、「後で読む」のまま', () => {
+  const st = makeStore({ readLater: [
+    { key: 'hameln:2', site: 'hameln', id: '2', title: 'B', kind: 'later', url: 'x', lastEp: 5 },
+  ] });
+  const NH = loadCore(st);
+  const r = NH.mergeUpdates('hameln', [{ id: '2', title: 'B', url: 'x', unread: 1, lastEp: 6 }]);
+  assert.equal(r.updates, 0);
+  const d = JSON.parse(st.raw);
+  assert.equal(d.readLater[0].kind, 'later');
+  assert.equal(d.readLater[0].lastEp, 6);
 });
 
 test('mergeUpdates: 行き先も話数も変わらなければ urlAt を変えない (アプリで読んだ位置を捨てない)', () => {
@@ -163,32 +268,6 @@ test('mergeUpdates: サイトの行き先から話番号が読めないとき (�
   d.readLater.forEach((x) => { assert.equal(x.urlAt, 100, x.key); assert.ok(NH.progressOf(d, x), x.key); });
 });
 
-test('mergeUpdates: 一覧を最後まで見ていない (truncated) ときは、今回無い作品を読了にしない', () => {
-  const st = makeStore({ readLater: [
-    { key: 'kakuyomu:2', site: 'kakuyomu', id: '2', title: 'U', done: false, kind: 'update', unread: 1, lastEp: 3 },
-  ] });
-  const NH = loadCore(st);
-  NH.mergeUpdates('kakuyomu', [], { truncated: true });
-  assert.equal(JSON.parse(st.raw).readLater[0].done, false);
-  NH.mergeUpdates('kakuyomu', [], { truncated: true, readIds: ['2'] }); // 見たページで未読が無かった作品は、打ち切っても読了にする
-  assert.equal(JSON.parse(st.raw).readLater[0].done, true);
-});
-
-test('mergeUpdates: カテゴリを絞って確認したときは、ほかのカテゴリ・カテゴリの分からない作品を読了にしない', () => {
-  const st = makeStore({ readLater: [
-    { key: 'narou:a', site: 'narou', id: 'a', title: 'A', done: false, kind: 'update', cat: 1 },
-    { key: 'narou:b', site: 'narou', id: 'b', title: 'B', done: false, kind: 'update', cat: 2 },
-    { key: 'narou:c', site: 'narou', id: 'c', title: 'C', done: false, kind: 'update' },
-    { key: 'narou:d', site: 'narou', id: 'd', title: 'D', done: false, kind: 'update' },
-  ] });
-  const NH = loadCore(st);
-  NH.mergeUpdates('narou', [{ id: 'd', title: 'D', url: 'u', unread: 1, lastEp: 2, cat: 1 }], { cats: [1] });
-  const by = (k) => JSON.parse(st.raw).readLater.find((x) => x.key === k);
-  assert.equal(by('narou:a').done, true); // 見たカテゴリにあって、今回無い
-  assert.equal(by('narou:b').done, false); // 見ていないカテゴリ
-  assert.equal(by('narou:c').done, false); // カテゴリが分からない
-  assert.equal(by('narou:d').cat, 1); // カテゴリを覚える
-});
 
 test('sanitize: ミュート・ブロック・履歴の中の形をそろえる (壊れたバックアップで例外にしない)', () => {
   const st = makeStore({ readLater: [], mute: { authors: 'foo', words: ['a', 1], block: { works: [null, { key: 'narou:n1' }], authors: 'x' } }, history: [{ key: 'narou:n1' }, 'bad', { title: 'no key' }] });
@@ -230,11 +309,11 @@ test('nextPool: NSFW モードで隠れている作品は、次の作品に選�
   assert.equal(NH.nextPool(d, d.readLater[0]).next.key, 'narou:b');
 });
 
-test('mergeUpdates: 手で「未読の更新」へ移した作品は、サイトの一覧に無くても読了にしない', () => {
-  const st = makeStore({ readLater: [{ key: 'narou:m', site: 'narou', id: 'm', title: 'M', done: false, kind: 'update', manualKind: true }] });
+test('mergeUpdates: 手で「未読の更新」へ移した作品は、サイトの一覧に無くてもリストから外さない', () => {
+  const st = makeStore({ readLater: [{ key: 'narou:m', site: 'narou', id: 'm', title: 'M', kind: 'update', manualKind: true }] });
   const NH = loadCore(st);
   NH.mergeUpdates('narou', []);
-  assert.equal(JSON.parse(st.raw).readLater[0].done, false);
+  assert.equal(JSON.parse(st.raw).readLater.length, 1);
   NH.mergeUpdates('narou', [{ id: 'm', title: 'M', url: 'u', unread: 1, lastEp: 3 }]); // 一覧に出たら、ふつうの更新の作品になる
   assert.equal(JSON.parse(st.raw).readLater[0].manualKind, undefined);
 });
@@ -304,20 +383,10 @@ test('safeUrl: https だけ通し、javascript: や空白・制御文字を含�
   assert.equal(NH.safeUrl(null), false);
 });
 
-test('mergeUpdates: 読了にした作品は、新しい話が来たら未読に戻す (最終話が分からなくても、未読が増えれば)', () => {
-  const st = makeStore({ readLater: [
-    { key: 'kakuyomu:1', site: 'kakuyomu', id: '1', title: 'A', done: true, doneAt: 1, kind: 'update', unread: 0, lastEp: null },
-    { key: 'narou:n1', site: 'narou', id: 'n1', title: 'B', done: true, doneAt: 1, kind: 'update', unread: 0, lastEp: 10 },
-    { key: 'kakuyomu:2', site: 'kakuyomu', id: '2', title: 'C', done: true, doneAt: 1, kind: 'update', unread: 2, lastEp: null },
-  ] });
+test('mergeUpdates: 読み終えて外した作品も、サイトに未読があれば、再び更新に入る (履歴や読書位置では判断しない)', () => {
+  const st = makeStore({ readLater: [], history: [hist('narou:n1', 10, true)] });
   const NH = loadCore(st);
-  NH.mergeUpdates('kakuyomu', [{ id: '1', title: 'A', url: 'u', unread: 1, lastEp: null }, { id: '2', title: 'C', url: 'u', unread: 2, lastEp: null }]);
-  NH.mergeUpdates('narou', [{ id: 'n1', title: 'B', url: 'u', unread: 1, lastEp: 11 }]);
-  const d = JSON.parse(st.raw);
-  const by = (k) => d.readLater.find((x) => x.key === k);
-  assert.equal(by('kakuyomu:1').done, false); // 最終話が分からず、未読が 0 → 1
-  assert.equal(by('narou:n1').done, false); // 最終話が 10 → 11
-  assert.equal(by('kakuyomu:2').done, true); // 未読が増えていない (前と同じ 2) なら、読了のまま
+  assert.equal(NH.mergeUpdates('narou', [{ id: 'n1', title: 'B', url: 'u', unread: 1, lastEp: 11 }]).added, 1);
 });
 
 test('pruneProgress: リストの作品と、それ以外の最近 PROGRESS_KEEP 作品だけ残す', () => {
@@ -326,8 +395,8 @@ test('pruneProgress: リストの作品と、それ以外の最近 PROGRESS_KEEP
   const progress = {};
   for (let i = 0; i < NH.PROGRESS_KEEP + 5; i++) progress['narou:n' + (1000 + i) + 'aa'] = { at: i };
   progress['hameln:9'] = { at: -1 }; // 古いがリストにある
-  progress['hameln:8'] = { at: 100 }; // 新しいが読了済み (リストでは残す対象でない)
-  const d = { readLater: [{ key: 'hameln:9', done: false }, { key: 'hameln:8', done: true }], progress };
+  progress['hameln:8'] = { at: 100 }; // 新しいが、リストに無い (最近読んだ作品として残る)
+  const d = { readLater: [{ key: 'hameln:9' }], progress };
   NH.pruneProgress(d);
   const keys = Object.keys(d.progress);
   assert.ok(keys.includes('hameln:9'));
@@ -378,16 +447,16 @@ tests.push(['NSFW モード: オンなら R18 の作品を隠し、R18 は更新
   assert.equal(NH.collectOn(off, 'narou18'), true);
 }]);
 
-tests.push(['seqRest: 絞り込みの並びの続きで、読んでいない作品だけを順に返す', () => {
+tests.push(['seqRest: 絞り込みの並びの続きで、リストに無い作品 (読み終えて外した作品) は飛ばして順に返す', () => {
   const NH = loadCore(makeStore({ readLater: [] }));
-  const item = (key, done = false) => ({ key, done });
-  const d = { readLater: [item('a'), item('b'), item('c', true), item('d'), item('e')] };
-  // 並びは a → c → e → b (並べ替え後の順)。c は読了なので飛ばす
+  const item = (key) => ({ key });
+  const d = { readLater: [item('a'), item('b'), item('d'), item('e')] };
+  // 並びは a → c → e → b (並べ替え後の順)。c はリストに無い (読み終えて外した) ので飛ばす
   NH.setReadSeq(d, ['a', 'c', 'e', 'b']);
   assert.deepEqual(NH.seqRest(d, d.readLater[0]).map((x) => x.key), ['e', 'b']);
-  assert.deepEqual(NH.seqRest(d, d.readLater[4]).map((x) => x.key), ['b']);
+  assert.deepEqual(NH.seqRest(d, d.readLater[3]).map((x) => x.key), ['b']);
   assert.deepEqual(NH.seqRest(d, d.readLater[1]), []); // b は並びの最後 (続きは無い)
-  assert.deepEqual(NH.seqRest(d, d.readLater[3]), null); // d は並びに無い (通常の次の作品を使う)
+  assert.deepEqual(NH.seqRest(d, d.readLater[2]), null); // d は並びに無い (通常の次の作品を使う)
   // 絞り込みなし (null) や 1 日以上前の並びは使わない
   NH.setReadSeq(d, null);
   assert.equal(NH.seqRest(d, d.readLater[0]), null);
@@ -418,10 +487,10 @@ tests.push(['pruneHistory: 作品数と日数の上限で古い履歴を消す',
   assert.equal(NH.pruneHistory({ readLater: [] }), 0);
 }]);
 
-tests.push(['readStates: 話を読み終えても、次の話があれば読みかけ。最後の話・リストの読了は読了', () => {
+tests.push(['readStates: 話を読み終えても、次の話があれば読みかけ。最後の話は読了', () => {
   const NH = loadCore(makeStore({ readLater: [] }));
   const d = {
-    readLater: [{ key: 'narou:n4', done: true }],
+    readLater: [],
     progress: {
       'narou:n1': { ep: '1', done: true, next: 'https://ncode.syosetu.com/n1/2/' },
       'narou:n2': { ep: '9', done: true },
@@ -430,7 +499,15 @@ tests.push(['readStates: 話を読み終えても、次の話があれば読み�
     history: [{ key: 'narou:n5' }],
   };
   const st = NH.readStates(d);
-  assert.deepEqual(['narou:n1', 'narou:n2', 'narou:n3', 'narou:n4', 'narou:n5', 'narou:n6'].map(st), ['reading', 'done', 'reading', 'done', 'seen', null]);
+  assert.deepEqual(['narou:n1', 'narou:n2', 'narou:n3', 'narou:n4', 'narou:n5', 'narou:n6'].map(st), ['reading', 'done', 'reading', null, 'seen', null]);
+}]);
+
+tests.push(['readStates: 読書位置が消えた (リストから外した) 作品の読了は、履歴の最後の位置で見る。最後の話まで読んでいなければ閲覧済み', () => {
+  const NH = loadCore(makeStore({ readLater: [] }));
+  const h = (key, no, done, total, ep = String(no)) => ({ key, ep, epNo: no, total, pr: { y: 1, done, ep }, at: 1 });
+  const d = { readLater: [], progress: {}, history: [h('narou:a', 10, true, 10), h('narou:b', 5, true, 10), h('narou:c', 10, false, 10), { key: 'narou:s', ep: '0', status: 'short', pr: { y: 1, done: true, ep: '0' }, at: 1 }] };
+  const st = NH.readStates(d);
+  assert.deepEqual(['narou:a', 'narou:b', 'narou:c', 'narou:s'].map(st), ['done', 'seen', 'seen', 'done']);
 }]);
 
 tests.push(['fixLoginTitles: なろうの作品名が「ログイン」のまま残ったものを片付ける', () => {
@@ -488,9 +565,9 @@ tests.push(['ブロック: 作品・作者・キーワードで判定し、ミ�
 
 test('nextPool: 並びの続き > 同じ種類 > 残り全体の順で次の作品を選ぶ', () => {
   const NH = loadCore(makeStore({ readLater: [] }));
-  const mk = (id, kind, done) => ({ key: 'narou:' + id, kind, done: !!done, title: id });
-  const a = mk('a', 'update'), b = mk('b', 'later'), c = mk('c', 'update'), z = mk('z', 'update', true);
-  let d = { readLater: [a, b, c, z] };
+  const mk = (id, kind) => ({ key: 'narou:' + id, kind, title: id });
+  const a = mk('a', 'update'), b = mk('b', 'later'), c = mk('c', 'update');
+  let d = { readLater: [a, b, c] };
   let r = NH.nextPool(d, a);
   assert.equal(r.next.key, 'narou:c'); // 同じ種類 (update) を優先
   assert.equal(r.remaining, 1);
@@ -900,27 +977,45 @@ test('importSiteHistory: 新しい作品だけ数え、公式にしか無い作�
   assert.equal(JSON.parse(off.raw).history, undefined);
 });
 
-test('pruneDone: 読了から日数がたった作品と、その読書位置を消す。pruneDone=false なら消さない', () => {
+test('sanitize: 履歴の同じキーの作品は、先頭 (新しい方) だけ残す', () => {
   const NH = loadCore(makeStore({ readLater: [] }));
-  const mk = () => ({
-    readLater: [
-      { key: 'a', done: true, doneAt: now() - 40 * D },
-      { key: 'b', done: true, doneAt: now() - 5 * D },
-      { key: 'c', done: true }, // doneAt なし: 今から数える
-      { key: 'd', done: false },
-    ],
-    progress: { a: {}, b: {} },
+  const d = NH.sanitize({ readLater: [], history: [{ key: 'a', at: 9, title: '新' }, { key: 'b', at: 8 }, { key: 'a', at: 1, title: '古' }] });
+  assert.deepEqual(Array.from(d.history, (x) => x.key), ['a', 'b']);
+  assert.equal(d.history[0].title, '新');
+});
+
+test('sanitize: 使わなくなった古い項目 (設定の pruneDone / pruneDays / barButtonLight / barSplit / barWide・読書位置の lt・履歴の読み具合の last) は、読み込むときに除く', () => {
+  const NH = loadCore(makeStore({ readLater: [] }));
+  const d = NH.sanitize({
+    readLater: [],
+    settings: { pruneDone: true, pruneDays: 30, barButtonLight: 1, barSplit: 2, barWide: 3, theme: 'dark' },
+    progress: { 'hameln:1': { ep: '3', y: 1, done: true, next: null, at: 1, lt: 13 } },
+    history: [{ key: 'hameln:1', at: 1, pr: { y: 1, done: true, ep: '3', last: 13 } }],
   });
-  const d = mk();
-  assert.equal(NH.pruneDone(d), 1);
-  assert.deepEqual(d.readLater.map((x) => x.key), ['b', 'c', 'd']);
-  assert.deepEqual(Object.keys(d.progress), ['b']);
-  assert.ok(d.readLater[1].doneAt > 0);
-  const d2 = mk(); d2.settings = { pruneDays: 3 };
-  assert.equal(NH.pruneDone(d2), 2); // a と b
-  const d3 = mk(); d3.settings = { pruneDone: false };
-  assert.equal(NH.pruneDone(d3), 0);
-  assert.equal(d3.readLater.length, 4);
+  assert.deepEqual(Object.keys(d.settings), ['theme']);
+  assert.equal('lt' in d.progress['hameln:1'], false);
+  assert.deepEqual(Object.keys(d.history[0].pr), ['y', 'done', 'ep']);
+});
+
+test('sanitize: 同じキーの作品は最初の 1 つだけ残し、古い読了の印 (done / doneAt) は残る作品からも外す', () => {
+  const NH = loadCore(makeStore({ readLater: [] }));
+  const d = NH.sanitize({ readLater: [{ key: 'a', done: false, doneAt: 5, title: '1' }, { key: 'a', title: '2' }, { key: 'b' }] });
+  assert.deepEqual(d.readLater.map((x) => x.key), ['a', 'b']);
+  assert.equal(d.readLater[0].title, '1');
+  assert.deepEqual([d.readLater[0].done, d.readLater[0].doneAt], [undefined, undefined]);
+});
+
+test('seqRest: 並びの時刻 (at) が無い・壊れているときは、期限切れとして使わない', () => {
+  const NH = loadCore(makeStore({ readLater: [] }));
+  const d = { readLater: [{ key: 'a' }, { key: 'b' }], readSeq: { keys: ['a', 'b'] } };
+  assert.equal(NH.seqRest(d, d.readLater[0]), null);
+});
+
+test('sanitize: 以前の版で「読了」の印 (done) を付けて隠していた作品は、読み込むときにリストから外す (読んだ記録は履歴に残る)', () => {
+  const NH = loadCore(makeStore({ readLater: [] }));
+  const d = NH.sanitize({ readLater: [{ key: 'a', done: true, doneAt: 1 }, { key: 'b', done: false }, { key: 'c' }], history: [{ key: 'a' }] });
+  assert.deepEqual(d.readLater.map((x) => x.key), ['b', 'c']);
+  assert.deepEqual(d.history.map((x) => x.key), ['a']);
 });
 
 test('blockReason / muteReason: 作者は完全一致、キーワードはタイトルとタグに含まれれば一致 (全角半角・大小は区別しない)', () => {
@@ -1160,6 +1255,62 @@ test('NH.load の結果を書き換えると例外 (__NH_READONLY の検査)。N
 });
 
 
+test('NH.hintDue / hintDone: 出すのは、ヒントがオフでなく、まだ見ていないときだけ。見たことにしても、ほかの設定と、ほかのヒントは消えない', () => {
+  const s = makeStore({ readLater: [], settings: { font: 'mincho', hintsSeen: { other: true } } });
+  const NH = loadCore(s);
+  assert.equal(NH.hintDue('a'), true);
+  assert.equal(NH.hintDue('other'), false);
+  NH.hintDone('a');
+  assert.equal(NH.hintDue('a'), false);
+  const st = JSON.parse(s.raw).settings;
+  assert.equal(st.font, 'mincho');
+  assert.deepEqual(st.hintsSeen, { other: true, a: true });
+  const off = loadCore(makeStore({ readLater: [], settings: { hints: false } })); // 設定でヒントをオフにしていれば、見ていなくても出さない
+  assert.equal(off.hintDue('a'), false);
+  assert.equal(loadCore(makeStore({ readLater: [] })).hintDue('a'), true); // 設定が無い (新規) なら出す
+});
+
+test('ガイド: 手順は、操作を見分けて順に進む。足す数は始めてからの増え方で数え、終えるか、やめるか、で止まる', () => {
+  const later = (n, extra = {}) => Array.from({ length: n }, (_, i) => ({ key: 'narou:' + i, kind: 'later', done: false, ...extra }));
+  const s = makeStore({ readLater: later(3), settings: { font: 'mincho' } });
+  const NH = loadCore(s);
+  const d = () => JSON.parse(s.raw);
+  assert.equal(NH.guideActive(d()), false); // 始めていない
+  assert.equal(NH.guideStep(d()), -1);
+  assert.equal(NH.guideNext(d(), { onRanking: true }), -1);
+  NH.update((x) => NH.guideStart(x));
+  assert.equal(NH.guideStep(d()), 0);
+  assert.equal(d().settings.guide.base, 3); // 始める前から 3 件あった
+  assert.equal(d().settings.font, 'mincho'); // ほかの設定は消えない
+  assert.match(NH.guideText(d()), /ランキング/);
+  assert.equal(NH.guideNext(d(), {}), 0); // 何もしていない
+  assert.equal(NH.guideNext(d(), { onList: true }), 0); // 順番どおり (先の手順の操作だけでは進まない)
+  assert.equal(NH.guideNext(d(), { onRanking: true }), 1);
+  NH.update((x) => NH.guideSet(x, 1));
+  assert.match(NH.guideText(d()), /いま 0 \/ 2/);
+  // 1 つ足しただけでは進まない。2 つで進む (始める前にあった 3 件は数えない)
+  NH.update((x) => { x.readLater = later(4); });
+  assert.match(NH.guideText(d()), /いま 1 \/ 2/);
+  assert.equal(NH.guideNext(d(), {}), 1);
+  NH.update((x) => { x.readLater = later(5); });
+  assert.equal(NH.guideNext(d(), {}), 2);
+  assert.equal(NH.guideNext(d(), { onList: true }), 3); // 続けて満たしていれば、まとめて進む
+  assert.equal(NH.guideNext(d(), { onList: true, onWork: true }), 4); // 4 = 終わり
+  NH.update((x) => NH.guideSet(x, 4));
+  assert.deepEqual(d().settings.guide, { step: 'done' });
+  assert.equal(NH.guideActive(d()), false);
+  assert.equal(NH.guideNext(d(), { onWork: true }), -1); // 終えたあとは動かない
+  NH.update((x) => NH.guideStart(x));
+  NH.update((x) => NH.guideStop(x));
+  assert.deepEqual(d().settings.guide, { step: 'off' });
+  assert.equal(NH.guideActive(d()), false);
+  // 読了・更新の作品は「後で読む」に数えない
+  const t = makeStore({ readLater: [...later(1, { done: true }), ...later(1, { kind: 'update' })] });
+  const N2 = loadCore(t);
+  N2.update((x) => N2.guideStart(x));
+  assert.equal(JSON.parse(t.raw).settings.guide.base, 0);
+});
+
 test('NH.flag / flagOf: 未設定は既定 (既定はオン)。書かれていればその真偽。既定オフの項目は def に false', () => {
   const NH = loadCore(makeStore({ readLater: [] }));
   assert.equal(NH.flag({}, 'x'), true);
@@ -1177,41 +1328,54 @@ test('NH.flag / flagOf: 未設定は既定 (既定はオン)。書かれてい�
   assert.equal(NH.statsOn({}), true);
 });
 
-test('mergeUpdates: サイトの一覧から外れても、アプリで読んでいる途中の作品は読了にしない (読み終えたら読了)', () => {
-  const t0 = Date.now() - 100000;
-  const mk = () => makeStore({ readLater: [
-    { key: 'hameln:1', site: 'hameln', id: '1', title: 'A', done: false, kind: 'update', unread: 1, lastEp: 5, urlAt: t0 },
-    { key: 'hameln:2', site: 'hameln', id: '2', title: 'B', done: false, kind: 'update', unread: 1, lastEp: 5, urlAt: t0 },
-    { key: 'hameln:3', site: 'hameln', id: '3', title: 'C', done: false, kind: 'update', unread: 1, lastEp: 5, urlAt: t0 },
+test('mergeUpdates: サイトの一覧に無い「更新」の作品は、読書位置・メモ・ジャンルがあってもなくても、何も変えずに残る (消さない・「後で読む」へ移さない・未読の数も変えない)', () => {
+  const st = makeStore({ readLater: [
+    { key: 'hameln:1', site: 'hameln', id: '1', title: 'A', kind: 'update', unread: 1, lastEp: 5, memo: 'メモ' },
+    { key: 'hameln:2', site: 'hameln', id: '2', title: 'B', kind: 'update', unread: 2, lastEp: 5, tag: '恋愛' },
+    { key: 'hameln:3', site: 'hameln', id: '3', title: 'C', kind: 'update', unread: 3, lastEp: 5 },
   ], progress: {
     'hameln:1': { url: 'u', ep: '5', y: 0.4, done: false, at: Date.now() }, // 読んでいる途中
     'hameln:2': { url: 'u', ep: '5', y: 1, done: true, at: Date.now() },    // 読み終えた
   } });
-  const st = mk();
-  const NH = loadCore(st);
-  NH.mergeUpdates('hameln', []); // 3 作品とも、サイトの未読の一覧には無い
-  const d = JSON.parse(st.raw);
-  const done = Object.fromEntries(d.readLater.map((x) => [x.id, x.done]));
-  assert.deepEqual(done, { 1: false, 2: true, 3: true });
+  const before = JSON.parse(st.raw);
+  const r = loadCore(st).mergeUpdates('hameln', []); // 3 作品とも、サイトの未読の一覧には無い
+  const after = JSON.parse(st.raw);
+  assert.deepEqual(after.readLater, before.readLater); // 1 つも、消えず・移らず・変わらない
+  assert.deepEqual(after.progress, before.progress);
+  assert.deepEqual([r.added, r.updates, r.trace.length], [0, 0, 0]);
 });
 
-test('読了から「後で読む」に戻すと「後で読む」へ移る。古い読了の時刻が残っていても、読了にした直後に消えない', () => {
+test('mergeUpdates: 一覧を最後まで見ていない・カテゴリを絞って確認したときも、取得に無い作品は何も変えない。取得した作品のカテゴリは覚える', () => {
+  const st = makeStore({ readLater: [
+    { key: 'narou:a', site: 'narou', id: 'a', title: 'A', kind: 'update', cat: 1, unread: 2 },
+    { key: 'narou:b', site: 'narou', id: 'b', title: 'B', kind: 'update', cat: 2, unread: 1 },
+    { key: 'narou:d', site: 'narou', id: 'd', title: 'D', kind: 'update' },
+  ] });
+  loadCore(st).mergeUpdates('narou', [{ id: 'd', title: 'D', url: 'u', unread: 1, lastEp: 2, cat: 1 }]);
+  const by = (k) => JSON.parse(st.raw).readLater.find((x) => x.key === k);
+  assert.deepEqual([by('narou:a').kind, by('narou:a').unread, by('narou:b').kind, by('narou:b').unread], ['update', 2, 'update', 1]);
+  assert.equal(by('narou:d').cat, 1); // カテゴリを覚える
+});
+
+test('removeItem: お気に入りの作品の読書位置は、リストから外しても消さない (ふつうの作品は消す)', () => {
+  const NH = loadCore(makeStore({ readLater: [] }));
+  const d = {
+    readLater: [{ key: 'narou:n1', kind: 'later' }, { key: 'narou:n2', kind: 'later' }],
+    progress: { 'narou:n1': { ep: '3', at: 5 }, 'narou:n2': { ep: '4', at: 6 } },
+    favorites: [{ key: 'narou:n1', site: 'narou', id: 'n1', title: 'F' }],
+  };
+  NH.removeItem(d, d.readLater[0]);
+  NH.removeItem(d, d.readLater[0]);
+  assert.deepEqual(Object.keys(d.progress), ['narou:n1']);
+});
+
+test('「更新」の作品を「後で読む」にすると、種類だけ「後で読む」へ移る (手で移した印は外れる)', () => {
   const NH = loadCore(makeStore({ readLater: [] }));
   const w = { site: 'hameln', id: '1', url: 'https://syosetu.org/novel/1/' };
-  // 更新の確認で読了に回った「更新」の作品を、「後で読む」にする (「更新」のままだと、次の確認でまた読了に回る)
-  const d = { readLater: [{ key: 'hameln:1', site: 'hameln', id: '1', kind: 'update', done: true, doneAt: 1, manualKind: true }], progress: {} };
-  assert.equal(NH.addLater(d, w, '作品'), 'revived');
-  assert.deepEqual([d.readLater[0].kind, d.readLater[0].done, 'doneAt' in d.readLater[0], 'manualKind' in d.readLater[0]], ['later', false, false, false]);
-  // 読了でない作品に古い doneAt が残っていても、読了にしたら今から数える (すぐ「30 日たった」と見なして消さない)
-  const x = { key: 'a:1', done: false, doneAt: 1 };
-  NH.setDone(x, true);
-  assert.ok(x.doneAt > Date.now() - 5000);
-  const d2 = { readLater: [x], settings: {} };
-  assert.equal(NH.pruneDone(d2), 0);
-  // すでに読了の作品を読了にし直しても、時刻は変えない
-  const y = { key: 'a:2', done: true, doneAt: 1234 };
-  NH.setDone(y, true);
-  assert.equal(y.doneAt, 1234);
+  const d = { readLater: [{ key: 'hameln:1', site: 'hameln', id: '1', kind: 'update', manualKind: true }], progress: {} };
+  assert.equal(NH.addLater(d, w, '作品'), 'moved');
+  assert.deepEqual([d.readLater[0].kind, 'manualKind' in d.readLater[0]], ['later', false]);
+  assert.equal(d.readLater.length, 1);
 });
 
 test('tagsOf: スペース・読点・カンマで区切って複数のタグ。以前の 1 つだけの値もそのまま。重複・空は除く', () => {
@@ -1247,14 +1411,10 @@ test('「後で読む」の追加・削除・元に戻す (addLater / toggleLate
   // 足す: 状態 (status) は分かっているときだけ付く
   assert.equal(NH.addLater(d, w1, '作品1', 'serial'), 'added');
   assert.equal(NH.addLater(d, w2, '作品2'), 'added');
-  assert.deepEqual([d.readLater[0].key, d.readLater[0].kind, d.readLater[0].done, d.readLater[0].status, d.readLater[0].title], ['narou:n1', 'later', false, 'serial', '作品1']);
+  assert.deepEqual([d.readLater[0].key, d.readLater[0].kind, d.readLater[0].status, d.readLater[0].title], ['narou:n1', 'later', 'serial', '作品1']);
   assert.equal('status' in d.readLater[1], false);
   assert.equal(NH.addLater(d, w1, '作品1'), 'exists');
   assert.equal(d.readLater.length, 2);
-  // 読了の作品は、足すと読了を外して戻る (消えず、増えない)
-  NH.setDone(d.readLater[0], true);
-  assert.equal(NH.addLater(d, w1, '作品1'), 'revived');
-  assert.equal(d.readLater[0].done, false);
   assert.equal(d.readLater.length, 2);
   // 外す: 読書位置も消え、元の位置と読書位置の控えが返る
   d.progress['narou:n1'] = { url: 'https://ncode.syosetu.com/n1/3/', y: 0.4 };
@@ -1268,9 +1428,7 @@ test('「後で読む」の追加・削除・元に戻す (addLater / toggleLate
   assert.deepEqual([d.readLater.map((x) => x.key), d.readLater[0].memo, d.progress['narou:n1'].y], [['narou:n1', 'hameln:2'], 'メモ', 0.4]);
   NH.restoreItem(d, t1.removed);
   assert.equal(d.readLater.length, 2);
-  // toggleLater: 読了なら戻す (revived)、無ければ足す (added)、あれば外す (removed)
-  NH.setDone(d.readLater[0], true);
-  assert.equal(NH.toggleLater(d, w1, '作品1').result, 'revived');
+  // toggleLater: あれば外す (removed)、無ければ足す (added)
   assert.equal(NH.toggleLater(d, w1, '作品1').result, 'removed');
   assert.equal(NH.toggleLater(d, w1, '作品1', 'complete').result, 'added');
   assert.equal(d.readLater[d.readLater.length - 1].status, 'complete');
@@ -1280,9 +1438,130 @@ test('「後で読む」の追加・削除・元に戻す (addLater / toggleLate
   assert.deepEqual([r.item.key, d.readLater.map((x) => x.key)], ['hameln:2', []]);
 });
 
+test('お気に入り: 足す・重ねて足さない・外す・元に戻す', () => {
+  const NH = loadCore(makeStore({ readLater: [] }));
+  const d = { readLater: [], history: [{ key: 'narou:n1', site: 'narou', id: 'n1', title: '履歴の名前', status: 'serial', url: 'https://ncode.syosetu.com/n1/' }] };
+  const w = { site: 'narou', id: 'n1' };
+  assert.equal(NH.isFav(d, w), false);
+  assert.equal(NH.addFav(d, w), 'added');
+  assert.equal(d.favorites[0].title, '履歴の名前'); // 作品名・連載状態・URL は、履歴に覚えたものを使う
+  assert.equal(d.favorites[0].status, 'serial');
+  assert.equal(NH.addFav(d, w), 'exists');
+  assert.equal(d.favorites.length, 1);
+  NH.addFav(d, { site: 'hameln', id: '9' }, '二つ目');
+  assert.equal(d.favorites.map((x) => x.key).join(), 'hameln:9,narou:n1'); // 新しく足した作品が先頭
+  const r = NH.removeFav(d, w);
+  assert.equal(d.favorites.length, 1);
+  NH.restoreFav(d, r);
+  assert.equal(d.favorites.map((x) => x.key).join(), 'hameln:9,narou:n1'); // 元の位置へ戻る
+  assert.equal(NH.removeFav(d, { site: 'x', id: 'none' }), null);
+});
+
+test('お気に入り: 読んだ場所の記録は、新しく読んだ順に最大数まで守り、超えたら古いものから消える (作品は残る)', () => {
+  const NH = loadCore(makeStore({ readLater: [] }));
+  const d = { readLater: [], settings: { favoritePosMax: 2 }, progress: {} };
+  ['a', 'b', 'c'].forEach((id, i) => {
+    NH.addFav(d, { site: 'narou', id }, id.toUpperCase());
+    d.progress['narou:' + id] = { url: 'u' + id, ep: '1', y: 0.1, at: 100 + i };
+  });
+  assert.equal(d.favorites.length, 3); // 作品の数に上限は無い
+  assert.equal([...NH.favProtected(d)].sort().join(), 'narou:b,narou:c'); // 一番古い a は守られない
+  // 100 作品以上の「ふつうの」記録が古い順に消える中でも、守られた b・c は残る (a は、ふつうの作品と同じ扱い)
+  for (let i = 0; i < 120; i++) d.progress['hameln:x' + i] = { url: 'x', ep: '1', y: 0, at: 1000 + i };
+  NH.pruneProgress(d);
+  assert.ok(d.progress['narou:b'] && d.progress['narou:c']);
+  assert.ok(!d.progress['narou:a']);
+  d.progress['narou:a'] = { url: 'ua', ep: '2', y: 0.5, at: 5000 }; // 読み直すと a が新しくなり、いちばん古い b が守られなくなる
+  assert.equal([...NH.favProtected(d)].sort().join(), 'narou:a,narou:c');
+  d.settings.favoritePosMax = 0; // 0 は無制限
+  assert.equal(NH.favProtected(d).size, 3);
+  assert.equal(NH.favPosMaxOf({}), 100);
+  assert.equal(d.favorites.length, 3);
+});
+test('お気に入り: 壊れたデータでも画面が止まらない (sanitize)', () => {
+  const NH = loadCore(makeStore({ readLater: [] }));
+  assert.equal(NH.sanitize({ readLater: [], favorites: 'x' }).favorites, undefined);
+  const d = NH.sanitize({ readLater: [], favorites: [{ key: 'a:1' }, null, { id: 3 }, 'z'] });
+  assert.equal(d.favorites.map((x) => x.key).join(), 'a:1');
+  // 同じ作品が二重にあるデータ (バックアップの読み込みなど): 先頭だけ残す
+  const dup = NH.sanitize({ readLater: [], favorites: [{ key: 'a:1', title: '新' }, { key: 'b:2' }, { key: 'a:1', title: '旧' }] });
+  assert.equal(dup.favorites.map((x) => x.key + x.title).join(), 'a:1新,b:2undefined');
+});
+
+test('バーの出し方: 2 つの設定 (hideBarOnScroll・barEdge) と選択の行き来。上は always / scroll、左右は always / edge (左右では「スクロールで隠す」を選べない)', () => {
+  const NH = loadCore(makeStore({ readLater: [] }));
+  assert.equal(NH.barModeOf({}), 'scroll'); // 既定
+  assert.equal(NH.barModeOf({ hideBarOnScroll: false }), 'always');
+  assert.equal(NH.barModeOf({ barEdge: true, barPos: 'left' }), 'edge');
+  assert.equal(NH.barModeOf({ barEdge: true, hideBarOnScroll: false, barPos: 'right' }), 'edge'); // 端から出すが優先
+  assert.equal(NH.barModeOf({ barEdge: true }), 'scroll'); // 上 (既定) に置くときは、端から出すは使わない
+  assert.equal(NH.barModeOf({ barEdge: true, barPos: 'top', hideBarOnScroll: false }), 'always');
+  for (const m of ['always', 'edge']) assert.equal(NH.barModeOf(NH.setBarMode({ barPos: 'left' }, m)), m, m);
+  for (const m of ['always', 'scroll']) assert.equal(NH.barModeOf(NH.setBarMode({ barPos: 'top' }, m)), m, m);
+  assert.equal(NH.barModeOf({ barPos: 'left', hideBarOnScroll: true }), 'always'); // 上で「スクロールで隠す」にしていて、左右へ移したとき: いつも表示
+  assert.equal(NH.barModesFor('top').map((x) => x[0]).join(), 'always,scroll');
+  assert.equal(NH.barModesFor('left').map((x) => x[0]).join(), 'always,edge');
+  assert.equal(NH.barModesFor(undefined).map((x) => x[0]).join(), 'always,scroll');
+});
+
+test('挿絵の保存は、窓口をすぐ戻し、返事 (imageDone) を Promise で待つ。窓口が無い・例外なら {}', async () => {
+  const calls = [];
+  const NH = loadCore(makeStore({ readLater: [] }), { NHOffline: { saveImage: (...a) => calls.push(a) } });
+  const p1 = NH.off.saveImage('hameln', '1', 'https://img.example/a.jpg', 'https://syosetu.org/x');
+  const p2 = NH.off.saveImage('hameln', '1', 'https://img.example/b.jpg', 'https://syosetu.org/x');
+  assert.equal(calls.length, 2); // 通信の終わりを待たずに、2 件とも窓口へ渡った
+  assert.notEqual(calls[0][4], calls[1][4]); // 番号 (req) は別
+  assert.equal(calls[0][5], 'tok'); // 合言葉を添える
+  NH.off.imageDone(calls[1][4], { name: 'ib.jpg', bytes: 5 }); // 返事は順不同でよい
+  NH.off.imageDone(calls[0][4], { error: 'challenge' });
+  assert.equal((await p2).name, 'ib.jpg');
+  assert.equal((await p1).error, 'challenge');
+  NH.off.imageDone(999, { name: 'x' }); // 待っていない番号の返事は無視
+  const NH2 = loadCore(makeStore({ readLater: [] }), { NHOffline: { saveImage: () => { throw new Error('x'); } } });
+  assert.equal(Object.keys(await NH2.off.saveImage('a', '1', 'https://a/b', '')).length, 0);
+  assert.equal(Object.keys(await loadCore(makeStore({ readLater: [] })).off.saveImage('a', '1', 'https://a/b', '')).length, 0); // 窓口なし
+});
+
+test('sanitize: 読書位置の値が null・文字でも捨てて、pruneProgress が例外にならない', () => {
+  const NH = loadCore(makeStore({ readLater: [] }));
+  const d = NH.sanitize({ readLater: [], progress: { a: null, b: 'x', c: { at: 3, lt: 1 }, e: { at: 5 } } });
+  assert.deepEqual(Object.keys(d.progress).sort(), ['c', 'e']);
+  assert.equal('lt' in d.progress.c, false);
+  NH.pruneProgress(d); // 例外にならない
+});
+
+test('restoreItem: 控えの位置が -1 (元から無かった) でも、先頭に入る (末尾の 1 つ手前にしない)', () => {
+  const NH = loadCore(makeStore({ readLater: [] }));
+  const d = { readLater: [{ key: 'a' }, { key: 'b' }], progress: {} };
+  NH.restoreItem(d, { item: { key: 'z' }, at: -1 });
+  assert.deepEqual(d.readLater.map((x) => x.key), ['z', 'a', 'b']);
+});
+
 let failed = 0;
 for (const [name, fn] of tests) {
   try { await fn(); console.log('ok   ' + name); } catch (e) { failed++; console.log('FAIL ' + name + '\n     ' + e.message); }
 }
 console.log(failed ? failed + ' 件失敗' : tests.length + ' 件すべて成功');
 process.exit(failed ? 1 : 0);
+
+test('mergeUpdates: 同じ作品が 1 回の取得に 2 度あっても、updates は 1 と数える', () => {
+  const st = makeStore({ readLater: [] });
+  const NH = loadCore(st);
+  const r = NH.mergeUpdates('hameln', [
+    { id: '9', title: 'D', url: 'u', unread: 1, lastEp: 2 },
+    { id: '9', title: 'D', url: 'u', unread: 1, lastEp: 2 },
+  ]);
+  assert.equal(r.updates, 1);
+  assert.equal(r.added, 1);
+  assert.equal(JSON.parse(st.raw).readLater.length, 1);
+});
+
+test('sanitize: 履歴・お気に入りの重複と作品の形でないものを除く (最初の 1 つを残す)', () => {
+  const NH = loadCore(makeStore({ readLater: [] }));
+  const d = NH.sanitize({ readLater: [{ key: 'a', done: true }, { key: 'a' }, { key: 'a', x: 1 }, null],
+    history: [{ key: 'h', at: 2 }, { key: 'h', at: 1 }, { key: 3 }], favorites: [{ key: 'f', n: 1 }, { key: 'f', n: 2 }, 'x'] });
+  assert.deepEqual(d.readLater.map((e) => e.key), ['a']);
+  assert.equal(d.readLater[0].x, undefined);
+  assert.deepEqual(d.history.map((e) => e.at), [2]);
+  assert.deepEqual(d.favorites.map((e) => e.n), [1]);
+});

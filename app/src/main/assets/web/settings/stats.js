@@ -7,7 +7,6 @@ const statsTitle = (d, key) => {
 };
 function paintStatsRow() { // トップの行の値: 今日の話数
   const e = NH.statsOn(load()) ? NH.statsSummary(load()).today.e : 0;
-  $('v-stats').textContent = !NH.statsOn(load()) ? '記録しない' : e ? '今日 ' + e + ' 話' : '';
 }
 function paintStats() {
   const d = load(), s = NH.statsSummary(d);

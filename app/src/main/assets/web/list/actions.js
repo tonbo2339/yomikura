@@ -1,11 +1,16 @@
 // list.html: データ操作 (元に戻せる書き換え)・並べ替えの操作
 // ---- データ操作 (変更前の状態を取っておき、元に戻せるようにする) ----
+// NH.update のあと、書けていなければ知らせて true (wrote = fn の中で決めた結果。書かなかったときは null)。呼び出し側は、true なら何もせず戻る
+function saveFailed(wrote) {
+  if (!wrote) { snack('保存データを読めないため、変更できませんでした'); return true; } // NH.update が書かなかった (NH.unreadable)
+  if (NH.updateGaveUp) { render(); snack('保存できませんでした。もう一度お試しください'); return true; } // 書き込みを断られ続けた (ほかが書き続けている)
+  return false;
+}
 function mutate(fn, message) {
   let before = null, after = null; // 変更前と変更後の写し
   const copy = (d) => JSON.parse(JSON.stringify({ readLater: d.readLater, progress: d.progress || {} }));
   NH.update((d) => { before = copy(d); fn(d); after = copy(d); });
-  if (!after) { snack('保存データを読めないため、変更できませんでした'); return; } // NH.update が書かなかった (NH.unreadable)
-  if (NH.updateGaveUp) { render(); snack('保存できませんでした。もう一度お試しください'); return; } // 書き込みを断られ続けた (ほかが書き続けている)
+  if (saveFailed(after)) return;
   render();
   if (message) snack(message, () => { NH.update((x) => undoChange(x, before, after)); render(); });
   else hideSnack(); // 別の操作をしたら、前の「元に戻す」は使えなくする (その操作まで戻ってしまうため)
@@ -29,6 +34,16 @@ function undoChange(x, before, after) {
     if (k in bp) x.progress[k] = bp[k]; else delete x.progress[k];
   });
 }
+// 並びだけを変える操作 (長押しの並べ替え・先頭 / 末尾へ)。mutate の「元に戻す」は、中身が変わった作品だけを戻すので、並びだけの変更は戻せない。
+// ここは、変更前の並び (key の配列) を取っておき、元に戻すときはその並びへ戻す (作品の中身・読書位置には触らない)。並びが変わらなかったときは何も出さない
+function mutateOrder(fn, message) {
+  let before = null, after = null;
+  NH.update((d) => { before = d.readLater.map((x) => x.key); fn(d); after = d.readLater.map((x) => x.key); });
+  if (saveFailed(after)) return;
+  render();
+  if (message && before.join('\n') !== after.join('\n')) snack(message, () => { NH.update((x) => { x.readLater = restoreOrder(x.readLater, before); }); render(); });
+  else hideSnack();
+}
 function patch(key, fn) { mutate((d) => { const x = d.readLater.find((y) => y.key === key); if (x) fn(x); }); }
 function remove(key) { mutate((d) => { d.readLater = d.readLater.filter((x) => x.key !== key); NH.dropProgress(d, [key]); }, 'リストから削除しました'); }
 // 選択モードでまとめて削除 (1 回で元に戻せる)
@@ -36,22 +51,11 @@ function removeMany(keys) {
   if (!keys.length) return;
   mutate((d) => { const gone = new Set(keys); d.readLater = d.readLater.filter((x) => !gone.has(x.key)); NH.dropProgress(d, keys); }, keys.length + ' 作品をリストから削除しました');
 }
-function markDone(key) { mutate((d) => { const x = d.readLater.find((y) => y.key === key); if (x) NH.setDone(x, true); }, '読了にしました'); }
-function restore(key) { mutate((d) => { const x = d.readLater.find((y) => y.key === key); if (x) NH.setDone(x, false); }, '読了を取り消しました'); }
-function clearDone() {
-  // 画面に出ている読了の作品だけ (NSFW モードで隠れている作品・検索で外れている作品は消さない)
-  const d = load(), terms = queryTerms();
-  const pick = (dd) => dd.readLater.filter((x) => x.done && !NH.nsfwHides(dd, x) && (!terms.length || kindOf(x) === ui.tab) && matchQuery(x, terms)).map((x) => x.key); // render の doneShown と同じ
-  const keys = pick(d);
-  if (!keys.length) return;
-  // 消す作品は、書き込みの中で選び直す (間に更新の確認が読了を外した作品を消さない)
-  mutate((x) => { const gone = new Set(pick(x)); x.readLater = x.readLater.filter((y) => !gone.has(y.key)); NH.dropProgress(x, [...gone]); }, '読了 ' + keys.length + ' 作品を削除しました');
-}
 function switchKind(key) {
   const it = load().readLater.find((y) => y.key === key);
   if (!it) return;
   const to = kindOf(it) === 'update' ? 'later' : 'update';
-  // 手で「未読の更新」へ移した作品は、サイトの一覧に無くても読了にしない (manualKind。サイトの一覧に出たら外す)
+  // 手で「未読の更新」へ移した作品は、サイトの一覧に無くてもリストから外さない (manualKind。サイトの一覧に出たら外す)
   mutate((d) => {
     const x = d.readLater.find((y) => y.key === key);
     if (!x) return;
@@ -60,10 +64,16 @@ function switchKind(key) {
   }, '「' + (to === 'later' ? '後で読む' : '更新') + '」タブへ移しました');
 }
 function toTop(key) {
-  mutate((d) => {
+  mutateOrder((d) => {
     const i = d.readLater.findIndex((x) => x.key === key);
     if (i > 0) d.readLater.unshift(d.readLater.splice(i, 1)[0]);
-  });
+  }, '先頭へ移しました');
+}
+function toBottom(key) {
+  mutateOrder((d) => {
+    const i = d.readLater.findIndex((x) => x.key === key);
+    if (i >= 0 && i < d.readLater.length - 1) d.readLater.push(d.readLater.splice(i, 1)[0]);
+  }, '末尾へ移しました');
 }
 // 表示中の並びの中で入れ替える (絞り込み中でも、見えている隣と入れ替わる)
 function move(key, delta, visible) {
@@ -73,6 +83,7 @@ function move(key, delta, visible) {
   mutate((d) => {
     const a = d.readLater.findIndex((x) => x.key === key);
     const b = d.readLater.findIndex((x) => x.key === visible[to].key);
+    if (a < 0 || b < 0) return; // 動かしているあいだに、どちらかが消えた (更新の確認など)。入れ替えると、リストに空の項目が入る
     [d.readLater[a], d.readLater[b]] = [d.readLater[b], d.readLater[a]];
   });
   // 描き直すとボタンが作り直されるので、動かした作品の同じ向きのボタンへフォーカスを戻す (端に着いたら反対の向き。TalkBack・キーボードで続けて動かせるように)

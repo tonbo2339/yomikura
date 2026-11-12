@@ -137,6 +137,31 @@ test('一覧がログイン・2 段階認証のページへ転送された (ロ�
   }
 });
 
+test('ログインのページへ転送されたとき、直前に移った先 (collectNext) のサイトのログイン切れとして残し、その次へ進む (なろう R18 のログインが、なろうの確認にならない)', async () => {
+  const st = makeStore();
+  st.raw = JSON.stringify({ readLater: [], collectStartAt: 1000, collectNext: { id: 'narou18', at: 2000 } });
+  const { ctx, timers, replaced } = load('https://syosetu.com/login/input/#nh-collect-fg', st);
+  const adapter = ctx.NH.adapter(); // ホストからは narou のアダプターになる
+  adapter.collectUpdates = async () => { throw new Error('一覧ではないので呼ばれない'); };
+  assert.equal(ctx.NH_UI_COLLECT({ adapter, challenge: false }), true);
+  await flush();
+  const log = JSON.parse(st.raw).collectLog;
+  assert.deepEqual(log.narou18, { err: 'login' }); // R18 のブックマークのログイン切れ
+  assert.equal(log.narou, undefined); // なろうのログイン切れにしない
+  timers[0][0]();
+  assert.match(replaced[0], /kakuyomu\.jp/); // narou18 の次 (カクヨム) へ進む。narou18 へ戻らない
+  assert.equal(JSON.parse(st.raw).collectNext.id, 'kakuyomu');
+});
+
+test('ログインのページへ転送されても、collectNext が今回の巡回より前の古い印なら、ホストで決まるサイト (なろう) として扱う', async () => {
+  const st = makeStore();
+  st.raw = JSON.stringify({ readLater: [], collectStartAt: 5000, collectNext: { id: 'narou18', at: 2000 } });
+  const { ctx } = load('https://syosetu.com/login/input/#nh-collect-fg', st);
+  assert.equal(ctx.NH_UI_COLLECT({ adapter: ctx.NH.adapter(), challenge: false }), true);
+  await flush();
+  assert.deepEqual(JSON.parse(st.raw).collectLog.narou, { err: 'login' });
+});
+
 test('ログインのページでも、巡回のページ (hash) でなければ何もしない (ふつうに開いたログイン画面を邪魔しない)', () => {
   const st = makeStore();
   const { ctx } = load('https://syosetu.com/login/input/', st); // hash が無い

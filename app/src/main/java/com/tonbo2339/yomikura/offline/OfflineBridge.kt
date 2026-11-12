@@ -3,7 +3,7 @@ package com.tonbo2339.yomikura
 import android.webkit.JavascriptInterface
 
 /**
- * オフライン保存の窓口 (NHOffline)。書き込み (put*) と「あるか」の確認は、保存を進めるサイトのページから呼ぶ。
+ * オフライン保存の窓口 (NHOffline)。保存した作品の書き込みは、保存用の WebView だけが持つ別の窓口 (OfflineService の Bridge) で行う (広告の入るサイトのページから、保存データを書き換えられないように、この窓口には持たない)。「あるか」の確認は、サイトのページからも呼べる。
  * 中身を読む / 一覧 / 削除は、アプリ内ページ (yomikura.local) からだけ受け付ける。
  * JS からは名前と引数の数で呼ばれるので、メソッドの名前と形は変えない。
  */
@@ -11,26 +11,9 @@ class OfflineBridge(
     host: BridgeHost,
     private val offline: OfflineStore,
     private val saveQueue: SaveQueue,
-    private val hostFilter: HostFilter,
 ) : GuardedBridge(host) {
 
     // ---- 保存した作品の読み書き ----
-
-    @JavascriptInterface
-    fun putEpisode(site: String, id: String, ep: String, json: String, t: String?): Boolean = trusted(t) && offline.putEpisode(site, id, ep, json)
-
-    @JavascriptInterface
-    fun putMeta(site: String, id: String, json: String, t: String?): Boolean = trusted(t) && offline.putMeta(site, id, json)
-
-    /** 挿絵を取って保存する (アプリの中から取る。結果の JSON は ImageSaver を参照)。保存中のサイトのページから */
-    @JavascriptInterface
-    fun saveImage(site: String, id: String, url: String, referer: String, t: String?): String =
-        if (trusted(t)) ImageSaver.save(offline, site, id, url, referer) { hostFilter.shouldBlock(it) } else "{}"
-
-    /** ページの中で取った挿絵 (base64) を保存する (本文と同じサイトの挿絵用。ImageSaver.saveData を参照) */
-    @JavascriptInterface
-    fun saveImageData(site: String, id: String, url: String, base64: String, t: String?): String =
-        if (trusted(t)) ImageSaver.saveData(offline, site, id, url, base64) { hostFilter.shouldBlock(it) } else "{}"
 
     @JavascriptInterface
     fun meta(site: String, id: String, t: String?): String = if (trusted(t)) offline.meta(site, id) else ""
@@ -56,6 +39,13 @@ class OfflineBridge(
     fun readerBar(hide: Boolean) {
         if (!host.appPageNow) return
         onUi { host.readerBar(hide) }
+    }
+
+    /** サイトの話ページ (縦書き) で、上部バーを隠す / 出す。保存した作品の読書画面と同じ動き。サイトのページから呼ぶので、合言葉を添える */
+    @JavascriptInterface
+    fun siteBar(hide: Boolean, t: String?) {
+        if (!trusted(t)) return
+        onUi { host.siteReaderBar(hide) }
     }
 
     // ---- 保存キュー ----
@@ -84,7 +74,12 @@ class OfflineBridge(
 
     /** キューから外す。保存中の作品なら、サービスが次の進みで中止する */
     @JavascriptInterface
-    fun queueRemove(key: String): Boolean = changeQueue { saveQueue.remove(key) }
+    fun queueRemove(key: String): Boolean = changeQueue {
+        saveQueue.remove(key).also {
+            // まだ目録 (meta) を書く前に外した作品の、書きかけの話・挿絵は残さない (保存中の作品は、サービスが終えるときに片付ける)
+            if (key != OfflineStatus.live?.key) key.split(":", limit = 2).takeIf { it.size == 2 }?.let { (site, id) -> offline.dropIfNoMeta(site, id) }
+        }
+    }
 
     @JavascriptInterface
     fun queueClearFinished(): Boolean = changeQueue { saveQueue.clearFinished() }
@@ -128,6 +123,14 @@ class OfflineBridge(
     /** 従量課金でない回線 (Wi-Fi など) につながっているか。「Wi-Fi のときだけ保存する」設定の判定に使う。 */
     @JavascriptInterface
     fun onUnmetered(t: String?): Boolean = trusted(t) && Connectivity.unmetered(ctx)
+
+    /** 端末の空き容量 (バイト。オフライン保存の置き場所)。調べられなければ -1。保存を始める前に、少ないときは聞くために使う (ui/ui-save.js) */
+    @JavascriptInterface
+    fun freeBytes(t: String?): Long = if (trusted(t)) StorageSpace.freeBytes(ctx) else -1L
+
+    /** 保存の前に使う人に聞くか (空きが少ない・見込み estimate の 2 倍に足りない)。判断は StorageSpace.shouldAsk */
+    @JavascriptInterface
+    fun lowSpace(estimate: Long, t: String?): Boolean = trusted(t) && StorageSpace.shouldAsk(StorageSpace.freeBytes(ctx), estimate)
 
     /** アプリ内ページからだけ受け付けて、キューを書き換え、画面の保存の帯に知らせる。 */
     private fun changeQueue(change: () -> Unit): Boolean = forApp(false) {

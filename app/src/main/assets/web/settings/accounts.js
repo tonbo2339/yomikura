@@ -47,10 +47,8 @@ function paintAccounts() {
   const logins = siteLogins(), log = load().collectLog || {};
   const box = $('accountList');
   box.innerHTML = '';
-  let nIn = 0, nAll = 0;
   ACCOUNTS.filter(accountShown).forEach((a) => {
     const st = accountState(a, logins, log);
-    nAll++; if (st !== 'out') nIn++;
     const g = addGroup(box, a[1]);
     const row = el('div', 'cell');
     row.append(el('span', 'text', st === 'out' ? '未ログイン' : st === 'expired' ? 'ログイン切れの可能性' : 'ログイン済み'));
@@ -84,7 +82,6 @@ function paintAccounts() {
     g.appendChild(actions);
     if (a[2]) box.appendChild(el('div', 'hint', a[2] + '。'));
   });
-  $('v-accounts').textContent = nAll ? nIn + ' / ' + nAll + ' ログイン済み' : '';
   clearTimeout(countdownTimer);
   if (countdown) countdownTimer = setTimeout(paintAccounts, 1000); // 残りの秒数を数え、押せるようになったら戻す
 }

@@ -4,10 +4,10 @@
   <div class="group">
     <label class="cell"><span class="text">読んだ作品を薄く表示</span><input type="checkbox" class="switch" id="dimRead" data-setting="dimRead"></label>
   </div>
-  <div class="hint">ランキングと検索結果で、読んだ作品を薄くして、「読了 / 読みかけ / 閲覧済み」の印を付けます。</div>
+  <div class="hint">ランキングと検索結果で、「読了 / 読みかけ / 閲覧済み」の印も付く。</div>
   <div class="section-label">ミュートに一致した作品</div>
   <div class="group" id="muteModeList"></div>
-  <div class="hint">ランキングと検索結果に使います。各作品の「ミュート」ボタンからも追加できます。</div>
+  <div class="hint">ランキングと検索結果に使う。各作品の「ミュート」ボタンからも追加できる。</div>
   <div class="section-label">ミュートを追加</div>
   <div class="group">
     <div class="cell" style="flex-direction:column;align-items:stretch;gap:10px">
@@ -18,7 +18,10 @@
       </div>
     </div>
   </div>
-  <div class="hint">キーワードはタイトルとタグに含まれていれば一致します。作者は名前が完全に一致したときだけです。</div>
+  <div class="hint"><ul>
+    <li>キーワード: タイトルかタグに含まれていれば一致</li>
+    <li>作者: 名前が完全に一致したときだけ</li>
+  </ul></div>
   <div class="section-label">ミュートの一覧</div>
   <div class="group">
     <button class="cell" data-names="muteWords"><span class="text">キーワード・タグ</span><span class="value" id="nc-muteWords"></span></button>
@@ -35,8 +38,8 @@
       </div>
     </div>
   </div>
-  <details class="more"><summary>ブロックに一致した作品は完全に出しません (件数にも出ません)。</summary>
-    <p>ランキング・検索結果のほか、おすすめや作者の作品一覧からも消えます。作品ごとのブロックは、「ミュート」ボタンで「ブロック」に切り替えて追加します。</p></details>
+  <details class="more"><summary>ブロックに一致した作品は完全に出ない (件数にも出ない)。</summary>
+    <p>ランキング・検索結果のほか、おすすめや作者の作品一覧からも消える。作品ごとのブロックは、「ミュート」ボタンで「ブロック」に切り替えて追加する。</p></details>
   <div class="section-label">ブロックの一覧</div>
   <div class="group">
     <button class="cell" data-names="blockWorks"><span class="text">作品</span><span class="value" id="nc-blockWorks"></span></button>

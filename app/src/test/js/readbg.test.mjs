@@ -47,3 +47,4 @@ for (const [name, fn] of tests) {
   try { fn(); console.log('ok   ' + name); } catch (e) { failed++; console.log('FAIL ' + name + '\n  ' + e.message); }
 }
 console.log(failed ? 'FAIL ' + failed + ' 件' : 'すべて通りました');
+process.exit(failed ? 1 : 0);

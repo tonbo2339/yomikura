@@ -11,7 +11,6 @@ import androidx.core.app.NotificationCompat
  * 何を出すかの材料は [Progress] で受け取り、通知の組み立てだけを持つ (保存の進行そのものは OfflineService)。
  */
 class OfflineNotifier(private val ctx: Context) {
-    private var doneCount = 0 // 終わりのお知らせの番号 (同時に複数出ても消えないように)
 
     /** 通知に出す、いまの保存の様子。job = いま保存している作品 (無ければ null)。 */
     class Progress(
@@ -67,7 +66,7 @@ class OfflineNotifier(private val ctx: Context) {
             .setAutoCancel(true)
             .setContentIntent(openApp())
             .build()
-        Notices.post(ctx, Notices.Id.OFFLINE_DONE_BASE + (++doneCount % 50), n)
+        Notices.post(ctx, Notices.Id.OFFLINE_DONE_BASE + (doneCount.incrementAndGet() % 50), n)
     }
 
     private fun openApp(): PendingIntent = Notices.openApp(ctx, REQ_OPEN, OfflineService.ACTION_OPEN_QUEUE)
@@ -83,6 +82,9 @@ class OfflineNotifier(private val ctx: Context) {
         private const val REQ_PAUSE = 1
         private const val REQ_RESUME = 2
         private const val REQ_CANCEL = 3
+
+        /** 終わりのお知らせの番号 (同時に複数出ても消えないように。サービスを作り直しても 1 に戻さない) */
+        private val doneCount = java.util.concurrent.atomic.AtomicInteger()
     }
 
     /** 話の題名。番号だけの題名 (「４」) は「4話目」にする (「1 / 2 話 ・ ４」と出て分かりにくいため) */

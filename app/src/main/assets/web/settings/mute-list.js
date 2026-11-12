@@ -1,11 +1,11 @@
 // ---- ミュート・ブロックの一覧: 行の数を出し、押すと別の画面で全部見て・探して・解除する ----
 const NAMES_TITLE = { muteWords: 'ミュートしたキーワード・タグ', muteAuthors: 'ミュートした作者', blockWorks: 'ブロックした作品', blockWords: 'ブロックしたキーワード・タグ', blockAuthors: 'ブロックした作者' };
-const NAMES_SRC = { // 一覧の種類 → 項目 ({name, remove})
-  muteWords: (d) => NH.muteOf(d).words.map((v) => ({ name: v, remove: () => NH.removeMute('words', v) })),
-  muteAuthors: (d) => NH.muteOf(d).authors.map((v) => ({ name: v, remove: () => NH.removeMute('authors', v) })),
-  blockWorks: (d) => NH.blockOf(d).works.map((w) => ({ name: (w.title || '(タイトル不明)') + ' (' + NH.siteLabel(NH.splitKey(w.key)) + ')', remove: () => NH.removeBlock('works', w.key) })),
-  blockWords: (d) => NH.blockOf(d).words.map((v) => ({ name: v, remove: () => NH.removeBlock('words', v) })),
-  blockAuthors: (d) => NH.blockOf(d).authors.map((v) => ({ name: v, remove: () => NH.removeBlock('authors', v) })),
+const NAMES_SRC = { // 一覧の種類 → 項目 ({name, remove, restore = 解除を元に戻す。並びは末尾に戻る})
+  muteWords: (d) => NH.muteOf(d).words.map((v) => ({ name: v, remove: () => NH.removeMute('words', v), restore: () => NH.addMute('words', v) })),
+  muteAuthors: (d) => NH.muteOf(d).authors.map((v) => ({ name: v, remove: () => NH.removeMute('authors', v), restore: () => NH.addMute('authors', v) })),
+  blockWorks: (d) => NH.blockOf(d).works.map((w) => ({ name: (w.title || '(タイトル不明)') + ' (' + NH.siteLabel(NH.splitKey(w.key)) + ')', remove: () => NH.removeBlock('works', w.key), restore: () => NH.addBlock('works', { key: w.key, title: w.title }) })),
+  blockWords: (d) => NH.blockOf(d).words.map((v) => ({ name: v, remove: () => NH.removeBlock('words', v), restore: () => NH.addBlock('words', v) })),
+  blockAuthors: (d) => NH.blockOf(d).authors.map((v) => ({ name: v, remove: () => NH.removeBlock('authors', v), restore: () => NH.addBlock('authors', v) })),
 };
 let namesKind = 'muteWords'; // 別画面で開いている一覧
 const nameFold = (t) => String(t || '').normalize('NFKC').toLowerCase();
@@ -20,7 +20,7 @@ function paintNamesPage() {
     const c = el('div', 'cell');
     c.appendChild(el('span', 'text', x.name));
     const del = el('button', 'del', '解除');
-    del.onclick = () => { x.remove(); paint(); snack('「' + x.name + '」を解除しました'); paintNamesPage(); };
+    del.onclick = () => { x.remove(); paint(); snack('「' + x.name + '」を解除しました', () => { x.restore(); paint(); paintNamesPage(); }); paintNamesPage(); };
     c.appendChild(del);
     box.appendChild(c);
   });

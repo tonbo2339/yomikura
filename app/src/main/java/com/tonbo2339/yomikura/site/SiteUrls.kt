@@ -14,6 +14,9 @@ object SiteUrls {
     private val NCODE_PATH = Regex("^/n\\d{4}[a-z]+(/|$)")
     private val HAMELN_PATH = Regex("^/novel/\\d+")
     private val KAKUYOMU_PATH = Regex("^/works/\\d+")
+    private val NCODE_EPISODE = Regex("^/n\\d{4}[a-z]+/\\d+/?$")
+    private val HAMELN_EPISODE = Regex("^/novel/\\d+/\\d+\\.html$")
+    private val KAKUYOMU_EPISODE = Regex("^/works/\\d+/episodes/\\d+")
 
     /** URL のホスト (小文字・末尾の点なし)。読めなければ空 */
     fun hostOf(url: String?): String = split(url).first
@@ -95,6 +98,20 @@ object SiteUrls {
             "ncode.syosetu.com", "novel18.syosetu.com" -> NCODE_PATH.containsMatchIn(path)
             "syosetu.org", "h.syosetu.org" -> HAMELN_PATH.containsMatchIn(path)
             "kakuyomu.jp" -> KAKUYOMU_PATH.containsMatchIn(path)
+            else -> false
+        }
+    }
+
+    /**
+     * 話ページ (本文のページ) の URL か。作品トップ・目次・ランキングは false。縦書きで開くページかを、開く前に URL で見分けるのに使う
+     * (ページ側の判定は ui.js の cur.episode。なろう /n1234ab/5/、ハーメルン /novel/123/5.html、カクヨム /works/123/episodes/456)
+     */
+    fun isEpisodeUrl(url: String?): Boolean {
+        val path = pathOf(url)
+        return when (hostOf(url)) {
+            "ncode.syosetu.com", "novel18.syosetu.com" -> NCODE_EPISODE.containsMatchIn(path)
+            "syosetu.org", "h.syosetu.org" -> HAMELN_EPISODE.containsMatchIn(path)
+            "kakuyomu.jp" -> KAKUYOMU_EPISODE.containsMatchIn(path)
             else -> false
         }
     }

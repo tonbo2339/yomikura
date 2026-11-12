@@ -1,0 +1,44 @@
+<!-- ===== 全画面 (見た目) ===== -->
+<section class="page" role="main" id="p-fullscreen" data-title="全画面" hidden>
+  <div class="group">
+    <label class="cell"><span class="text">全画面で表示</span><input type="checkbox" class="switch" id="fullscreenOn" data-setting="fullscreen" data-default="off"></label>
+  </div>
+  <div class="hint">画面の端から内側へスワイプすると、状態バーとナビゲーションバーが少しの間だけ出る。</div>
+
+  <div id="stBox">
+    <div class="section-label">状態バー</div>
+    <div class="group">
+      <label class="cell"><span class="text">状態バーを残して、ページを広げる</span><input type="checkbox" class="switch" id="statusOverlay" data-setting="statusOverlay" data-default="on"></label>
+    </div>
+    <div class="hint"><ul>
+      <li>全画面にしなくても、状態バーを残したまま、サイトのページをその下まで広げる (Twitter のような見え方)</li>
+      <li>状態バーの後ろだけ、文字が薄く消える</li>
+      <li>上のタブバーは、状態バーの下に出る</li>
+      <li>広げない: 上のタブバーを「いつも表示」にして上に固定しているとき、設定・リストなどアプリの画面</li>
+    </ul></div>
+  </div>
+
+  <div id="fsBox">
+    <div class="section-label">カメラの切り欠き</div>
+    <div class="group">
+      <div class="cell stack"><span class="text">切り欠きの所は</span><div class="seg" id="fsCutoutSeg"></div></div>
+    </div>
+    <div class="hint"><ul>
+      <li>無視: 切り欠きの所まで内容を広げる</li>
+      <li>設定に関わらず避ける: サイトの本文・保存した作品を縦書きで読むとき、アプリの画面 (設定・リストなど)</li>
+      <li>時計を出していて、カメラが上にない端末は、設定に関わらず時計の分の空きを取る</li>
+    </ul></div>
+
+    <div class="section-label">時計</div>
+    <div class="group">
+      <label class="cell"><span class="text">上に時計を出す</span><input type="checkbox" class="switch" id="fullscreenClock" data-setting="fullscreenClock" data-default="off"></label>
+      <div class="cell stack" id="fsClockSideRow"><span class="text">時計を置く側</span><div class="seg" id="fsClockSideSeg"></div></div>
+    </div>
+    <div class="hint"><ul>
+      <li>切り欠きが「無視」: ページを時計の下まで広げ、時計の後ろだけ、文字が薄く消える (Twitter のような見え方)</li>
+      <li>切り欠きが「避ける」・カメラが上にない: 時計の分の細い余白を取る</li>
+      <li>画面の角が丸い端末では、角の内側に寄せる</li>
+    </ul></div>
+
+  </div>
+</section>

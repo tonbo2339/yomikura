@@ -49,7 +49,7 @@ const RICH = (() => {
   // 引用元のレスの中身: 目印 jump.r<N> から jump.r<N>e の間 (段落の区切りは改行にする)。無ければ空
   const refHtml = (html, n) => {
     if (!/^\d{1,6}$/.test(String(n))) return '';
-    const m = String(html).match(new RegExp('<span id="jump\\.r' + n + '"></span>([\\s\\S]*?)<span id="jump\\.r' + n + 'e"></span>'));
+    const m = String(html).match(new RegExp('<span id="jump\\.r' + n + '"[^>]*></span>([\\s\\S]*?)<span id="jump\\.r' + n + 'e"[^>]*></span>')); // 清掃で class・style が付いた目印も拾う
     return m ? m[1].replace(/<p\b[^>]*>/gi, '').replace(/<\/p>/gi, '<br>') : '';
   };
 

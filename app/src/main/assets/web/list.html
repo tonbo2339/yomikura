@@ -45,12 +45,6 @@
 <div id="hero"></div>
 <div class="list" id="active"></div>
 
-<details class="done-box" id="doneBox">
-  <summary><span id="doneHead">読了</span><svg viewBox="0 0 24 24"><path d="M16.59 8.59 12 13.17 7.41 8.59 6 10l6 6 6-6z"/></svg></summary>
-  <div class="list" id="done"></div>
-  <div class="done-tools"><button class="btn danger" id="clearDone">読了をまとめて削除</button></div>
-  <div class="done-hint" id="pruneHint"></div>
-</details>
 
 </main>
 <div class="scrim" id="scrim"></div>
@@ -60,12 +54,14 @@
 
 <!--#scripts core-->
 <script src="app.js"></script>
+<script src="hints.js"></script>
 <script>
 <!--#include list/state.js-->
 <!--#include list/progress.js-->
 <!--#include list/card.js-->
 <!--#include list/render.js-->
 <!--#include list/history.js-->
+<!--#include list/fav.js-->
 <!--#include list/sort.js-->
 <!--#include list/hero.js-->
 <!--#include list/sheet.js-->

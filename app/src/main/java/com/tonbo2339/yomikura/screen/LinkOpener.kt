@@ -142,7 +142,7 @@ class LinkOpener(
             val arr = data.optJSONArray("readLater") ?: JSONArray().also { data.put("readLater", it) }
             if ((0 until arr.length()).any { arr.optJSONObject(it)?.optString("key") == key }) return@update
             arr.put(JSONObject().put("key", key).put("site", w.site).put("id", w.id).put("url", w.url).put("title", w.id)
-                .put("addedAt", System.currentTimeMillis()).put("done", false).put("kind", "later")
+                .put("addedAt", System.currentTimeMillis()).put("kind", "later")
                 .also { o -> w.sub?.let { o.put("sub", it) }; if (w.site == "hameln") o.put("r18", true) })
             added = true
         }

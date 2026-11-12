@@ -23,6 +23,8 @@ window.NH.define('fetch', function (NH) {
     if (!res.ok) throw new Error('http ' + res.status);
     return doc;
   };
+  // 更新の確認 (しおり・ブックマーク・アンテナ) で 1 回に取る一覧のページ数の上限。超えたら truncated にして、今回見ていない作品をリストから外さない
+  NH.COLLECT_MAX_PAGES = 10;
   NH.fetchListDoc = async function (url, pageIndex) {
     const u = new URL(url, location.href);
     if (pageIndex === 0 && u.origin === location.origin && u.pathname === location.pathname && u.search === location.search) {

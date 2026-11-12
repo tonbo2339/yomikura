@@ -18,6 +18,7 @@ import java.net.URL
 object ImageSaver {
     private const val TIMEOUT_MS = 20_000
     private const val MAX_REDIRECTS = 5
+    private const val TOTAL_MS = 60_000L // 1 枚の取得の全体の期限
 
     /**
      * 応答 code が、本文のサイトに止められた印か (話ごと止めて、サイトを休ませる)。
@@ -58,12 +59,16 @@ object ImageSaver {
      * 転送 (3xx) は自分でたどる: HttpURLConnection に任せると、手で付けた Cookie が転送先の別のホストへもそのまま送られるため。
      * 1 回ごとに https と blocked を確かめ直し、Cookie はその URL のものを付け直す。
      */
-    fun save(store: OfflineStore, site: String, id: String, url: String, referer: String, blocked: (String) -> Boolean = { false }): String {
+    fun save(
+        store: OfflineStore, site: String, id: String, url: String, referer: String,
+        blocked: (String) -> Boolean = { false }, stillWanted: () -> Boolean = { true },
+    ): String {
         var cur = url
+        val deadline = System.currentTimeMillis() + TOTAL_MS // 少しずつ送り続けるサーバーで、窓口を握られ続けない
         repeat(MAX_REDIRECTS + 1) {
             if (!cur.startsWith("https://")) return "{}" // 平文の通信は使わない (アプリの方針)
             val u = try { URL(cur) } catch (e: Exception) { return "{}" }
-            if (blocked(u.host)) return "{}"
+            if (blocked(u.host) || pointsInside(u.host)) return "{}"
             val conn = try { u.openConnection() as HttpURLConnection } catch (e: Exception) { return "{}" }
             val startedAt = System.currentTimeMillis()
             var cookieSent = false
@@ -71,7 +76,7 @@ object ImageSaver {
                 conn.connectTimeout = TIMEOUT_MS
                 conn.readTimeout = TIMEOUT_MS
                 conn.instanceFollowRedirects = false
-                conn.setRequestProperty("Referer", referer)
+                conn.setRequestProperty("Referer", refererFor(referer, u.host))
                 CookieManager.getInstance().getCookie(cur)?.let { conn.setRequestProperty("Cookie", it); cookieSent = true }
                 val code = conn.responseCode
                 NetLog.native(conn, cur, startedAt, cookieSent)
@@ -83,8 +88,8 @@ object ImageSaver {
                 if (stopsSite(code, u.host)) return """{"error":"challenge"}"""
                 if (code !in 200..299) return "{}"
                 if (conn.contentLengthLong > OfflineStore.MAX_IMAGE_BYTES) return "{}"
-                val bytes = readLimited(conn.inputStream, OfflineStore.MAX_IMAGE_BYTES) ?: return "{}"
-                return keep(store, site, id, url, bytes)
+                val bytes = readLimited(conn.inputStream, OfflineStore.MAX_IMAGE_BYTES, deadline) ?: return "{}"
+                return keep(store, site, id, url, bytes, stillWanted)
             } catch (e: Exception) {
                 return "{}"
             } finally {
@@ -95,11 +100,12 @@ object ImageSaver {
     }
 
     /** 取った中身 (bytes) の種類を確かめて保存し、結果の JSON を返す (save と saveData の共通部分) */
-    private fun keep(store: OfflineStore, site: String, id: String, url: String, bytes: ByteArray): String {
+    private fun keep(store: OfflineStore, site: String, id: String, url: String, bytes: ByteArray, stillWanted: () -> Boolean): String {
         val ext = kindOf(bytes) ?: return "{}"
         val name = nameFor(url, ext) // 名前は元の URL で決める (話の本文の img と対応させるため)
         val b64 = java.util.Base64.getEncoder().encodeToString(bytes)
-        return if (store.putImage(site, id, name, b64)) """{"name":"$name","bytes":${bytes.size}}""" else "{}"
+        // 通信のあいだに作品が消されていたら、書き戻さない
+        return if (store.guarded(stillWanted) { store.putImage(site, id, name, b64) }) """{"name":"$name","bytes":${bytes.size}}""" else "{}"
     }
 
     /**
@@ -107,23 +113,39 @@ object ImageSaver {
      * 本文と同じサイトにある挿絵は、アプリ自身の通信だと Cloudflare に止められる (403) ので、WebView の fetch で取り、ここへ渡す。
      * 結果は save と同じ形。
      */
-    fun saveData(store: OfflineStore, site: String, id: String, url: String, base64: String, blocked: (String) -> Boolean = { false }): String {
+    fun saveData(
+        store: OfflineStore, site: String, id: String, url: String, base64: String,
+        blocked: (String) -> Boolean = { false }, stillWanted: () -> Boolean = { true },
+    ): String {
         if (!url.startsWith("https://")) return "{}"
         val host = try { URL(url).host } catch (e: Exception) { return "{}" }
         if (blocked(host) || base64.length > OfflineStore.MAX_IMAGE_BASE64) return "{}"
         val bytes = try { java.util.Base64.getDecoder().decode(base64) } catch (e: IllegalArgumentException) { return "{}" }
-        return keep(store, site, id, url, bytes)
+        return keep(store, site, id, url, bytes, stillWanted)
     }
 
-    /** 上限を超えたら null (大きすぎる物は読み切らない) */
-    private fun readLimited(input: java.io.InputStream, max: Int): ByteArray? = input.use { ins ->
+    /** 本文のサイトの外へ出すときは、話のページの全体ではなく、サイトの名前 (origin) だけを教える (WebView の既定と同じ) */
+    internal fun refererFor(referer: String, host: String): String {
+        val r = try { URL(referer) } catch (e: Exception) { return "" }
+        return if (r.host == host) referer else "${r.protocol}://${r.host}/"
+    }
+
+    /** 自分の端末や家の中 (127.x・10.x・192.168.x など) を指す名前か。挿絵の取得先にさせない (見つからない名前も取らない) */
+    private fun pointsInside(host: String): Boolean = try {
+        java.net.InetAddress.getAllByName(host).any { it.isLoopbackAddress || it.isSiteLocalAddress || it.isLinkLocalAddress || it.isAnyLocalAddress }
+    } catch (e: Exception) {
+        true
+    }
+
+    /** 上限を超える・期限 (deadline の時刻) を過ぎたら null (大きすぎる物・遅すぎる物は読み切らない) */
+    private fun readLimited(input: java.io.InputStream, max: Int, deadline: Long): ByteArray? = input.use { ins ->
         val out = ByteArrayOutputStream()
         val buf = ByteArray(16 * 1024)
         while (true) {
             val n = ins.read(buf)
             if (n < 0) break
             out.write(buf, 0, n)
-            if (out.size() > max) return null
+            if (out.size() > max || System.currentTimeMillis() > deadline) return null
         }
         out.toByteArray()
     }

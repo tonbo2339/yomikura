@@ -15,7 +15,7 @@ window.nhCollecting = (on) => {
   $('collectText').textContent = checking ? '確認中' : '更新を確認';
   $('collect').classList.toggle('spinning', checking);
   $('checkProg').textContent = checking ? '…' : '';
-  if (!on) render();
+  if (!on) window.nhDataChanged(); // 持ち上げている間・シートを開いている間は待ってから描き直す (sync.js)
 };
 // 手動の確認は、前回の確認から 10 分は押せない (残りは Kotlin の CollectCooldown が NHStore.collectWaitMs で返す)。
 // 待つ間はボタンを押せなくして「次は N 分後から」を出し、時間が来たら描き直して押せるように戻す
@@ -25,7 +25,8 @@ function paintCollectWait() {
   const ms = !checking && window.NHStore && NHStore.collectWaitMs ? Number(NHStore.collectWaitMs()) || 0 : 0;
   $('collect').disabled = checking || ms > 0;
   if (ms > 0) {
-    $('checkLast').textContent += ' ・ 次は ' + Math.ceil(ms / 60000) + ' 分後から';
+    const wait = '次は ' + Math.ceil(ms / 60000) + ' 分後から';
+    $('checkLast').textContent += ($('checkLast').textContent ? ' ・ ' : '') + wait;
     waitTimer = setTimeout(paintCheckRow, Math.min(ms, 60000) + 200); // 1 分ごとに「次は N 分後から」を進める (一覧は描き直さない。操作中のフォーカスや持ち上げを崩さないため)
   }
 }

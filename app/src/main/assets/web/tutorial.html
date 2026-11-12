@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>使い方</title>
+<link rel="stylesheet" href="app.css">
+<style>
+  main { display: flex; flex-direction: column; min-height: 100vh; padding-bottom: 16px; }
+  .tut-top { display: flex; justify-content: flex-end; padding-top: 8px; }
+  .tut-skip { color: var(--accent-text); font-size: 15px; font-weight: 600; padding: 10px 12px; border-radius: 12px; }
+  .tut-track { flex: 1; display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; margin: 0 -16px; }
+  .tut-track::-webkit-scrollbar { display: none; }
+  .tut-slide { flex: 0 0 100%; scroll-snap-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 16px 32px; box-sizing: border-box; }
+  .tut-ico { width: 96px; height: 96px; border-radius: 26px; background: var(--accent-soft); display: grid; place-items: center; margin-bottom: 28px; }
+  .tut-ico svg { width: 52px; height: 52px; fill: var(--accent-strong); }
+  .tut-slide h1 { font-size: 24px; margin: 0 0 14px; line-height: 1.3; }
+  .tut-slide p { margin: 0; font-size: 16px; line-height: 1.8; color: var(--sub); max-width: 28em; }
+  .tut-dots { display: flex; justify-content: center; gap: 8px; padding: 12px 0; }
+  .tut-dots i { width: 8px; height: 8px; border-radius: 50%; background: var(--surface-3); transition: background .2s, transform .2s; }
+  .tut-dots i.on { background: var(--accent); transform: scale(1.25); }
+  .tut-nav { display: flex; gap: 12px; justify-content: center; }
+  .tut-nav .btn { flex: 1; max-width: 220px; height: 48px; }
+  .tut-seg { margin-top: 24px; width: 100%; max-width: 420px; text-align: left; }
+  @media (prefers-reduced-motion: reduce) { .tut-track { scroll-behavior: auto; } .tut-dots i { transition: none; } }
+</style>
+</head>
+<body>
+<main>
+<div class="tut-top"><button class="tut-skip" id="skip" type="button">スキップ</button></div>
+<div class="tut-track" id="track" tabindex="0" aria-label="使い方のスライド"></div>
+<div class="tut-dots" id="dots" aria-hidden="true"></div>
+<div class="tut-nav"><button class="btn" id="back" type="button">戻る</button><button class="btn primary" id="next" type="button">次へ</button></div>
+</main>
+<!--#scripts core-->
+<script src="app.js"></script>
+<script>
+// 使い方のスライド。初めて起動したとき (ようこそ画面のあと) と、設定の「使い方」から開く。
+// スキップ・最後まで進む、のどちらでも「見た」ことにして (settings.tutorialDone)、元の画面 (最初は起動ページ、設定から開いたときは設定) へ戻る。
+<!--#include tutorial/slides.js-->
+const fromSettings = new URLSearchParams(location.search).get('from') === 'settings';
+const track = $('track'), dots = $('dots');
+let cur = 0;
+TUTORIAL_SLIDES.forEach((s, i) => {
+  const slide = el('section', 'tut-slide'); slide.setAttribute('aria-label', (i + 1) + ' / ' + TUTORIAL_SLIDES.length);
+  const ico = el('div', 'tut-ico'); ico.innerHTML = svg(s.icon);
+  slide.append(ico, el('h1', '', s.title), el('p', '', s.text));
+  if (s.choose === 'barMode') { // 「バーの出し方」をその場で選ぶ (設定の「バー」と同じ 3 択。選ぶとすぐ保存)
+    const seg = el('div', 'group tut-seg');
+    const draw = () => paintBarModeList(seg, NH.load().settings || {}, (k) => { NH.update((d) => { d.settings = NH.setBarMode(d.settings || {}, k); }); draw(); });
+    draw();
+    slide.appendChild(seg);
+  }
+  if (s.guide) { // 体験型のガイド (guide.js・guide-bar.js) を始める。始めないときは、下の「はじめる」「閉じる」で、そのまま終える
+    const go = el('button', 'btn primary', 'やってみる');
+    go.style.marginTop = '24px';
+    go.onclick = () => { NH.update((d) => NH.guideStart(d)); finish(true); };
+    slide.appendChild(go);
+  }
+  track.appendChild(slide);
+  dots.appendChild(el('i'));
+});
+const last = TUTORIAL_SLIDES.length - 1;
+function paint() {
+  [...dots.children].forEach((d, i) => d.classList.toggle('on', i === cur));
+  $('back').hidden = cur === 0;
+  $('next').textContent = cur === last ? (fromSettings ? '閉じる' : 'はじめる') : '次へ';
+  $('skip').hidden = cur === last;
+}
+let lockUntil = 0; // ボタンで送っている間 (スクロールの動きの途中) は、動きの途中の位置から、いまのスライドを決め直さない
+const go = (i) => { cur = Math.max(0, Math.min(last, i)); lockUntil = Date.now() + 800; track.scrollTo({ left: cur * track.clientWidth, behavior: 'smooth' }); paint(); };
+let scrollTimer = 0;
+track.addEventListener('scroll', () => { // 指で送ったときも、いまのスライドを追う
+  clearTimeout(scrollTimer);
+  scrollTimer = setTimeout(() => { if (Date.now() < lockUntil) return; const i = Math.round(track.scrollLeft / Math.max(1, track.clientWidth)); if (i !== cur) { cur = i; paint(); } }, 60);
+});
+function finish(startedGuide) {
+  NH.update((d) => { d.settings = Object.assign(d.settings || {}, { tutorialDone: true }); });
+  if (startedGuide === true && fromSettings) location.replace(NH.LIST_URL); // 設定から始めたガイドは、リストから (設定には戻らない)
+  else if (fromSettings) {
+    // 設定から来たときは、設定へ「戻る」 (置き換えると、設定が履歴に 2 つ並び、Back を 2 回押さないとリストに戻れない)。戻れなかった (履歴が無い・スキップされた) ときだけ、置き換える
+    if (history.length > 1) { history.back(); setTimeout(() => location.replace('settings.html'), 3000); } // 戻れたらこのページごと消える。遅い端末で、戻る前に置き換えて履歴を二重にしないよう、長めに待つ
+    else location.replace('settings.html');
+  } else location.replace(window.NHStore && NHStore.startUrl ? NHStore.startUrl() : NH.LIST_URL);
+}
+$('skip').onclick = finish;
+$('back').onclick = () => go(cur - 1);
+$('next').onclick = () => (cur === last ? finish() : go(cur + 1));
+track.addEventListener('keydown', (e) => { if (e.key === 'ArrowRight') go(cur + 1); else if (e.key === 'ArrowLeft') go(cur - 1); });
+window.addEventListener('resize', () => track.scrollTo({ left: cur * track.clientWidth }));
+paint();
+</script>
+</body>
+</html>

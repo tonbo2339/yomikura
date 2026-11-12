@@ -27,6 +27,9 @@ class FindBar(private val ctx: Context, private val webView: WebView, bg: Int, f
 
     val isShowing: Boolean get() = view.visibility == View.VISIBLE
 
+    /** 出た・隠れたときに呼ぶ (本文を、検索バーの下へ下げる・戻すため。MainActivity.layoutFindArea) */
+    var onToggle: (() -> Unit)? = null
+
     init {
         view.apply {
             orientation = LinearLayout.HORIZONTAL
@@ -95,6 +98,7 @@ class FindBar(private val ctx: Context, private val webView: WebView, bg: Int, f
 
     fun show() {
         view.visibility = View.VISIBLE
+        onToggle?.invoke()
         input.requestFocus()
         (ctx.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager).showSoftInput(input, InputMethodManager.SHOW_IMPLICIT)
     }
@@ -105,7 +109,13 @@ class FindBar(private val ctx: Context, private val webView: WebView, bg: Int, f
         input.setText("")
         count.text = ""
         view.visibility = View.GONE
+        onToggle?.invoke()
         (ctx.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager).hideSoftInputFromWindow(input.windowToken, 0)
         webView.requestFocus()
+    }
+
+    companion object {
+        /** 検索バーの高さ (dp)。入力欄 44 + 上下の余白 2 + 2 */
+        const val HEIGHT_DP = 48
     }
 }

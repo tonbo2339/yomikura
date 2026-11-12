@@ -34,6 +34,14 @@ window.NH.define('read-state', function (NH) {
       pr: e.pr && (e.pr.ep == null || e.pr.ep === ep) ? e.pr : null,
     };
   };
+  // 履歴の作品 e を、最後の話まで読み終えているか (短編は読み終えた、長編は覚えた全話数 e.total の話まで読み終えた)。
+  // 読み終えた作品はリストから外れて読書位置が消えるので、「読了」は履歴に覚えた位置 (historyPos) で見る
+  NH.historyFinished = (e) => {
+    const pos = NH.historyPos(e);
+    if (!pos.pr || !pos.pr.done) return false;
+    const total = Number(e.total) || 0;
+    return e.status === 'short' || (e.ep || '0') === '0' || (!!total && !!pos.no && pos.no >= total);
+  };
   // サイトの行き先の URL (更新の確認で入った、しおり・次の未読の話) から話番号を読む。分からなければ null。
   // ハーメルンの #nh-next は「しおりの話の次」なので 1 足す。カクヨムの続き (resume_reading) は番号が分からない
   NH.epFromUrl = (site, url) => {
@@ -50,6 +58,7 @@ window.NH.define('read-state', function (NH) {
   //   started: 読み始めているか / finished: 最後の話まで読み終えたか / fromSite: 位置はサイトのしおりから (アプリでは読んでいない)
   //   unread: 未読の話数 (分からなければ null) / complete: 完結した作品か
   // 読書位置は NH.progressOf (更新の確認のあとに読んだものだけ)
+  const clamp01 = (x) => Math.max(0, Math.min(1, x));
   NH.readState = (d, it) => {
     const p = NH.progressOf(d, it);
     const short = it.status === 'short' || (!!p && String(p.ep) === '0');
@@ -59,9 +68,9 @@ window.NH.define('read-state', function (NH) {
       started = true;
       const n = short ? 1 : NH.epNumber(p);
       if (p.done && p.next && n) { ep = n + 1; readEps = n; } // その話を読み終えて、次の話から
-      else if (n) { ep = n; epPct = p.done ? 1 : Math.max(0, Math.min(1, p.y || 0)); readEps = n - 1 + epPct; }
+      else if (n) { ep = n; epPct = p.done ? 1 : clamp01(p.y || 0); readEps = n - 1 + epPct; }
       else if (p.done && !p.next && total) { ep = total; readEps = total; epPct = 1; } // 話番号は分からないが、最後の話 (次の話が無い) まで読み終えた
-      else epPct = p.done ? 1 : Math.max(0, Math.min(1, p.y || 0)); // 話番号の分からない話 (カクヨムで目次を読めていない)
+      else epPct = p.done ? 1 : clamp01(p.y || 0); // 話番号の分からない話 (カクヨムで目次を読めていない)
     } else {
       // アプリで読んでいなければ、サイトの行き先の話番号か、未読の話数 (全話数 - 未読 = 読んだ話数。カクヨムの続きの URL は番号が無い) から
       const n = NH.epFromUrl(it.site, it.url) || (total && it.unread != null && it.unread < total ? total - it.unread + 1 : null);
@@ -72,24 +81,25 @@ window.NH.define('read-state', function (NH) {
     // 全話数より先を読んでいるのに終わっていない: 全話数が古い (新しい話が出た) か、話番号が飛ぶ作品 (ハーメルン)。全話数は使わない
     if (!finished && total && !short && readEps != null && (readEps >= total || (ep && ep > total))) total = 0;
     if (total && ep && ep > total) ep = total;
-    const workPct = total && readEps != null ? Math.max(0, Math.min(1, readEps / total)) : short ? epPct : null;
+    const workPct = total && readEps != null ? clamp01(readEps / total) : short ? epPct : null;
     const calc = total && readEps != null ? Math.max(0, total - Math.floor(readEps)) : null;
     const unread = calc != null && it.unread != null ? Math.min(calc, it.unread) : calc != null ? calc : it.unread != null ? it.unread : null;
     return { short, total, ep, epPct, workPct, started, finished, fromSite, unread, complete: it.status === 'complete' };
   };
 
   // 作品を読んだことがあるか (ランキング・検索で薄くする目印): 'done' 読了 / 'reading' 読みかけ / 'seen' 開いたことがある / null
-  // 読書位置・リストの読了・閲覧履歴 (公式の履歴を取り込んだものも含む) から判定する
+  // 読書位置・閲覧履歴 (公式の履歴を取り込んだものも含む。リストから外して読書位置が消えた作品は、履歴の最後の位置) から判定する
   // 一覧の作品ごとに呼ぶので、リストと履歴は先に索引にしておき、(key) => 状態 の関数を返す
   NH.readStates = function (d) {
     const progress = d.progress || {};
-    const doneInList = new Set(d.readLater.filter((x) => x.done).map((x) => x.key));
     const seen = new Set((d.history || []).map((h) => h.key));
+    const finished = new Set((d.history || []).filter(NH.historyFinished).map((h) => h.key)); // 読書位置が消えた (リストから外した) 作品の読了は、履歴で見る
     return (key) => {
       const p = progress[key];
       // p.done はその話を読み終えたこと。次の話がある (p.next) なら、作品はまだ読みかけ
-      if (doneInList.has(key) || (p && p.done && !p.next)) return 'done';
+      if (p && p.done && !p.next) return 'done';
       if (p) return 'reading';
+      if (finished.has(key)) return 'done';
       return seen.has(key) ? 'seen' : null;
     };
   };

@@ -11,7 +11,15 @@
     <button class="cell accent" id="updLoginTop" hidden>GitHub にログインして更新を確認</button>
     <button class="cell accent" id="updCheck">更新を確認</button>
   </div>
-  <div class="hint">初めてのときは、先に「このアプリからのインストール」の許可を求められます。</div>
+  <div class="hint">初めてのときは、先に「このアプリからのインストール」の許可を求められる。</div>
+  <div class="group">
+    <label data-kw="通知 つうち 点 てん アップデート 更新 こうしん 新しい版 あたらしい 知らせる しらせる notify update dot new version" class="cell"><span class="text">新しい版を通知する</span><input type="checkbox" class="switch" id="updateNotice" data-setting="updateNotice" data-default="on"></label>
+  </div>
+  <div class="hint"><ul>
+    <li>アプリを開いたとき (半日に 1 回まで) 新しい版を確認し、あれば ⋮ や歯車に小さな点を出す</li>
+    <li>ここを開くと、その版の点は消える</li>
+    <li>オフにすると、確認もしない</li>
+  </ul></div>
   <div class="group" id="updRepoBox" hidden>
     <button class="cell accent" id="updRepo">GitHub のリリースページを開く</button>
   </div>

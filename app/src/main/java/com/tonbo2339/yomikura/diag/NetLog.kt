@@ -24,10 +24,6 @@ object NetLog {
         log("native", c.requestMethod, code, url, fields)
     }
 
-    /** 通信が例外で終わったとき */
-    fun nativeFailed(url: String, startedAt: Long, e: Exception) =
-        log("native", "GET", null, url, "${System.currentTimeMillis() - startedAt}ms ${e.javaClass.simpleName}: ${e.message ?: ""}")
-
     /** WebView の移動 (最上位のページだけ。広告・画像などの部分は数が多いので記録しない) */
     fun page(where: String, request: WebResourceRequest) {
         if (!request.isForMainFrame || !DevLog.on(DevLog.Category.NET)) return

@@ -24,7 +24,7 @@ class NetworkWatch(private val ctx: Context, private val main: Handler, private 
 
     @Volatile var online = true
         private set
-    var metered = false
+    @Volatile var metered = false // 保存の窓口のスレッドからも読む
         private set
     private var callback: ConnectivityManager.NetworkCallback? = null
 

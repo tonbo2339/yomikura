@@ -48,6 +48,15 @@ class SaveQueueTest {
     }
 
     @Test
+    // 待ちの作品に足したとき、挿絵は片方でも「文字だけ」なら文字だけ (あとから足した話の選択が、消えない)
+    fun mergeKeepsTextOnlyChoice() {
+        val q = queue()
+        q.add(job("a1", "1"))
+        q.add(job("a1", "2").copy(images = false))
+        assertEquals(false, q.all().single().images)
+    }
+
+    @Test
     // 終わった作品は作り直して末尾へ入る
     fun finishedJobIsRequeuedAtEnd() {
         val q = queue()
@@ -81,6 +90,20 @@ class SaveQueueTest {
         q.move("narou:a1", 1) // 実行中は動かない
         q.move("narou:c3", -1) // 実行中の作品の隣とは入れ替わらない
         assertEquals(listOf("narou:a1", "narou:c3", "narou:b2"), q.all().map { it.key })
+    }
+
+    @Test
+    // 並べ替えの相手は、終わった作品を飛ばした隣の作品 (画面の並びと同じ)
+    fun moveSkipsFinishedJobs() {
+        val q = queue()
+        q.add(job("a1", "1"))
+        q.add(job("b2", "1"))
+        q.add(job("c3", "1"))
+        q.update("narou:b2") { it.copy(status = Status.DONE) }
+        q.move("narou:c3", -1)
+        assertEquals(listOf("narou:c3", "narou:b2", "narou:a1"), q.all().map { it.key })
+        q.move("narou:c3", -1) // 先頭より前へは動かない
+        assertEquals(listOf("narou:c3", "narou:b2", "narou:a1"), q.all().map { it.key })
     }
 
     @Test

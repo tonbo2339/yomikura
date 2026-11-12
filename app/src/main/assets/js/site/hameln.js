@@ -19,13 +19,20 @@
     foldGroups: ((window.NH_SITES || {}).hameln || {}).fold,
     seqEpisodes: true, // 話番号が 1, 2, 3... の連番
     lastEpIsCount: true, // 更新の確認で分かる最終話 (lastEp) は全話数。話番号が飛ぶ作品があるので、話番号とは比べない
+
+    // 「<< 前の話」 (第 1 話には無い)
+    prevUrl() {
+      const a = [...document.querySelectorAll('a')].find((x) => /前の話/.test(x.textContent));
+      return a ? a.href : null;
+    },
+
     // 「次の話 >>」 (最終話には無い)
     nextUrl() {
       const a = [...document.querySelectorAll('a')].find((x) => /次の話/.test(x.textContent));
       return a ? a.href : null;
     },
 
-    // 「読了 → 次の小説へ」を置く場所: 本文の下の「<< 前の話 / 次の話 >>」の並び (li.novelnb の ul。上にもあるので最後のもの)
+    // 「読み終わり → 次の小説へ」を置く場所: 本文の下の「<< 前の話 / 次の話 >>」の並び (li.novelnb の ul。上にもあるので最後のもの)
     endCardAfter() {
       const li = document.querySelectorAll('li.novelnb');
       return li.length ? li[li.length - 1].closest('ul') : null;
@@ -112,26 +119,30 @@
       const items = [];
       let sawList = false;
       let truncated = false; // ページの上限で打ち切った (続きのページがある)
-      for (let page = 1; page <= 10; page++) {
+      const stat = { pages: 0, lis: 0, unparsed: 0, allRead: 0, head: '' }; // 開発用ログ用の数え (ページ数・作品の行・読めなかった行・未読なしの行・見出し)
+      for (let page = 1; page <= NH.COLLECT_MAX_PAGES; page++) {
         const doc = await NH.fetchListDoc(page === 1 ? this.collectUrl : this.collectUrl + '&page=' + page, page - 1);
         if (/しおり一覧\(/.test(doc.body.textContent)) sawList = true;
         const lis = [...doc.querySelectorAll('li[id^="siori-id"]')];
+        stat.pages++;
+        stat.lis += lis.length;
+        if (page === 1) stat.head = ((doc.body.textContent.match(/しおり一覧\([^)]*\)[^\n]{0,12}/) || [])[0] || '').replace(/\s+/g, ' ');
         for (const li of lis) {
           const a = li.querySelector('a[href*="/novel/"]');
           const m = (li.querySelector('.date') || {}).textContent;
           const nums = m && m.match(/(\d+)話／全(\d+)話/);
           const w = a && this.parseWork(a.href);
-          if (!w || !nums) continue;
+          if (!w || !nums) { stat.unparsed++; continue; }
           const read = Number(nums[1]);
           const total = Number(nums[2]);
-          if (total <= read) continue; // 未読なし (しおり話数 > 全話数 の表記ゆれも含む)
+          if (total <= read) { stat.allRead++; continue; } // 未読なし (しおり話数 > 全話数 の表記ゆれも含む)
           const title = a.childNodes[0] ? a.childNodes[0].textContent.trim() : a.textContent.trim();
           items.push({ id: w.id, title, url: a.href.split('#')[0] + '#nh-next', unread: total - read, lastEp: total });
         }
         if (!lis.length || !doc.querySelector('a[href*="page=' + (page + 1) + '"]')) break;
-        if (page === 10) truncated = true;
+        if (page === NH.COLLECT_MAX_PAGES) truncated = true;
       }
-      return { ok: sawList, items, truncated };
+      return { ok: sawList, items, truncated, stat };
     },
 
     rankingItems() {

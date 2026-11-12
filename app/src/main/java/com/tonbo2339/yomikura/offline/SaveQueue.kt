@@ -85,7 +85,7 @@ class SaveQueue(private val file: File) {
             val have = jobs[i].eps.map { it.ep }.toSet()
             val fresh = job.eps.filter { it.ep !in have }
             if (fresh.isEmpty()) return@synchronized 0
-            jobs[i] = jobs[i].copy(eps = jobs[i].eps + fresh, mobileOk = jobs[i].mobileOk || job.mobileOk)
+            jobs[i] = jobs[i].copy(eps = jobs[i].eps + fresh, mobileOk = jobs[i].mobileOk || job.mobileOk, images = jobs[i].images && job.images) // 自動更新の待ちに足したときは、refresh のまま (保存を始めるとき、保存していない話は全部取る)。挿絵は、片方でも「文字だけ」なら、文字だけ
             return@synchronized if (write(jobs)) fresh.size else 0
         }
         if (i >= 0) jobs.removeAt(i)
@@ -118,8 +118,12 @@ class SaveQueue(private val file: File) {
         synchronized(LOCK) {
             val jobs = all().toMutableList()
             val i = jobs.indexOfFirst { it.key == key }
-            val j = i + delta
-            if (i < 0 || j !in jobs.indices) return
+            if (i < 0 || delta == 0) return
+            // 入れ替える相手は、終わった作品 (完了・止まった) を飛ばした、隣の有効な作品 (画面の並びと同じ)
+            val step = if (delta > 0) 1 else -1
+            var j = i + step
+            while (j in jobs.indices && !jobs[j].status.active) j += step
+            if (j !in jobs.indices) return
             if (jobs[i].status == Status.RUNNING || jobs[j].status == Status.RUNNING) return
             if (current != null && (jobs[i].key == current || jobs[j].key == current)) return // 一時停止中でも、今の作品は動かさない
             val moved = jobs[i]

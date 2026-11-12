@@ -22,7 +22,7 @@ async function work(key) {
   const row = el('div', 'actions-row');
   if (eps.length) {
     const rd = el('button', 'btn primary', p && cur >= 0 ? '続きから読む' : '最初から読む');
-    rd.onclick = () => (location.href = here(key, eps[start].ep));
+    rd.onclick = () => { rememberTocY(key); location.href = here(key, eps[start].ep); };
     row.appendChild(rd);
   }
   if (!SRC) { // 外の作品は、読むのと消すだけ (保存し直すのは端末の作品で)
@@ -44,7 +44,10 @@ async function work(key) {
     const t = (e.title || '').normalize('NFKC').trim();
     c.append(el('span', 'text ep-title', !t ? (i + 1) + '話' : /^\d+$/.test(t) ? t + '話' : e.title)); // 題名が番号だけ (「２」) の作品は「2話」
     if (p && p.ep === e.ep) c.appendChild(el('span', 'state', p.done ? '読了' : Math.round(p.y * 100) + '%'));
-    c.onclick = () => (location.href = here(key, e.ep));
+    c.onclick = () => { rememberTocY(key); location.href = here(key, e.ep); };
     g.appendChild(c);
   });
+  // 本文から戻ったときは、出ていった位置へ (描き終えたあとでないと、高さが足りず動けない)
+  const y = takeTocY(key);
+  if (y > 0) { window.scrollTo(0, y); requestAnimationFrame(() => window.scrollTo(0, y)); }
 }

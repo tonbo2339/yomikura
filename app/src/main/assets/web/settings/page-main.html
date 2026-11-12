@@ -2,68 +2,81 @@
 <section class="page" role="main" id="p-main">
   <header class="page-head"><div><h1>設定</h1></div></header>
 
+  <!-- 設定の検索 (search.js)。入力中は、下の一覧 (mainList) を隠して、結果 (searchResults) を出す -->
+  <div class="search"><input type="search" id="setSearch" placeholder="設定を検索" aria-label="設定を検索" autocomplete="off" enterkeyhint="search"></div>
+  <div id="searchResults" hidden></div>
+
+  <div id="mainList">
   <!-- 新しいバージョンがあるときだけ出す -->
   <button class="update-card" id="updateCard" hidden>
     <span class="ico green" data-icon="refresh"></span>
     <span class="body"><span class="t1">アプリの更新</span><span class="t2" id="updateCardText"></span></span>
   </button>
 
-  <div class="section-label">起動と更新</div>
-  <div class="group">
-    <button class="cell has-icon" data-go="start"><span class="ico green" data-icon="home"></span><span class="text">起動ページ</span><span class="value" id="v-start"></span></button>
-    <button class="cell has-icon" data-go="auto"><span class="ico orange" data-icon="refresh"></span><span class="text">更新の確認</span><span class="value" id="v-auto"></span></button>
-    <button class="cell has-icon" data-go="bg"><span class="ico red" data-icon="bell"></span><span class="text">裏での確認と通知</span><span class="value" id="v-bg"></span></button>
-  </div>
-
-  <div class="section-label">サイト</div>
-  <div class="group">
-    <button class="cell has-icon" data-go="sites"><span class="ico brown" data-icon="globe"></span><span class="text">表示するサイト</span><span class="value" id="v-sites"></span></button>
-    <label class="cell has-icon" id="adultRow"><span class="ico pink" data-icon="person"></span><span class="text">18 歳以上</span><input type="checkbox" class="switch" id="adult"></label>
-    <label class="cell has-icon"><span class="ico red lock" id="nsfwIco"><svg viewBox="0 0 24 24"><path class="shackle" d="M8.5 14V8a3.5 3.5 0 0 1 7 0v3.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><rect x="5" y="11" width="14" height="10" rx="2"/></svg></span><span class="text" id="nsfwLabel">NSFW モード</span><input type="checkbox" class="switch" id="nsfw"></label>
-    <button class="cell has-icon" data-go="accounts"><span class="ico blue" data-icon="person"></span><span class="text">ログイン</span><span class="value" id="v-accounts"></span></button>
-    <button class="cell has-icon" data-go="links"><span class="ico gray" data-icon="link"></span><span class="text">リンクの扱い</span><span class="value" id="v-links"></span></button>
-  </div>
-
   <div class="section-label">読む</div>
   <div class="group">
-    <button class="cell has-icon" data-go="list"><span class="ico blue" data-icon="book"></span><span class="text">リスト</span><span class="value" id="v-list"></span></button>
-    <button class="cell has-icon" data-go="fold"><span class="ico teal" data-icon="down"></span><span class="text">話ページの下の欄</span><span class="value" id="v-fold"></span></button>
-    <button class="cell has-icon" data-go="ranking"><span class="ico orange" data-icon="trophy"></span><span class="text">ランキングの行き先</span><span class="value" id="v-ranking"></span></button>
-    <button class="cell has-icon" data-go="mute"><span class="ico red" data-icon="mute"></span><span class="text">ミュート・ブロック・既読</span><span class="value" id="v-mute"></span></button>
-    <button class="cell has-icon" data-go="reading"><span class="ico blue" data-icon="tune"></span><span class="text">読書の補助</span><span class="value">読み上げ・自動スクロール</span></button>
-    <a class="cell has-icon" href="offline.html" id="offlineLink" style="text-decoration:none"><span class="ico teal" data-icon="download"></span><span class="text">オフライン保存</span><span class="value" id="v-offline"></span></a>
-    <button class="cell has-icon" data-go="offlineset"><span class="ico teal" data-icon="tune"></span><span class="text">オフライン保存の設定</span><span class="value" id="v-offlineset"></span></button>
-  </div>
-
-  <div class="section-label">記録</div>
-  <div class="group">
-    <button class="cell has-icon" data-go="stats"><span class="ico teal" data-icon="chart"></span><span class="text">読書の統計</span><span class="value" id="v-stats"></span></button>
-    <button class="cell has-icon" data-go="history"><span class="ico pink" data-icon="history"></span><span class="text">閲覧履歴</span><span class="value" id="v-history"></span></button>
+    <button class="cell has-icon" data-go="list" data-kw="お気に入り おきにいり 読了 どくりょう 消す けす 残す のこす 削除 さくじょ 次の作品 つぎ カード 履歴 りれき 並べ替え ならべかえ スワイプ 後で読む あとでよむ list favorites favourite read done remove delete next swipe read later queue"><span class="ico blue" data-icon="book"></span><span class="text">リスト</span></button>
+    <button class="cell has-icon" data-go="fold" data-kw="感想 かんそう レビュー おすすめ 関連作品 かんれん 畳む たたむ 隠す かくす リアクション 広告 こうこく fold collapse comments reviews recommendations related reactions ads hide"><span class="ico teal" data-icon="down"></span><span class="text">話ページの下の欄</span></button>
+    <button class="cell has-icon" data-go="ranking" data-kw="日間 にっかん 週間 しゅうかん 月間 げっかん ランキング 行き先 いきさき ranking daily weekly monthly destination"><span class="ico orange" data-icon="trophy"></span><span class="text">ランキングの行き先</span></button>
+    <button class="cell has-icon" data-go="mute" data-kw="非表示 ひひょうじ 除外 じょがい キーワード 作者 さくしゃ ブロック 隠す かくす 既読 きどく 薄く うすく mute block hide exclude keyword author read filter"><span class="ico red" data-icon="mute"></span><span class="text">ミュート・ブロック・既読</span></button>
+    <button class="cell has-icon" data-go="reading" data-kw="読み上げ よみあげ 朗読 ろうどく tts 自動スクロール じどう 音量キー おんりょう 次の話 つぎのわ 連続 れんぞく タイマー スリープ 寝る ねる reading aid tts text to speech read aloud auto scroll volume key next episode continuous timer sleep"><span class="ico blue" data-icon="tune"></span><span class="text">読書の補助</span></button>
+    <a class="cell has-icon" href="offline.html" id="offlineLink" data-kw="ダウンロード 保存済み ほぞんずみ 通信なし つうしん オフライン offline download saved no network" style="text-decoration:none"><span class="ico teal" data-icon="download"></span><span class="text">オフライン保存</span></a>
+    <button class="cell has-icon" data-go="offlineset" data-kw="ダウンロード 保存 ほぞん wi-fi 容量 ようりょう 自動保存 通信 つうしん offline download save wifi wi-fi storage auto save network"><span class="ico teal" data-icon="tune"></span><span class="text">オフライン保存の設定</span></button>
   </div>
 
   <div class="section-label">見た目</div>
   <div class="group">
-    <div class="cell has-icon stack"><span class="ico indigo" data-icon="moon"></span><span class="text">テーマ</span><div class="seg" id="themeSeg"></div></div>
-    <div class="cell has-icon stack"><span class="ico gray" data-icon="swap"></span><span class="text">操作部分の大きさ</span><div class="seg" id="densitySeg"></div></div>
-    <button class="cell has-icon" data-go="text"><span class="ico blue" data-icon="text"></span><span class="text">本文の見た目</span><span class="value" id="v-text"></span></button>
-    <button class="cell has-icon" data-go="bar"><span class="ico gray" data-icon="top"></span><span class="text">上部バー</span><span class="value" id="v-bar"></span></button>
-    <button class="cell has-icon" data-go="icon"><span class="ico teal" data-icon="apps"></span><span class="text">アプリのアイコン</span><span class="value"></span></button>
+    <div data-kw="ダーク ライト 暗い くらい 夜 よる 白 しろ 黒 くろ 自動 じどう theme dark light night auto appearance" class="cell has-icon stack"><span class="ico indigo" data-icon="moon"></span><span class="text">テーマ</span><div class="seg" id="themeSeg"></div></div>
+    <div data-kw="ボタン 大きさ おおきさ サイズ 小さめ ちいさめ 大きめ おおきめ タップ 押しやすい おしやすい ui size density button size tap target large small" class="cell has-icon stack"><span class="ico gray" data-icon="swap"></span><span class="text">操作部分の大きさ</span><div class="seg" id="densitySeg"></div></div>
+    <button class="cell has-icon" data-go="text" data-kw="文字 もじ フォント 大きさ おおきさ 行間 ぎょうま 背景 はいけい 色 いろ ダーク 明るさ あかるさ 縦書き たてがき 横書き よこがき text font size line height background color dark brightness vertical horizontal typography"><span class="ico blue" data-icon="text"></span><span class="text">本文の見た目</span></button>
+    <button class="cell has-icon" data-go="bar" data-kw="タブバー 上 うえ 下 した 左右 さゆう スクロール 隠す かくす 常に表示 つねに ボタン 位置 いち tab bar top bottom left right scroll hide always show button position"><span class="ico gray" data-icon="top"></span><span class="text">タブバー</span></button>
+    <button class="cell has-icon" data-go="fullscreen" data-kw="全画面 ぜんがめん 状態バー じょうたい ステータスバー 時計 とけい 切り欠き きりかき カメラ ナビゲーション fullscreen full screen status bar clock cutout notch camera navigation bar"><span class="ico indigo" data-icon="swap"></span><span class="text">全画面</span></button>
+    <button class="cell has-icon" data-go="icon" data-kw="アイコン ランチャー ホーム画面 がめん 変更 へんこう icon launcher home screen change app icon"><span class="ico teal" data-icon="apps"></span><span class="text">アプリのアイコン</span></button>
+  </div>
+
+  <div class="section-label">サイト</div>
+  <div class="group">
+    <button class="cell has-icon" data-go="sites" data-kw="サイト 表示 ひょうじ なろう ハーメルン カクヨム ノクターン ムーンライト タブ 並び ならび sites display narou hameln kakuyomu nocturne moonlight midnight tabs order"><span class="ico brown" data-icon="globe"></span><span class="text">表示するサイト</span></button>
+    <label data-kw="R18 成人 せいじん 年齢 ねんれい 確認 かくにん アダルト r18 adult age confirm" class="cell has-icon" id="adultRow"><span class="ico pink" data-icon="person"></span><span class="text">18 歳以上</span><input type="checkbox" class="switch" id="adult"></label>
+    <label data-kw="R18 成人 せいじん アダルト 18歳 じゅうはっさい ノクターン ムーンライト ミッドナイト 隠す かくす nsfw r18 adult mature nocturne moonlight midnight hide" class="cell has-icon"><span class="ico red lock" id="nsfwIco"><svg viewBox="0 0 24 24"><path class="shackle" d="M8.5 14V8a3.5 3.5 0 0 1 7 0v3.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><rect x="5" y="11" width="14" height="10" rx="2"/></svg></span><span class="text" id="nsfwLabel">NSFW モード</span><input type="checkbox" class="switch" id="nsfw"></label>
+    <button class="cell has-icon" data-go="accounts" data-kw="ログイン アカウント 認証 にんしょう totp パスワード ログアウト login account sign in two-factor 2fa totp password logout"><span class="ico blue" data-icon="person"></span><span class="text">ログイン</span></button>
+    <button class="cell has-icon" data-go="links" data-kw="リンク ブラウザ 外部 がいぶ アプリの中 開く ひらく links browser external open in app"><span class="ico gray" data-icon="link"></span><span class="text">リンクの扱い</span></button>
+  </div>
+
+  <div class="section-label">更新と通知</div>
+  <div class="group">
+    <button class="cell has-icon" data-go="start" data-kw="起動 きどう 最初 さいしょ ホーム 始まり はじまり 開く ひらく リスト 最後のページ start launch startup page home first open list last page"><span class="ico green" data-icon="home"></span><span class="text">起動ページ</span></button>
+    <button class="cell has-icon" data-go="auto" data-kw="更新 こうしん 確認 かくにん 新着 しんちゃく チェック 自動 じどう 起動時 きどうじ 手動 しゅどう カテゴリ update check auto new arrivals startup manual category"><span class="ico orange" data-icon="refresh"></span><span class="text">更新の確認</span></button>
+    <button class="cell has-icon" data-go="bg" data-kw="裏 うら バックグラウンド 通知 つうち 定期 ていき 曜日 ようび 時刻 じこく バッテリー background check notification schedule weekday time battery"><span class="ico red" data-icon="bell"></span><span class="text">裏での確認と通知</span></button>
+  </div>
+
+  <div class="section-label">記録</div>
+  <div class="group">
+    <button class="cell has-icon" data-go="stats" data-kw="統計 とうけい 記録 きろく 連続 れんぞく 日数 にっすう グラフ stats statistics record streak days graph"><span class="ico teal" data-icon="chart"></span><span class="text">読書の統計</span></button>
+    <button class="cell has-icon" data-go="history" data-kw="履歴 りれき 記録 きろく 閲覧 えつらん 見た作品 みた history record browsing viewed"><span class="ico pink" data-icon="history"></span><span class="text">閲覧履歴</span></button>
   </div>
 
   <div class="section-label">データ</div>
   <div class="group">
-    <button class="cell has-icon" data-go="export"><span class="ico green" data-icon="download"></span><span class="text">書き出す</span><span class="value">ファイルに保存</span></button>
-    <button class="cell has-icon" id="importBtn"><span class="ico blue" data-icon="inbox"></span><span class="text">読み込む</span><span class="value">ファイルから復元</span></button>
+    <button class="cell has-icon" data-go="export" data-kw="書き出す かきだす バックアップ 保存 ほぞん エクスポート 移行 いこう 機種変更 きしゅへんこう export backup save migrate transfer device"><span class="ico green" data-icon="download"></span><span class="text">書き出す</span></button>
+    <button class="cell has-icon" id="importBtn" data-kw="読み込む よみこむ 復元 ふくげん バックアップ インポート 機種変更 きしゅへんこう import restore backup migrate device"><span class="ico blue" data-icon="inbox"></span><span class="text">読み込む</span></button>
     <button class="cell has-icon" id="undoRestoreBtn" hidden><span class="ico orange" data-icon="inbox"></span><span class="text">復元前の状態に戻す</span><span class="value" id="undoRestoreWhen"></span></button>
-    <button class="cell has-icon" data-go="data"><span class="ico red" data-icon="del"></span><span class="text">初期化と消去</span><span class="value"></span></button>
+    <button class="cell has-icon" data-go="data" data-kw="初期化 しょきか 消去 しょうきょ リセット 全部 ぜんぶ 削除 さくじょ データ reset erase clear delete all data factory"><span class="ico red" data-icon="del"></span><span class="text">初期化と消去</span></button>
+  </div>
+
+  <div class="section-label">使い方</div>
+  <div class="group">
+    <button class="cell has-icon" data-go="help" data-kw="チュートリアル ガイド ヒント 説明 せつめい ヘルプ 使い方 つかいかた 初心者 しょしんしゃ help tutorial guide hints tips how to beginner"><span class="ico blue" data-icon="info"></span><span class="text">使い方とヒント</span></button>
   </div>
 
   <div class="section-label">このアプリ</div>
   <div class="group">
-    <button class="cell has-icon" data-go="update"><span class="ico gray" data-icon="info"></span><span class="text">アプリの更新</span><span class="value" id="v-update"></span></button>
-    <button class="cell has-icon" data-go="licenses"><span class="ico gray" data-icon="doc"></span><span class="text">オープンソースライセンス</span><span class="value"></span></button>
-    <button class="cell has-icon" data-go="privacy"><span class="ico gray" data-icon="lock"></span><span class="text">プライバシー</span><span class="value">データの扱い</span></button>
-    <button class="cell has-icon" data-go="diag"><span class="ico gray" data-icon="bug"></span><span class="text">診断情報</span><span class="value">不具合の報告用</span></button>
+    <button class="cell has-icon" data-go="update" data-kw="アプリの更新 こうしん バージョン アップデート 新しい版 あたらしい インストール app update version upgrade install new version release"><span class="ico gray" data-icon="info"></span><span class="text">アプリの更新</span></button>
+    <button class="cell has-icon" data-go="licenses" data-kw="ライセンス オープンソース licenses open source oss"><span class="ico gray" data-icon="doc"></span><span class="text">オープンソースライセンス</span></button>
+    <button class="cell has-icon" data-go="privacy" data-kw="プライバシー 個人情報 こじんじょうほう データの扱い あつかい 送信 そうしん privacy private information data handling send"><span class="ico gray" data-icon="lock"></span><span class="text">プライバシー</span></button>
+    <button class="cell has-icon" data-go="diag" data-kw="診断 しんだん 不具合 ふぐあい 報告 ほうこく エラー ログ diagnostics bug report error log troubleshooting"><span class="ico gray" data-icon="bug"></span><span class="text">診断情報</span></button>
+  </div>
+
   </div>
 
   <div class="version" id="version"></div>

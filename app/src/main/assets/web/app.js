@@ -209,8 +209,11 @@ const ICON_PATHS = {
   up: 'M7.41 15.41 12 10.83l4.59 4.58L18 14l-6-6-6 6z',
   down: 'M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6z',
   top: 'M8 11h3v10h2V11h3l-4-4-4 4zM4 3v2h16V3H4z',
+  bottom: 'M8 13h3V3h2v10h3l-4 4-4-4zM4 19v2h16v-2H4z',
   check: 'M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z',
   add: 'M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z',
+  star: 'M22 9.24l-7.19-.62L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21 12 17.27 18.18 21l-1.63-7.03L22 9.24zM12 15.4l-3.76 2.27 1-4.28-3.32-2.88 4.38-.38L12 6.1l1.71 4.04 4.38.38-3.32 2.88 1 4.28L12 15.4z',
+  starOn: 'M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z',
   undo: 'M12.5 8c-2.65 0-5.05.99-6.9 2.6L2 7v9h9l-3.62-3.62c1.39-1.16 3.16-1.88 5.12-1.88 3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 11.03 17.15 8 12.5 8z',
   swap: 'M6.99 11 3 15l3.99 4v-3H14v-2H6.99v-3zM21 9l-3.99-4v3H10v2h7.01v3L21 9z',
   del: 'M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z',
@@ -256,3 +259,84 @@ function applySiteColors(st) {
   MAIN_SITES.forEach(([k]) => document.documentElement.style.setProperty('--' + k, custom[k] || TAB_COLOR_DEFAULT[k]));
 }
 applySiteColors(NH.load().settings);
+
+// ---- ヒント: 初めて開いた画面に、短い説明を 1 回だけ出す ----
+// 文章は tutorial/hints.js の HINTS (id で呼ぶ)。見たら settings.hintsSeen[id] に覚える。設定 hints (既定オン) がオフなら出さない。
+// box の先頭に差し込む。「わかった」で閉じる (もう出さない)・「ヒントを出さない」で、ヒント全部をオフにする
+function showHint(box, id, text) {
+  if (!box || !NH.hintDue(id)) return;
+  box.querySelectorAll('.hintcard[data-id="' + id + '"]').forEach((c) => c.remove()); // 描き直しで重ならないように
+  const card = el('div', 'hintcard'); card.dataset.id = id;
+  card.setAttribute('role', 'note');
+  card.appendChild(el('p', '', text || (typeof HINTS !== 'undefined' && HINTS[id]) || ''));
+  const row = el('div', 'hintcard-btns');
+  const ok = el('button', 'btn primary', 'わかった');
+  ok.onclick = () => { NH.hintDone(id); card.remove(); };
+  const off = el('button', 'btn', 'ヒントを出さない');
+  off.onclick = () => { NH.update((d) => { d.settings = d.settings || {}; d.settings.hints = false; }); if (typeof S !== 'undefined') S.hints = false; /* 設定の画面は S で丸ごと書き戻すので、S も合わせる */ card.remove(); snack('ヒントを出さないようにしました (設定の「使い方」で戻せます)'); };
+  row.append(ok, off);
+  card.appendChild(row);
+  box.insertBefore(card, box.firstChild);
+}
+// 行の下に出す、横に並んだ 1 つ選ぶボタン (少ない選択肢を、別の画面に分けずに切り替える)
+// 選んでいる印 (白い丸みの部分) は、ボタンを作り直しても残る 1 つの要素 (.seg-thumb) で、選び直すと次のボタンへ滑る
+function segPick(box, items, current, onPick) {
+  // 選択肢も選んでいる値も変わっていなければ、作り直さない (設定を 1 つ変えるたびに、全部の選択を作り直すと、遅い端末でちらつく)。押したときの動きだけ、最新にする
+  const sig = JSON.stringify([items, String(current)]);
+  const btns = [...box.querySelectorAll('button')];
+  if (box.dataset.segSig === sig && btns.length === items.length) { btns.forEach((b, i) => { b.onclick = () => onPick(items[i][0]); }); return; }
+  box.dataset.segSig = sig;
+  box.querySelectorAll('button').forEach((b) => b.remove());
+  items.forEach(([k, label]) => {
+    const b = setPressed(el('button', String(k) === String(current) ? 'on' : '', label), String(k) === String(current));
+    b.onclick = () => onPick(k);
+    box.appendChild(b);
+  });
+  let thumb = box.querySelector('.seg-thumb');
+  const first = !thumb;
+  if (first) { thumb = el('i', 'seg-thumb'); thumb.hidden = true; box.prepend(thumb); box.classList.add('slide'); }
+  const place = () => {
+    const on = box.querySelector('button.on');
+    if (!on || !on.offsetWidth) return; // 隠れている画面では測れない (見えたときに ResizeObserver が置き直す)
+    thumb.style.width = on.offsetWidth + 'px';
+    thumb.style.transform = 'translateX(' + on.offsetLeft + 'px)';
+    thumb.hidden = false;
+  };
+  if (first) thumb.classList.add('instant'); // 最初の位置へは滑らず、すぐ置く
+  place();
+  if (first) {
+    requestAnimationFrame(() => requestAnimationFrame(() => thumb.classList.remove('instant')));
+    let lastW = box.offsetWidth; // 幅が変わったとき (画面が見えた・回転した) だけ、滑らずに置き直す。高さだけ変わる (操作部分の大きさ) ときは滑らせる
+    if (window.ResizeObserver) new ResizeObserver(() => {
+      if (box.offsetWidth === lastW) return;
+      lastW = box.offsetWidth;
+      thumb.classList.add('instant'); place();
+      requestAnimationFrame(() => requestAnimationFrame(() => thumb.classList.remove('instant')));
+    }).observe(box);
+  }
+}
+const CHECK = '<svg class="check" viewBox="0 0 24 24"><path d="M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>';
+// チェックマークで選ぶ 1 行 (選んでいる行に ✓ と aria-pressed を付ける)。sub は 2 行目の小さい説明。設定のどの選択の一覧もこれで作る
+function checkRow(label, on, onClick, sub) {
+  const c = setPressed(el('button', 'cell'), on);
+  const t = el('span', 'text', label);
+  if (sub) t.appendChild(el('small', '', sub));
+  c.appendChild(t);
+  if (on) c.insertAdjacentHTML('beforeend', CHECK);
+  c.onclick = onClick;
+  return c;
+}
+
+// チェックマークで 1 つ選ぶ一覧 (iOS の選択リスト)
+function pickList(box, items, current, onPick) {
+  box.innerHTML = '';
+  items.forEach(([k, label]) => {
+    box.appendChild(checkRow(label, String(k) === String(current), () => onPick(k)));
+  });
+}
+// バーの出し方の縦の一覧 (チェックつき + 説明)。設定の「バー」とチュートリアルで共通。pos = バーの置き場所。onChange はあとの描き直し用
+function paintBarModeList(box, st, onPick) {
+  box.innerHTML = '';
+  const cur = NH.barModeOf(st);
+  NH.barModesFor(st.barPos).forEach(([k, label, sub]) => box.appendChild(checkRow(label, k === cur, () => onPick(k), sub)));
+}

@@ -128,16 +128,25 @@ class OfflineStore(private val root: File) {
 
     fun delete(site: String, id: String): Boolean {
         val d = dir(site, id) ?: return false
-        return d.deleteRecursively().also { sizes.remove(d.absolutePath) }
+        return synchronized(WRITE) { d.deleteRecursively().also { sizes.remove(d.absolutePath) } }
     }
 
     /** meta.json の無い作品のフォルダ (保存中に消したあとで、挿絵などだけ書かれたもの) を消す。一覧に出ず容量だけ使うので */
     fun dropIfNoMeta(site: String, id: String) {
         val d = dir(site, id) ?: return
-        if (d.isDirectory && !File(d, "meta.json").isFile) d.deleteRecursively().also { sizes.remove(d.absolutePath) }
+        synchronized(WRITE) {
+            if (d.isDirectory && !File(d, "meta.json").isFile) d.deleteRecursively().also { sizes.remove(d.absolutePath) }
+        }
     }
 
-    fun deleteAll(): Boolean = (!root.exists() || root.deleteRecursively()).also { sizes.clear() }
+    fun deleteAll(): Boolean = synchronized(WRITE) { (!root.exists() || root.deleteRecursively()).also { sizes.clear() } }
+
+    /**
+     * 「まだ必要か」の確認 (stillWanted) と、書き込み (write) を、削除と同じロックの中で一続きに行う。
+     * 確認のあとに書くまでの間 (挿絵の通信など) に作品が消されても、消したあとに書き戻さない。確認が false なら書かない
+     */
+    fun guarded(stillWanted: () -> Boolean, write: () -> Boolean): Boolean =
+        synchronized(WRITE) { stillWanted() && write() }
 
     /** ファイルを文字列で読む。圧縮してあれば (先頭の印で見分ける) 展開する。壊れた圧縮は空 */
     private fun read(f: File): String = try { decode(f.readBytes()) } catch (e: Exception) { "" }
@@ -146,6 +155,9 @@ class OfflineStore(private val root: File) {
     private fun size(f: File): Long = sizes.getOrPut(f.absolutePath) { f.walkTopDown().filter { it.isFile }.sumOf { it.length() } }
 
     companion object {
+        /** 書き込みと削除の排他 (画面とサービスが別の OfflineStore で同じ場所を書くので、共有する) */
+        private val WRITE = Any()
+
         /** 作品のフォルダごとの大きさ。画面とサービスが別の OfflineStore で同じ場所を書くので、置き場は共有する */
         private val sizes = java.util.concurrent.ConcurrentHashMap<String, Long>()
 

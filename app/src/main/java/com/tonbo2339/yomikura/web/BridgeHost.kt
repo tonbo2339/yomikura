@@ -18,6 +18,8 @@ interface BridgeHost {
     val collectingNow: Boolean
     val collectProgressText: String
     val updater: Updater
+    /** 新しい版の印 (⋮ / 歯車の点) の状態 */
+    val updateNotice: UpdateNotice
     val launcherIcon: LauncherIcon
 
     /** UI: WebView の今の URL がアプリ内ページか */
@@ -56,6 +58,8 @@ interface BridgeHost {
     fun dropOfflineAll(): Boolean
     /** UI: 読書画面の上部バーの出し入れ */
     fun readerBar(hide: Boolean)
+    /** UI: サイトの話ページ (縦書き) の上部バーの出し入れ。保存した作品の読書画面 ([readerBar]) と同じ動き */
+    fun siteReaderBar(hide: Boolean)
 }
 
 /**

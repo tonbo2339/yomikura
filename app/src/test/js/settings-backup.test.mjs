@@ -55,6 +55,15 @@ t('版ごとの設定画面の JS が使う要素の ID は、設定画面の HT
   }
 });
 
+t('バックアップの項目 (core/backup.js の NH.BACKUP_PARTS) は、すべて設定画面の数え方 (BACKUP_COUNT) がある', () => {
+  const core = read('main/assets/js/core/backup.js');
+  const keys = [...core.slice(core.indexOf('NH.BACKUP_PARTS = ['), core.indexOf('];', core.indexOf('NH.BACKUP_PARTS = ['))).matchAll(/\['([a-z]+)',/g)].map((m) => m[1]);
+  assert.ok(keys.length >= 6, keys.join());
+  const ui = read('main/assets/web/settings/backup.js');
+  const block = ui.slice(ui.indexOf('const BACKUP_COUNT = {'), ui.indexOf('};', ui.indexOf('const BACKUP_COUNT = {')));
+  for (const k of keys) assert.ok(new RegExp('\n  ' + k + ':').test(block), `BACKUP_COUNT に ${k} がありません (設定の「書き出す」の画面が例外で止まります)`);
+});
+
 let failed = 0;
 for (const [name, fn] of tests) {
   try { fn(); console.log('ok  ', name); } catch (e) { failed++; console.log('FAIL', name, '\n    ', e.message); }

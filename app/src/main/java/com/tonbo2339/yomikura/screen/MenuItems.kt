@@ -18,6 +18,7 @@ object MenuItems {
     const val LATER = "later"
     const val SAVE = "save"
     const val RANKING = "ranking"
+    const val VIEWER = "viewer"
     const val READ_ALOUD = "readAloud"
     const val AUTO_SCROLL = "autoScroll"
     const val FIND = "find"
@@ -30,6 +31,7 @@ object MenuItems {
         Item(LATER, "後で読むに追加・リストから削除", "作品", true),
         Item(SAVE, "オフライン保存", "作品", true),
         Item(RANKING, "ランキングの行き先に設定", "作品", true),
+        Item(VIEWER, "表示の設定", "読書の補助", true),
         Item(READ_ALOUD, "読み上げ", "読書の補助", true),
         Item(AUTO_SCROLL, "自動スクロール", "読書の補助", true),
         Item(FIND, "ページ内を検索", "ページ", true),

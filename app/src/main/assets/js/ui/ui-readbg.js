@@ -11,11 +11,19 @@ window.NH_UI_READBG = function () {
   if (!R || !R.colors((NH.load().settings || {}).readBg)) return;
   const NEUTRAL = 40; // R・G・B の最大と最小の差がこれ未満の背景は、無彩色に近い (色つきのボタンの緑・青などは、これ以上)
   const RE = /rgba?\(\s*(\d+)[ ,]+(\d+)[ ,]+(\d+)(?:[ ,/]+([\d.]+))?/;
-  const own = (e) => /^nh-/.test(e.id) || /(^|\s)nh-/.test(typeof e.className === 'string' ? e.className : ''); // このアプリの部品は触らない
+  const OWN = '[id^="nh-"],[class^="nh-"],[class*=" nh-"]'; // このアプリの部品 (と、その中) は触らない
   const bgOf = (e) => { // {opaque, neutral}
     const m = RE.exec(getComputedStyle(e).backgroundColor);
     if (!m || (m[4] !== undefined && Number(m[4]) < 0.9)) return { opaque: false, neutral: false };
     return { opaque: true, neutral: Math.max(m[1], m[2], m[3]) - Math.min(m[1], m[2], m[3]) < NEUTRAL };
+  };
+  // 1 回の paint のあいだは、同じ要素の背景色を使い回す (getComputedStyle は重い。文字の判定は祖先を何度もたどるので、要素数 × 階層の深さの回数になる)
+  let memo = null;
+  const bgc = (e) => {
+    if (!memo) return bgOf(e);
+    let r = memo.get(e);
+    if (!r) { r = bgOf(e); memo.set(e, r); }
+    return r;
   };
   const pageLike = (e) => e === root || e === document.body || e.hasAttribute('data-nh-surface');
   const hasText = (e) => { if (e.matches('input[type=submit],input[type=button],input[type=reset]')) return true; for (const n of e.childNodes) if (n.nodeType === 3 && n.nodeValue.trim()) return true; return false; };
@@ -23,7 +31,7 @@ window.NH_UI_READBG = function () {
   const onPage = (e) => {
     for (let p = e; p && p !== root; p = p.parentElement) {
       if (pageLike(p)) return true;
-      if (bgOf(p).opaque) return false;
+      if (bgc(p).opaque) return false;
     }
     return true;
   };
@@ -32,19 +40,28 @@ window.NH_UI_READBG = function () {
   });
   const paint = () => {
     if (!root.hasAttribute('data-nh-readbg') || !document.body) { clear(); return; }
-    const all = [...document.body.querySelectorAll('*')].filter((e) => !own(e) && !e.closest('[id^="nh-"],[class^="nh-"],[class*=" nh-"]'));
-    // 1 回目: 無彩色の面に印を付ける (外側から。文字の判定は、全部の面に印が付いてから)
-    all.forEach((e) => { const b = bgOf(e); if (b.opaque && b.neutral) e.setAttribute('data-nh-surface', ''); });
-    // 2 回目: 文字
-    all.forEach((e) => {
-      if (!hasText(e)) return;
-      if (!onPage(e)) { e.removeAttribute('data-nh-ink'); e.removeAttribute('data-nh-link'); return; }
-      e.setAttribute('data-nh-ink', '');
-      if (e.closest('a') || e.tagName === 'INPUT') e.setAttribute('data-nh-link', ''); else e.removeAttribute('data-nh-link');
-    });
+    memo = new Map();
+    try {
+      const all = [...document.body.querySelectorAll('*')].filter((e) => !e.closest(OWN));
+      // 1 回目: 無彩色の面に印を付ける (外側から。文字の判定は、全部の面に印が付いてから)
+      all.forEach((e) => { const b = bgc(e); if (b.opaque && b.neutral) e.setAttribute('data-nh-surface', ''); });
+      // 2 回目: 文字
+      all.forEach((e) => {
+        if (!hasText(e)) return;
+        if (!onPage(e)) { e.removeAttribute('data-nh-ink'); e.removeAttribute('data-nh-link'); return; }
+        e.setAttribute('data-nh-ink', '');
+        if (e.closest('a') || e.tagName === 'INPUT') e.setAttribute('data-nh-link', ''); else e.removeAttribute('data-nh-link');
+      });
+    } finally { memo = null; }
   };
-  let timer = 0;
-  const later = () => { clearTimeout(timer); timer = setTimeout(paint, 400); };
+  let timer = 0, stale = false;
+  // 画面が見えていない間 (別のアプリ・画面オフ) は描かず、見えたときにやり直す (広告などの DOM の変化のたびに、全要素を調べ直さない)
+  const later = () => {
+    clearTimeout(timer);
+    if (document.hidden) { stale = true; return; }
+    timer = setTimeout(paint, 400);
+  };
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && stale) { stale = false; later(); } });
   paint();
   if (typeof MutationObserver === 'function') {
     new MutationObserver(later).observe(document.body, { childList: true, subtree: true });

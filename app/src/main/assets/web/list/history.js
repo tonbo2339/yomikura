@@ -13,7 +13,7 @@ function dayLabel(t) {
 // 開く先: リストにあれば「続きから」、そうでなければ履歴の URL (アプリで読んだ話 → 公式の続き)
 function historyOpenUrl(d, e) {
   const it = d.readLater.find((x) => x.key === e.key);
-  return it ? NH.resumeUrl(d, it) : NH.resumeUrl(d, { key: e.key, url: e.url || e.siteUrl });
+  return it ? NH.resumeUrl(d, it) : NH.resumeUrl(d, { key: e.key, url: e.url || e.siteUrl || NH.workUrl(e.site, e.id) }); // 履歴に URL が無ければ、作品のページ
 }
 // 「読んだ話」の欄を開いている作品 (画面を描き直しても開いたままにする)
 const H_OPEN = new Set();
@@ -98,24 +98,31 @@ function historyRow(d, e, inList) {
     ev.stopPropagation();
     if (inList) return;
     NH.update((dd) => {
-      // 追加の規則は NH.addLater に任せる (連載状態・全話数・読書位置を履歴から引き継ぐ。読了の作品は、読了を外して戻す)
+      // 追加の規則は NH.addLater に任せる (連載状態・全話数・読書位置を履歴から引き継ぐ)
       const w = { site: e.site, id: e.id, url: e.url || e.siteUrl };
-      if (NH.addLater(dd, w, e.title, e.status) === 'added' && e.sub) NH.findItem(dd, w).sub = e.sub;
+      if (NH.addLater(dd, w, e.title || e.id, e.status) === 'added' && e.sub) NH.findItem(dd, w).sub = e.sub;
     });
     snack('後で読むに追加しました');
     render();
   };
   r.appendChild(add);
+  if (NH.favOn(d)) {
+    const work = { site: e.site, id: e.id, url: e.url || e.siteUrl };
+    const faved = NH.isFav(d, work);
+    const star = el('button', 'icon-btn hadd fav' + (faved ? ' on' : ''));
+    star.innerHTML = svg(faved ? 'starOn' : 'star');
+    star.setAttribute('aria-label', faved ? 'お気に入りから外す' : 'お気に入りに追加');
+    star.onclick = (ev) => { ev.stopPropagation(); favToggle(work, e.title, e.status); };
+    r.appendChild(star);
+  }
   return r;
 }
 function renderHistory(d) {
   const terms = queryTerms();
   const h = (d.history || []).filter((e) => !NH.nsfwHides(d, e));
-  const onList = new Set(d.readLater.filter((x) => !x.done).map((x) => x.key));
-  // 履歴のタブでは、上のカード・読了の欄・読了の自動削除の案内は出さない
+  const onList = new Set(d.readLater.map((x) => x.key));
+  // 履歴のタブでは、上のカードは出さない
   $('hero').innerHTML = '';
-  $('doneBox').hidden = true;
-  $('pruneHint').textContent = '';
   const sites = [...new Set(h.map(NH.siteKey))]; // R18 はノクターンなどに分ける
   if (ui.site && !sites.includes(ui.site)) ui.site = '';
   const fl = $('filters'); fl.innerHTML = '';
@@ -125,6 +132,7 @@ function renderHistory(d) {
   fl.hidden = !fl.childElementCount;
 
   const root = $('active'); root.innerHTML = '';
+  showHint(root, 'list-history');
   if (!NH.historyOn(d)) {
     $('qCount').textContent = ''; // 前のタブの検索の件数を残さない
     root.appendChild(emptyState('book', '履歴の記録はオフです', '設定の「閲覧履歴を記録する」で切り替えられます'));

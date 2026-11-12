@@ -53,7 +53,7 @@ window.NH_UI_WORK = function (ctx) {
       items.forEach((u) => {
         const key = adapter.id + ':' + u.id;
         const p = (d.progress || {})[key];
-        const inList = d.readLater.some((x) => x.key === key && !x.done);
+        const inList = d.readLater.some((x) => x.key === key);
         const label = [p ? (NH.epNumber(p) ? 'アプリ: 第' + NH.epNumber(p) + '話' : 'アプリで読書中') + (p.done ? ' 読了' : p.y >= 0.01 ? ' ' + Math.round(p.y * 100) + '%' : '') : '', inList ? 'リスト' : '']
           .filter(Boolean).join(' ・ ');
         if (label && u.anchor && !u.anchor.dataset.nhHist) {

@@ -25,7 +25,7 @@
     collectUrl: 'https://kakuyomu.jp/my/antenna/works',
     onCollectPage: (loc) => loc.pathname.startsWith('/my/antenna/works'),
     bodySel: '.widget-episodeBody',
-    topToc: true, // 話ページの一番上に「目次へ」(作品のページ) を置く。作品へのパンくずは sites.js で隠しているため
+    viewerBtn: '#displaySetting-button', sideTocBtn: '#sidebar-button', // 隠しているサイトのヘッダーにある「ビューワー設定」「目次」(ハンバーガー) のボタン。話ページの上の列 (ui.js) から押す
     spa: true, // 話から話へページを読み込み直さずに移る (ui.js が作品 / 話の変化を見張る)
     // 話番号が連番でないので、次の話は「次のエピソード」リンクから取る (最終話には無い)
     nextUrl() {
@@ -35,8 +35,8 @@
 
     // 目次 (オフライン保存用): ページの HTML には最初の数話しかリンクが無いので、埋め込みデータ (章 → 話の並び) から読む
     async listEpisodes(w) {
-      const out = tocOf(document, w.id);
-      return out.length ? out : NH.linkEpisodes(this, w, document);
+      // 埋め込みデータが読めないとき、ページのリンクには最初の数話しかない。それを全話として保存の計画にしない (空なら、短編として本文を見るか、「目次を読めませんでした」で止まる)
+      return tocOf(document, w.id);
     },
 
     // 話ページで「何話目か」(読書位置の「第N話」用)。話 ID は連番でないので、作品ページの目次の並びで数える。
@@ -57,7 +57,7 @@
       return noOf(ids);
     },
 
-    // 「読了 → 次の小説へ」を置く場所: 話の下の応援ボタンの直下 (作品情報・おすすめより上)
+    // 「読み終わり → 次の小説へ」を置く場所: 話の下の応援ボタンの直下 (作品情報・おすすめより上)
     endCardAfter: () => document.querySelector('#episodeFooter-cheerSection'),
 
     // ランキング / 検索結果の 1 作品の囲みから作者名を取る (ミュート用)
@@ -126,8 +126,7 @@
       const items = [];
       let sawList = false;
       let truncated = false; // ページの上限で打ち切った (続きのページがある)
-      const readIds = []; // 見たページにあった、未読の無い作品 (打ち切ったときも、これらは読了にしてよい)
-      for (let page = 1; page <= 10; page++) {
+      for (let page = 1; page <= NH.COLLECT_MAX_PAGES; page++) {
         const doc = await NH.fetchListDoc(page === 1 ? this.collectUrl : this.collectUrl + '?page=' + page, page - 1);
         if (doc.querySelector('.widget-antennaList-item') || doc.querySelector('.widget-antennaList')) sawList = true;
         const lis = [...doc.querySelectorAll('li.widget-antennaList-item[data-is-unread="1"]')];
@@ -140,17 +139,13 @@
           const tot = [...li.querySelectorAll('.widget-antennaList-event li')].map((e) => e.textContent.match(/(\d+)話/)).find((m) => m && !/未読/.test(m.input));
           items.push({ id: w.id, title: t ? t.textContent.trim() : '', url: location.origin + '/works/' + w.id + '/resume_reading', unread, lastEp: tot ? Number(tot[1]) : null });
         }
-        doc.querySelectorAll('li.widget-antennaList-item:not([data-is-unread="1"]) a.widget-antennaList-workInfo').forEach((a) => {
-          const w = this.parseWork(a.getAttribute('href'));
-          if (w) readIds.push(w.id);
-        });
         const more = !!doc.querySelector('a[href*="page=' + (page + 1) + '"]');
         // 未読の行が無いページで止める (後ろのページまで取りに行くと、サイトへのアクセスが増えるため)。
-        // まだ続きのページがあるときは、見ていない作品を「今回の取得に無い」として読了にしないよう truncated にする
+        // まだ続きのページがあるときは、打ち切ったことを truncated で返す (確認の記録に出す)
         if (!lis.length || !more) { if (more) truncated = true; break; }
-        if (page === 10) truncated = true;
+        if (page === NH.COLLECT_MAX_PAGES) truncated = true;
       }
-      return { ok: sawList, items, truncated, readIds };
+      return { ok: sawList, items, truncated };
     },
 
     // ランキング・検索結果: 作品タイトルの見出しリンク (クラス名はハッシュ付きなので見出し要素で拾う)

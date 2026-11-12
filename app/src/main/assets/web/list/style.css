@@ -28,6 +28,8 @@
   .hlog .go { margin-top: 8px; }
   .hadd { width: var(--hadd-w); height: var(--hadd-h); }
   .hadd.on { color: var(--accent-text); grid-auto-flow: row; align-content: center; justify-items: center; border-radius: 14px; }
+  .hadd.fav.on { color: #c98a00; }
+  .hadd.fav.on::after { content: "お気に入り"; }
   .hadd.on::after { content: "登録済み"; display: var(--hadd-label); font-size: 10px; font-weight: 700; margin-top: 1px; white-space: nowrap; }
   .hofficial { margin-top: 28px; padding: 16px; }
   .hofficial p { margin: 0 0 12px; font-size: 13px; color: var(--sub); line-height: 1.6; }
@@ -133,8 +135,6 @@
   .badge.status.serial { background: var(--st-serial-bg); color: var(--st-serial); }
   .badge.status.complete { background: var(--st-complete-bg); color: var(--st-complete); }
   .badge.status.short { background: var(--st-short-bg); color: var(--st-short); }
-  .item.done { opacity: .6; }
-  .item.done .title { text-decoration: line-through; text-decoration-color: var(--muted); }
 
   /* 長押しして上下へ動かす並べ替え: 長押しの文字選択・メニューを出さず、持ち上げている間は浮かせる */
   .item { touch-action: pan-y; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -155,8 +155,7 @@
   .move { display: flex; flex-direction: column; }
   .move .icon-btn { width: var(--move-w); height: var(--move-h); border-radius: 10px; }
   .move .icon-btn:disabled { opacity: .25; }
-  .done-tools { display: flex; justify-content: flex-end; margin: 10px 0 0; }
-  .done-hint { font-size: 12px; color: var(--sub); margin: 8px 4px 0; text-align: right; }
+  .list-hint { font-size: 12px; color: var(--sub); margin: 8px 4px 0; }
 
   .empty { text-align: center; color: var(--sub); padding: 40px 20px; }
   .empty .ico { width: 64px; height: 64px; border-radius: 20px; margin: 0 auto 14px; display: grid; place-items: center; background: var(--surface-2); }
@@ -164,11 +163,6 @@
   .empty h2 { margin: 0 0 6px; color: var(--fg); font-size: 16px; }
   .empty p { margin: 0 0 16px; font-size: 13px; }
 
-  details.done-box { margin-top: 24px; }
-  details.done-box summary { list-style: none; display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; color: var(--sub); padding: 10px 4px; cursor: pointer; }
-  details.done-box summary::-webkit-details-marker { display: none; }
-  details.done-box summary svg { width: 18px; height: 18px; fill: currentColor; transition: transform .2s; }
-  details.done-box[open] summary svg { transform: rotate(180deg); }
 
   /* シートの中身 */
   .sheet h2 { margin: 0 0 4px; font-size: 17px; line-height: 1.4; word-break: break-all; }
@@ -186,5 +180,5 @@
   .sheet textarea { min-height: 76px; resize: vertical; }
   .sheet textarea:focus, .sheet input[type=text]:focus { border-color: var(--accent); }
   .tag-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
-  .sheet .done-row { display: flex; gap: 10px; margin-top: 18px; }
-  .sheet .done-row .btn { flex: 1; height: 46px; border-radius: 14px; }
+  .sheet .sheet-actions { display: flex; gap: 10px; margin-top: 18px; }
+  .sheet .sheet-actions .btn { flex: 1; height: 46px; border-radius: 14px; }

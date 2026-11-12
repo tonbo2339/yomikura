@@ -6,32 +6,58 @@
 const LONG_PRESS_MS = 380;
 const SWIPE_RATIO = 0.35; // 幅のこの割合を越えて離すと削除
 let dragEndedAt = 0;
+let hintShown = false; // 「自分で並べた順」でないと長押しで並べ替えられない、という案内は、1 回開いているあいだに 1 度だけ出す
 
-// 表示中の作品 (keys) の並びを新しい順にする。d.readLater の中では、表示中の作品が占めていた場所に順に入れ直す
+// 表示中の作品 (keys) の並びを新しい順にした、リスト (list) の新しい配列を返す。表示中の作品が占めていた場所に順に入れ直し、
+// 見えていない作品の位置は変えない。keys のうち、いまのリストに無い作品 (動かしている間に、更新の確認などで消えた) は飛ばす
+// (飛ばさないと、場所と作品の数が合わずに、リストに空の項目が入って、ほかの作品が消える)
+function orderedList(list, keys) {
+  const byKey = new Map(list.map((x) => [x.key, x]));
+  const ks = [...new Set(keys)].filter((k) => byKey.has(k)); // keys の重複は 1 つにする (場所より作品が多いと、場所の外へ書いてしまう)
+  const set = new Set(ks);
+  const slots = [];
+  list.forEach((x, i) => { if (set.has(x.key)) slots.push(i); });
+  const out = list.slice();
+  ks.forEach((k, j) => { out[slots[j]] = byKey.get(k); });
+  return out;
+}
+// 元の並び (key の配列) へ戻した配列を返す。元の並びにある作品を元の順に並べ、そのあとに、増えた作品を今の順のまま続ける
+function restoreOrder(list, keys) {
+  const byKey = new Map(list.map((x) => [x.key, x]));
+  const known = new Set(keys);
+  return [...keys.filter((k) => byKey.has(k)).map((k) => byKey.get(k)), ...list.filter((x) => !known.has(x.key))];
+}
+// 表示中の作品 (keys) の並びを新しい順にする (元に戻せる)
 function applyOrder(keys) {
-  mutate((d) => {
-    const set = new Set(keys);
-    const slots = [];
-    d.readLater.forEach((x, i) => { if (set.has(x.key)) slots.push(i); });
-    const byKey = new Map(d.readLater.map((x) => [x.key, x]));
-    keys.forEach((k, j) => { d.readLater[slots[j]] = byKey.get(k); });
-  });
+  mutateOrder((d) => { d.readLater = orderedList(d.readLater, keys); }, '並べ替えました');
 }
 
-// reorder = 長押しで動かせるか (自分で並べた順で、選択中でないとき)。swipe = 横スワイプで削除できるか (設定。選択中は使わない)。まとめての削除は選択モード (select.js)
-function enableDrag(c, it, visible, reorder, swipe) {
-  let timer = 0, sx = 0, sy = 0, st = null, raf = 0, swiping = false, swipeDx = 0;
+// 持ち上げた作品 (idx 番目) を dy だけ動かしたとき、入る位置 (動かしたあとの番号) を返す。tops / hs = 各作品の上端の位置と高さ。
+// 上へ動かしたときは、持ち上げた作品の上端が、上にある作品の中心を越えたら、その作品の前に入る。下へ動かしたときは、下端が下にある作品の中心を越えたら、
+// その作品の後に入る。(中心どうしで比べると、持ち上げた作品が先頭・末尾の作品より背が高いとき、いちばん上・下まで動かしても 1 つ手前にしか入れない)
+function dragTarget(tops, hs, idx, dy) {
+  const top = tops[idx] + dy;
+  const bottom = top + hs[idx];
+  if (dy < 0) {
+    for (let j = 0; j < idx; j++) if (top < tops[j] + hs[j] / 2) return j;
+  } else if (dy > 0) {
+    for (let j = tops.length - 1; j > idx; j--) if (bottom > tops[j] + hs[j] / 2) return j;
+  }
+  return idx;
+}
+
+// reorder = 長押しで動かせるか (自分で並べた順で、選択中でないとき)。hint = 長押しされたら「自分で並べた順にすると並べ替えられる」と案内するか (ほかの並べ替えのとき)。swipe = 横スワイプで削除できるか (設定。選択中は使わない)。まとめての削除は選択モード (select.js)
+function enableDrag(c, it, visible, reorder, swipe, hint) {
+  let hintFired = false; // この指で、案内を出した
+  let timer = 0, hintTimer = 0, sx = 0, sy = 0, st = null, raf = 0, swiping = false, swipeDx = 0;
   c.addEventListener('contextmenu', (e) => e.preventDefault());
-  if (!reorder && !swipe) return;
+  if (!reorder && !swipe && !hint) return;
 
   const layout = (clientY) => {
     st.y = clientY;
     const dy = Math.max(st.minDy, Math.min(st.maxDy, clientY + scrollY - st.startY));
     c.style.transform = 'translateY(' + dy + 'px) scale(1.02)';
-    // 持ち上げた作品の中心より上にある作品の数 = 入る位置
-    const center = st.tops[st.idx] + st.hs[st.idx] / 2 + dy;
-    let target = 0;
-    st.tops.forEach((t, j) => { if (j !== st.idx && t + st.hs[j] / 2 < center) target++; });
+    const target = dragTarget(st.tops, st.hs, st.idx, dy); // 入る位置
     st.target = target;
     const step = st.hs[st.idx] + st.gap;
     st.cards.forEach((x, j) => {
@@ -43,7 +69,10 @@ function enableDrag(c, it, visible, reorder, swipe) {
   // 画面の端に近いあいだは自動でスクロールする
   const autoScroll = () => {
     if (!st) return;
-    const edge = 90, v = st.y < edge + 60 ? -14 : st.y > innerHeight - edge ? 14 : 0;
+    // 端に近いほど速く (端の手前 150px / 90px から。遅い 6px から速い 22px まで)。長い一覧でも、いちばん上・下まで時間がかかりすぎない
+    const edge = 90, topZone = edge + 60;
+    const near = (a) => Math.min(1, Math.max(0, a));
+    const v = st.y < topZone ? -(6 + 16 * near((topZone - st.y) / topZone)) : st.y > innerHeight - edge ? 6 + 16 * near((st.y - (innerHeight - edge)) / edge) : 0;
     if (v) { scrollBy(0, v); layout(st.y); }
     raf = requestAnimationFrame(autoScroll);
   };
@@ -65,15 +94,22 @@ function enableDrag(c, it, visible, reorder, swipe) {
     clearTimeout(timer); timer = 0;
     if (!st) return;
     cancelAnimationFrame(raf);
-    const { cards, idx, target } = st;
+    const { cards, idx, target, tops, hs, gap } = st;
     st = null;
     dragEndedAt = Date.now();
-    c.classList.remove('dragging');
-    cards.forEach((x) => { x.style.transform = ''; x.style.transition = ''; });
+    const settle = () => { c.classList.remove('dragging'); cards.forEach((x) => { x.style.transform = ''; x.style.transition = ''; }); };
     if (apply && target !== idx) {
       const keys = visible.map((x) => x.key);
       keys.splice(target, 0, keys.splice(idx, 1)[0]);
-      applyOrder(keys);
+      // 落とす場所へ、持ち上げた作品をなめらかに寄せてから (ほかの作品は、もうその場所にいる) 描き直す。
+      // すぐ元の位置に戻して描き直すと、作品が指の位置から落とす場所へ一気に飛んで、ずれて見える
+      const step = hs[idx] + gap;
+      const finalTop = target > idx ? tops[target] - step + hs[target] + gap : tops[target]; // 下へ動かしたときは、ずれた作品のすぐ下。上へ動かしたときは、target 番目の場所
+      c.style.transition = 'transform .12s';
+      c.style.transform = 'translateY(' + (finalTop - tops[idx]) + 'px)';
+      setTimeout(() => { settle(); applyOrder(keys); }, 130); // 待つあいだも dragging のまま (裏のデータの変更で描き直されない。sync.js)
+    } else {
+      settle();
     }
   };
 
@@ -110,6 +146,8 @@ function enableDrag(c, it, visible, reorder, swipe) {
     endSwipe(false);
     sx = e.touches[0].clientX; sy = e.touches[0].clientY;
     clearTimeout(timer);
+    clearTimeout(hintTimer); hintFired = false;
+    if (hint && !hintShown) hintTimer = setTimeout(() => { hintShown = hintFired = true; snack('長押しで並べ替えるには、「並べ替え」を「自分で並べた順」にしてください'); }, 700);
     // 並べ替えられないとき (自分で並べた順以外) は長押しを待たない。待つと、ゆっくり横に動かしたときにスワイプにならない (-1 = 指が触れている印)
     timer = reorder ? setTimeout(() => { timer = 0; start(); }, LONG_PRESS_MS) : -1;
   }, { passive: true });
@@ -120,6 +158,7 @@ function enableDrag(c, it, visible, reorder, swipe) {
       if (!timer) return;
       const dx = t.clientX - sx, dy = t.clientY - sy;
       if (Math.hypot(dx, dy) <= 10) return;
+      clearTimeout(hintTimer);
       clearTimeout(timer); timer = 0;
       if (swipe && Math.abs(dx) > Math.abs(dy) * 1.2) { swiping = true; swipeDx = dx; if (e.cancelable) e.preventDefault(); swipeTo(dx); }
       return;
@@ -127,6 +166,6 @@ function enableDrag(c, it, visible, reorder, swipe) {
     if (e.cancelable) e.preventDefault();
     layout(t.clientY);
   }, { passive: false });
-  c.addEventListener('touchend', () => { endSwipe(true); finish(true); });
-  c.addEventListener('touchcancel', () => { endSwipe(false); finish(false); });
+  c.addEventListener('touchend', () => { clearTimeout(hintTimer); if (hintFired) { dragEndedAt = Date.now(); hintFired = false; } endSwipe(true); finish(true); }); // 案内を出した指を離しても、作品を開かない
+  c.addEventListener('touchcancel', () => { clearTimeout(hintTimer); endSwipe(false); finish(false); });
 }

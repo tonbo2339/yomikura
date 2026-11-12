@@ -4,14 +4,30 @@
   <div class="group">
     <label class="cell"><span class="text">Wi-Fi のときだけ保存する</span><input type="checkbox" class="switch" id="offlineWifiOnly" data-setting="offlineWifiOnly" data-default="off"></label>
   </div>
-  <div class="hint">モバイル回線では、保存の前に確認します。保存中に Wi-Fi が切れたら、つながるまで待って、続きから再開します。</div>
+  <div class="hint"><ul>
+    <li>モバイル回線では、保存の前に確認する</li>
+    <li>保存中に Wi-Fi が切れたら、つながるまで待って続きから再開する</li>
+  </ul></div>
   <div class="group" style="margin-top:16px">
     <label class="cell"><span class="text">新しい話を自動で保存する</span><input type="checkbox" class="switch" id="offlineAutoUpdate" data-setting="offlineAutoUpdate" data-default="off"></label>
   </div>
-  <div class="hint">保存済みの作品に新しい話が出たら、自動で保存します (Wi-Fi のときだけ)。対象は、設定の「更新の確認」で選んだサイトの作品です。</div>
+  <div class="hint"><ul>
+    <li>保存済みの作品の新しい話を保存する (Wi-Fi のときだけ)</li>
+    <li>対象は、設定の「更新の確認」で選んだサイトの作品</li>
+  </ul></div>
   <div class="section-label">読むとき</div>
   <div class="group">
     <label class="cell"><span class="text">縦書きで表示</span><input type="checkbox" class="switch" id="vertical" data-setting="vertical" data-default="off"></label>
+    <label class="cell"><span class="text">本文の上のバーを不透明にする</span><input type="checkbox" class="switch" id="readerBarOpaque" data-setting="readerBarOpaque" data-default="off"></label>
+    <label class="cell"><span class="text">保存した画像 (挿絵) を表示する</span><input type="checkbox" class="switch" id="offlineImages" data-setting="offlineImages"></label>
   </div>
-  <div class="hint">オフライン保存した作品の読み画面だけが縦書きになります。文字の大きさとフォントは「本文の見た目」と共通です。</div>
+  <div class="hint"><ul>
+    <li>縦書き: オフライン保存した作品の読み画面だけが縦書きになる</li>
+    <li>文字の大きさとフォントは「本文の見た目」と共通</li>
+    <li>タブバーを隠す設定のときは、本文をタップすると上下のバーが本文に重なって出る (もう一度タップすると隠れる。文字の高さは変わらない)</li>
+    <li>縦書きで「スクロールで隠す」のときは、最初からバーを隠し、本文をタップしたときだけ出る (戻す向きに動かしても出ない。出ているバーは、読み進める向きに動かすと隠れる)</li>
+    <li>「いつも表示」のときは、バーを出したままにする</li>
+    <li>バーの下の文字が透けるのが気になるときは、「本文の上のバーを不透明にする」をオンにする</li>
+    <li>画像は、読み画面の「表示」からも切り替えられる。オフにしても、保存した画像は消えない</li>
+  </ul></div>
 </section>

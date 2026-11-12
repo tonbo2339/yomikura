@@ -30,7 +30,7 @@ window.NH.define('nav', function (NH) {
       };
     });
     window.addEventListener('popstate', check);
-    timer = setInterval(check, 1000);
+    timer = setInterval(() => { if (typeof document === 'undefined' || !document.hidden) check(); }, 1000); // 見えていない間は確認しない (見えたら次の 1 秒で確認)
     return changed;
   };
 });

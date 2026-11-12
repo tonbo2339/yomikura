@@ -43,12 +43,14 @@
 <main>
 <div class="topnav"><button id="back"></button></div>
 <h1 class="page-head" style="margin:4px 0 12px;font-size:28px">保存キュー</h1>
+<div id="hintBox"></div>
 <div id="app"></div>
 </main>
 <div class="snack" id="snack" role="status" aria-live="polite"><span id="snackText"></span><button id="snackUndo">元に戻す</button></div>
 
 <!--#scripts core-->
 <script src="app.js"></script>
+<script src="hints.js"></script>
 <script>
 // オフライン保存のキュー: いま保存している作品の進み (一時停止・再開・中止) と、順番待ちの作品 (並べ替え・外す・もう一度)。
 // 中身は端末の SaveQueue、進みは OfflineService が OfflineStatus に出したもの。1.5 秒おきに読み直す。
@@ -147,14 +149,17 @@ function paint() {
     root.appendChild(e);
     return;
   }
-  const cur = live.running && live.key ? jobs.find((j) => j.key === live.key) : null;
+  // 初めて、キューに作品があるときだけ 1 回出す説明 (空のときは、この画面の説明がある)。1.5 秒おきに描き直す #app の外の箱に置く。出ている間は作り直さない
+  if (!$('hintBox').firstChild) showHint($('hintBox'), 'queue-about');
+  const cur =live.running && live.key ? jobs.find((j) => j.key === live.key) : null;
   if (cur) { root.appendChild(el('div', 'section-label', 'いま保存している作品')); root.appendChild(nowCard(cur, live)); }
   const rest = jobs.filter((j) => j !== cur);
   const waiting = rest.filter(active);
   const finished = rest.filter((j) => !active(j));
   if (waiting.length) {
     const g = addGroup(root, '順番待ち');
-    waiting.forEach((j) => g.appendChild(jobRow(j, jobs.indexOf(j), jobs, live)));
+    const activeJobs = jobs.filter(active); // ▲▼ は、終わった作品を飛ばした並びで動く (SaveQueue.move も同じ)
+    waiting.forEach((j) => g.appendChild(jobRow(j, activeJobs.indexOf(j), activeJobs, live)));
   }
   if (finished.length) {
     const g = addGroup(root, '終わった作品');
@@ -166,7 +171,8 @@ function paint() {
   }
 }
 paint();
-setInterval(paint, 1500);
+setInterval(() => { if (!document.hidden) paint(); }, 1500); // 見えていない間 (別のアプリ・画面オフ) は描かない
+document.addEventListener('visibilitychange', () => { if (!document.hidden) paint(); });
 </script>
 </body>
 </html>

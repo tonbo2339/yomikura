@@ -4,23 +4,48 @@
   <div class="group">
     <label class="cell"><span class="text">さっきまで読んでいた作品を出す</span><input type="checkbox" class="switch" id="heroResume" data-setting="heroResume"></label>
   </div>
-  <div class="hint">オンは、最近読んだ作品の「続きから読む」を上のカードに出します。オフは、リスト先頭の作品を出します。</div>
+  <div class="hint"><ul>
+    <li>オン: 最近読んだ作品の「続きから読む」を出す</li>
+    <li>オフ: リスト先頭の作品を出す</li>
+  </ul></div>
   <div class="section-label">並べ替え</div>
   <div class="group">
     <label class="cell"><span class="text">読む順番の上下ボタンを表示</span><input type="checkbox" class="switch" id="listArrows" data-setting="listArrows"></label>
   </div>
-  <div class="hint">各作品に ▲▼ を出します。長押しでの入れ替えは、この設定に関係なく使えます。</div>
+  <div class="hint">長押しでの入れ替えは、この設定に関係なく使える。</div>
+  <div class="section-label">お気に入り</div>
+  <div class="group">
+    <label class="cell"><span class="text">お気に入りを使う</span><input type="checkbox" class="switch" id="favOn" data-setting="favOn"></label>
+  </div>
+  <div class="hint"><ul>
+    <li>オン: リストに「お気に入り」のタブを出し、ランキング・検索・履歴・リストの作品に ☆ を出す</li>
+    <li>オフにしても、お気に入りのデータは消えない</li>
+  </ul></div>
+  <div id="favPosBox">
+  <div class="section-label">お気に入りの読んだ場所</div>
+  <div class="group" id="favPosList"></div>
+  <div class="hint"><ul>
+    <li>お気に入りの「読んだ場所」を、新しく読んだ順にこの数まで残す</li>
+    <li>超えた古いものは「記録なし」に戻る (作品はお気に入りに残る)</li>
+    <li>お気に入りにする作品の数に上限はない</li>
+  </ul></div>
+  </div>
   <div class="section-label">削除</div>
   <div class="group">
-    <label class="cell"><span class="text">横にスワイプして削除</span><input type="checkbox" class="switch" id="listSwipe" data-setting="listSwipe"></label>
+    <label data-kw="スワイプ 削除 さくじょ リスト 横 よこ swipe delete list" class="cell"><span class="text">横にスワイプして削除</span><input type="checkbox" class="switch" id="listSwipe" data-setting="listSwipe"></label>
   </div>
-  <div class="hint">作品を横へ大きく動かして離すと、リストから削除します (元に戻せます)。オフでも、「選択」から削除できます。</div>
-  <div class="group" style="margin-top:16px">
-    <label class="cell"><span class="text">読了を自動で削除</span><input type="checkbox" class="switch" id="pruneDone" data-setting="pruneDone"></label>
+  <div class="hint"><ul>
+    <li>作品を横へ大きく動かして離すと削除する (元に戻せる)</li>
+    <li>オフでも、「選択」から削除できる</li>
+  </ul></div>
+  <div class="section-label">読み終えたとき</div>
+  <div class="group">
+    <label data-kw="読了 どくりょう 削除 さくじょ 残す のこす 消す けす 次へ つぎへ 話の最後 はなしのさいご カード お気に入り おきにいり done remove keep next work card favorite list delete" class="cell"><span class="text">次の作品へ進むとき、読み終えた作品をリストから消す</span><input type="checkbox" class="switch" id="removeOnNext" data-setting="removeOnNext" data-default="on"></label>
   </div>
-  <div id="pruneDaysBox">
-    <div class="section-label">読了にしてから、この日数がたったとき</div>
-    <div class="group" id="pruneDaysList"></div>
-  </div>
-  <div class="hint">リストを開いたときに削除し、読書位置の記録も消します。「読了」の欄からまとめて消すこともできます。</div>
+  <div class="hint"><ul>
+    <li>話の最後のカードで「次の小説へ」を押したときの動き</li>
+    <li>オン: 読み終えた作品をリストから外す</li>
+    <li>オフ: リストに残したまま次の作品へ進む (カードの左のボタンは「リストから削除」になる)</li>
+    <li>リストから外した作品も、読んだ記録は履歴に残る</li>
+  </ul></div>
 </section>

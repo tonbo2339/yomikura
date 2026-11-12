@@ -158,6 +158,14 @@ window.NH_UI_SAVE = function (ctx, w) {
     const chosen = picked.list;
     plan.images = picked.images;
 
+    // 端末の空き容量が少ないとき (保存の見込みの 2 倍に足りない・500 MB 未満。判断は Kotlin の StorageSpace) は、キューに入れる前に聞く
+    if (NH.off.lowSpace(chosen.length * plan.todo[0].bytes)) {
+      const free = NH.off.freeBytes();
+      const pick = await askDialog('端末の空き容量が少なくなっています',
+        '空きは約 ' + NH.fmtBytes(free) + '、保存の見込みは約 ' + NH.fmtBytes(chosen.length * plan.todo[0].bytes) + ' です。保存しますか?', [['保存する', 'go'], ['やめる', 'cancel']]);
+      if (!pick || pick === 'cancel') return back();
+    }
+
     // 「Wi-Fi のときだけ」の設定: 従量課金の回線なら、キューに入れる前に聞く。待つ場合は、サービスが Wi-Fi になるまで待つ
     let mobileOk = false;
     if (NH.flag(d0, 'offlineWifiOnly', false) && !NH.off.onUnmetered()) {

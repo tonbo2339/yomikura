@@ -43,6 +43,22 @@ test('clean: ゼロ幅の文字を除き、空白をそろえる', () => {
   assert.equal(R.clean('改\n行　全角'), '改 行 全角');
 });
 
+test('nhGoNext: 次の話が無ければ false。あれば開き、自動スクロールのときだけ印を残す', () => {
+  const store = {};
+  ctx.sessionStorage = { setItem: (k, v) => { store[k] = v; }, getItem: () => null, removeItem: () => {} };
+  ctx.NH = { adapter: () => ({}) }; // nextUrl の無いサイト
+  assert.equal(ctx.nhGoNext('tts'), false);
+  ctx.NH = { adapter: () => ({ nextUrl: () => null }) }; // 最終話
+  assert.equal(ctx.nhGoNext('scroll'), false);
+  assert.equal(store.nhAutoCont, undefined);
+  ctx.NH = { adapter: () => ({ nextUrl: () => 'https://ncode.syosetu.com/n1/3/' }) };
+  assert.equal(ctx.nhGoNext('tts'), true); // 読み上げは Kotlin が続けるので、印は要らない
+  assert.equal(ctx.location.href, 'https://ncode.syosetu.com/n1/3/');
+  assert.equal(store.nhAutoCont, undefined);
+  assert.equal(ctx.nhGoNext('scroll'), true);
+  assert.match(store.nhAutoCont, /^scroll:\d+$/); // 時刻つき (次の話が開けなかったとき、古い印で別のページが勝手に始まらないように)
+});
+
 let failed = 0;
 for (const [name, fn] of tests) {
   try { fn(); console.log('ok  ', name); } catch (e) { failed++; console.log('FAIL', name, '\n    ', e.message); }

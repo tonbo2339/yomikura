@@ -4,8 +4,15 @@
   if (!window.NH || NH.offlinePlan) return;
 
   // 本文の要素 (前書き・本文・後書きなど) を文書の順に、<hr> で区切って 1 つの HTML にする (安全な要素だけ。NH.cleanNode は core/clean.js)
+  // 文字が無くても、挿絵 (<img>) があるパート (挿絵だけの話・前書き) は残す
   NH.cleanBody = (doc, adapter) =>
-    [...doc.querySelectorAll(adapter.bodySel)].map(NH.cleanNode).filter((h) => h.replace(/<[^>]*>|\s/g, '')).join('<hr>');
+    [...doc.querySelectorAll(adapter.bodySel)].map(NH.cleanNode).filter((h) => /<img\b/i.test(h) || h.replace(/<[^>]*>|\s/g, '')).join('<hr>');
+
+  // 話の番号 (数字だけの文字列) の大小。桁が多い (カクヨムの ID) ので、数にせず、桁数→文字の順で比べる
+  const epCompare = (a, b) => a.length - b.length || (a < b ? -1 : a > b ? 1 : 0);
+
+  // なろうの話の番号は「目次の何番目か」なので、途中の話の削除・挿入でずれる。番号が同じでも題名が変わっていたら、別の話として取り直す
+  const byPosition = (adapter) => /^narou/.test(adapter.id);
 
   // 目次のリンクから話の一覧を作る (作品の話ページへのリンクだけを、出てきた順に)。アダプターが listEpisodes を持っていればそちら
   NH.linkEpisodes = function (adapter, w, doc) {
@@ -37,8 +44,12 @@
       total: total || eps.length,
       images: images !== false, // 挿絵も保存する (既定)
       saved,
-      todo: eps.filter((e) => !saved.has(e.ep)),
+      todo: eps.filter((e) => {
+        const s = saved.get(e.ep);
+        return !s || (byPosition(adapter) && e.title && s.title && s.title !== e.title);
+      }),
       meta,
+      dirty: false, // 今回の実行で話を保存したか (保存していなければ、更新日時を変えない)
     };
   };
 
@@ -74,7 +85,7 @@
   }
   async function fetchImage(site, id, url) {
     if (new URL(url).origin === location.origin) return fetchImageHere(site, id, url);
-    const got = NH.off.saveImage(site, id, url, location.href);
+    const got = await NH.off.saveImage(site, id, url, location.href);
     if (got.error === 'challenge') throw new Error(NH.CHALLENGE);
     return got.name ? got : null;
   }
@@ -95,7 +106,10 @@
       const seen = new Map(); // 同じ話の中で同じ挿絵は 1 回だけ取る
       const counted = new Set(); // 容量と件数は、保存した挿絵 1 枚ごとに 1 回だけ数える
       for (const img of imgs) {
-        const src = img.getAttribute('src') || img.getAttribute('data-src') || (img.tagName === 'A' ? img.getAttribute('href') : '') || '';
+        // 遅延読み込みの代わりの画像 (data: ・loading) が src にあるときは、本物の data-src などを使う
+        const s0 = img.getAttribute('src') || '';
+        const lazy = !s0 || /^data:|placeholder|loading/i.test(s0);
+        const src = (lazy && (img.getAttribute('data-src') || img.getAttribute('data-original'))) || s0 || (img.tagName === 'A' ? img.getAttribute('href') : '') || '';
         let url;
         try { url = new URL(src, e.url).href; } catch (x) { continue; }
         url = url.replace(/^http:/, 'https:'); // 平文の通信は使わない (ImageSaver も https だけ)。画像の置き場所は https でも開ける
@@ -119,6 +133,7 @@
   NH.offlineStore = function (adapter, w, plan, e) {
     if (!NH.off.putEpisode(adapter.id, w.id, e.ep, e.rec)) throw new Error('保存できません');
     plan.saved.set(e.ep, { ep: e.ep, title: e.title, url: e.url });
+    plan.dirty = true;
     delete e.rec; // 保存したぶんはメモリから手放す
   };
 
@@ -137,8 +152,8 @@
         await NH.offlineGet(adapter, w, e, plan.images);
         st.bytes += e.bytes;
         NH.offlineStore(adapter, w, plan, e);
-        st.ok++;
         st.fails = 0;
+        if (++st.ok % 5 === 0) NH.offlineCommit(adapter, w, plan); // 成功した直後だけ (失敗のたびに書き直さない)
       } catch (err) {
         st.lastErr = (err && err.message) || '';
         if (st.lastErr === NH.CHALLENGE) { st.blocked = true; NH.markRest(adapter.id); break; }
@@ -148,22 +163,31 @@
         if (++st.fails >= 3) break; // 続けて失敗するなら、ログイン切れなどなのでやめる
       }
       if (hooks.onEpisode) hooks.onEpisode(e, st);
-      if (st.ok % 5 === 0) NH.offlineCommit(adapter, w, plan);
       if (net && i < chosen.length - 1 && !stopped()) await NH.pause();
     }
     NH.offlineCommit(adapter, w, plan);
     return st;
   };
 
-  // 保存した話の並びと作品の情報 (meta) を書く。目次の順に並べ、目次から消えた話は最後に残す
+  // 保存した話の並びと作品の情報 (meta) を書く。目次の順に並べ、目次から消えた話は最後に残す。
+  // キューからは選んだ話だけが plan.eps に入る (全話より少ない) ので、そのときは目次の順が分からない: 番号 (数字) の順に並べる
   NH.offlineCommit = function (adapter, w, plan) {
-    const order = plan.eps.filter((e) => plan.saved.has(e.ep)).map((e) => plan.saved.get(e.ep));
-    const known = new Set(order.map((e) => e.ep));
-    plan.saved.forEach((e) => { if (!known.has(e.ep)) order.push(e); });
+    if (!plan.saved.size && !plan.meta) return true; // 1 話も保存していなくて、以前の保存も無いなら、空の作品 (0 話) を作らない
+    let order;
+    const all = [...plan.saved.values()];
+    if (plan.eps.length < plan.total && all.every((e) => /^\d+$/.test(e.ep))) {
+      order = all.sort((a, b) => epCompare(a.ep, b.ep));
+    } else {
+      order = plan.eps.filter((e) => plan.saved.has(e.ep)).map((e) => plan.saved.get(e.ep));
+      const known = new Set(order.map((e) => e.ep));
+      plan.saved.forEach((e) => { if (!known.has(e.ep)) order.push(e); });
+    }
     const now = Date.now();
+    const at = plan.dirty || !(plan.meta && plan.meta.updatedAt) ? now : plan.meta.updatedAt;
     return NH.off.putMeta(adapter.id, w.id, NH.withSub({
       site: adapter.id, id: w.id, title: plan.title, url: plan.workUrl,
-      savedAt: (plan.meta && plan.meta.savedAt) || now, updatedAt: now, total: plan.total, eps: order,
+      savedAt: (plan.meta && plan.meta.savedAt) || now, updatedAt: at, total: plan.total, eps: order,
+      images: plan.images !== false, // 挿絵を保存したか (自動更新が引き継ぐ)
       ...(plan.meta && plan.meta.sub ? { sub: plan.meta.sub } : {}),
     }));
   };

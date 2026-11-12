@@ -1,7 +1,7 @@
 // 読書の補助 (自動スクロール・読み上げ用の段落)。⋮ メニューの「自動スクロール」「読み上げ」(Kotlin の PageMenu / ReadingAids / ReadAloud) が、
 // ページの中で呼ぶ。本文の囲みは sites.js の body.box (sitecheck.js のサイト判定を使う)。
 //
-// - 自動スクロール: 設定 autoScrollSpeed (1〜10。既定 4) の速さで、ゆっくり下へ。画面を触る・スクロールする・キーを押す・ページを離れる・いちばん下に着く、で止まる。
+// - 自動スクロール: 設定 autoScrollSpeed (1〜10。既定 4) の速さで、ゆっくり下へ (縦書きは、左へ。window.nhVerticalScroll に頼む)。画面を触る・スクロールする・キーを押す・ページを離れる・いちばん下に着く、で止まる。
 //   画面の下に、速さを変える・止めるボタンを出す。スクロールの位置は、ふつうの読書と同じく記録される (ui.js の読書位置)
 // - 読み上げ: 本文を段落に分けて Kotlin へ渡す (ルビは読まない)。読んでいる段落は nhTtsMark(番号) で色をつけて、画面の中ほどに出す
 //
@@ -74,6 +74,7 @@
   // level = 今の速さ。始めるときに設定から読み、ボタンで変えたら設定にも書く (毎フレーム保存データを読まない)
   let on = false, raf = 0, last = 0, acc = 0, pill = null, speedLabel = null, level = DEFAULT_LEVEL;
   const atBottom = () => window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2;
+  const vertical = () => (window.nhVerticalScroll && nhVerticalScroll.active() ? nhVerticalScroll : null); // 縦書きのページ (本文が横にスクロール。ui/ui-vertical.js)
   function stop() {
     if (!on) return;
     on = false;
@@ -93,8 +94,13 @@
     last = t;
     acc += speedOf(level) * dt / 1000;
     const px = Math.floor(acc);
-    if (px > 0) { acc -= px; window.scrollBy(0, px); }
-    if (atBottom()) return stop(); // いちばん下に着いた
+    const v = vertical();
+    if (px > 0) { acc -= px; if (v) v.by(px); else window.scrollBy(0, px); }
+    if (v ? v.atEnd() : atBottom()) { // いちばん下 (縦書きは、いちばん左) に着いた
+      stop();
+      if (settings().autoNextEpisode) window.nhGoNext('scroll'); // 設定 autoNextEpisode: 次の話があれば開いて、続けて自動スクロール
+      return;
+    }
     raf = requestAnimationFrame(tick);
   }
   function setLevel(n) {
@@ -131,4 +137,30 @@
   // 始める / 止める。戻り値: いま動いているか
   window.nhAutoScroll = () => { if (on) stop(); else start(); return on; };
   window.nhAutoScrollOn = () => on;
+
+  // ---- 次の話へ自動で進む (設定 autoNextEpisode。読み上げは Kotlin の ReadingAids が、自動スクロールは上の tick が呼ぶ) ----
+  // 次の話の URL は、サイトごとの nextUrl (最終話には無い)。開いたあとも続けるため、自動スクロールのときは印 (sessionStorage) を残し、
+  // 開いたページで、本文があれば、少し待ってから自動スクロールを始める。読み上げは、Kotlin が、ページを開き終えたあとに始める
+  const CONT_KEY = 'nhAutoCont';
+  const CONT_MAX_AGE_MS = 60000; // 次の話が開くまで待つ長さ (これより古い印は、無視する)
+  const nextUrlOf = () => { try { const a = window.NH && NH.adapter && NH.adapter(); return (a && a.nextUrl && a.nextUrl()) || null; } catch (e) { return null; } };
+  // 戻り値: 開き始めたか (次の話が無ければ false)
+  window.nhGoNext = (mode) => {
+    const u = nextUrlOf();
+    if (!u) return false;
+    if (mode === 'scroll') { try { sessionStorage.setItem(CONT_KEY, 'scroll:' + Date.now()); } catch (e) { /* 続けられないだけ */ } }
+    location.href = u;
+    return true;
+  };
+  (function resumeAfterGoNext() {
+    let mode = null;
+    try { mode = sessionStorage.getItem(CONT_KEY); sessionStorage.removeItem(CONT_KEY); } catch (e) { /* 無い */ }
+    // 印が古い (次の話が開けなかったあと、別の作品を開いたとき) ときは、始めない
+    const m = /^scroll:(\d+)$/.exec(mode || '');
+    if (!m || Date.now() - Number(m[1]) > CONT_MAX_AGE_MS) return;
+    // 本文のある話のページだけ (ほかのページへ移っていたら始めない)
+    const go = () => { const s = bodySel(); if (s && document.querySelector(s)) start(); };
+    if (document.readyState === 'complete') setTimeout(go, 1200);
+    else window.addEventListener('load', () => setTimeout(go, 1200), { once: true });
+  })();
 })();

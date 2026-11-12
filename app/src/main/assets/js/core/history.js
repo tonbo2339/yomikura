@@ -12,8 +12,6 @@ window.NH.define('history', function (NH) {
   // 公式の履歴はユーザーがそのページを開いたときだけ取り込む (こちらから取りに行かない)。
   NH.HISTORY_MAX = 300; // 保存する作品数の既定 (settings.historyMax。0 = 無制限)
   NH.historyOn = (d) => NH.flag(d, 'history');
-  // 古い履歴を消す: 保存する日数 (settings.historyDays。0 = 無期限、既定) を過ぎたものと、保存する作品数 (settings.historyMax) を超えた分。
-  // 日数は最後に開いた時刻 (アプリ at / 公式 siteAt の新しい方) で見る。戻り値: 消した数
   // 1.0.x の不具合 (ログインしていない話ページで、なろうの作品名を「ログイン」と取った) で残った作品名を片付ける。
   // リストは ID を仮の名前に (開いたときに直る)、履歴はリストの名前か空 (「作品名不明」と出て、開いたときに直る) にする。直した数を返す
   NH.fixLoginTitles = function (d) {
@@ -22,13 +20,15 @@ window.NH.define('history', function (NH) {
     (d.readLater || []).forEach((x) => { if (bad(x)) { x.title = x.id; n++; } });
     (d.history || []).forEach((e) => {
       if (!bad(e)) return;
-      const it = (d.readLater || []).find((x) => x.key === e.key);
+      const it = NH.itemByKey(d, e.key);
       e.title = it && it.title !== it.id ? it.title : '';
       n++;
     });
     return n;
   };
 
+  // 古い履歴を消す: 保存する日数 (settings.historyDays。0 = 無期限、既定) を過ぎたものと、保存する作品数 (settings.historyMax) を超えた分。
+  // 日数は最後に開いた時刻 (アプリ at / 公式 siteAt の新しい方) で見る。戻り値: 消した数
   NH.pruneHistory = function (d) {
     if (!Array.isArray(d.history)) return 0;
     const st = d.settings || {};
@@ -36,7 +36,7 @@ window.NH.define('history', function (NH) {
     const days = st.historyDays || 0;
     const before = d.history.length;
     if (days > 0) {
-      const limit = Date.now() - days * 86400000;
+      const limit = Date.now() - days * NH.DAY_MS;
       d.history = d.history.filter((e) => Math.max(e.at || 0, e.siteAt || 0) >= limit);
     }
     if (max > 0 && d.history.length > max) d.history.length = max;
@@ -74,7 +74,7 @@ window.NH.define('history', function (NH) {
       }
       e.at = e.appAt = Date.now();
       if (sub) e.sub = sub;
-      const listed = d.readLater.find((x) => x.key === key);
+      const listed = NH.itemByKey(d, key);
       if (listed && listed.r18 !== undefined) e.r18 = listed.r18; // ハーメルンの R-18 (リストで調べた結果)。NSFW モードで履歴から隠すため
       h.unshift(e);
       NH.pruneHistory(d);
@@ -93,7 +93,7 @@ window.NH.define('history', function (NH) {
     if (day.includes(n)) return false;
     day.push(n);
     day.sort((a, b) => a - b);
-    const limit = NH.dayKey(now - NH.READ_LOG_DAYS * 86400000);
+    const limit = NH.dayKey(now - NH.READ_LOG_DAYS * NH.DAY_MS);
     Object.keys(reads).forEach((k) => { if (k < limit) delete reads[k]; }); // 日付の文字列は、そのまま大小で比べられる
     return true;
   };

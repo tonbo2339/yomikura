@@ -225,3 +225,15 @@ button.cell:active, a.cell:active, label.cell:active { background: var(--surface
 .sheet:focus { outline: none; } /* シートを開いたとき、読み上げの対象にするためにフォーカスを置くだけ (枠は出さない) */
 .sheet .grip { width: 36px; height: 5px; border-radius: 3px; background: var(--surface-3); margin: 4px auto 14px; }
 button.cell:disabled { opacity: .4; pointer-events: none; }
+
+/* 広い画面 (タブレット・横向き): 内容を中央の読みやすい幅に収める。地の色は html に付いているので、両脇も同じ色 */
+@media (min-width: 700px) {
+  body { max-width: 760px; margin-left: auto; margin-right: auto; }
+  .sheet, .snack { max-width: 760px; margin-left: auto; margin-right: auto; } /* 固定位置の部品は、左右を 0 にして max-width と auto の余白で中央に寄せる */
+}
+
+/* ヒント (app.js の showHint): 初めて開いた画面に出る、閉じられる説明 */
+.hintcard { background: var(--accent-soft); border-radius: var(--r); padding: 14px 16px; margin: 4px 0 12px; }
+.hintcard p { margin: 0 0 10px; font-size: 14px; line-height: 1.7; }
+.hintcard-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+.hintcard-btns .btn { height: 36px; padding: 0 14px; font-size: 14px; }

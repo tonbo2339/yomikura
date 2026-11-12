@@ -52,7 +52,7 @@ class DiagTest {
 
     @Test
     fun emptyDataDoesNotCrash() {
-        assertEquals(listOf("リスト 0 作品 / 履歴 0 作品 / 読書位置 0 作品", "設定 0 項目"), DiagReport.dataSummary(JSONObject()))
+        assertEquals(listOf("リスト 0 作品 / お気に入り 0 作品 / 履歴 0 作品 / 読書位置 0 作品", "設定 0 項目"), DiagReport.dataSummary(JSONObject()))
     }
 
     @Test

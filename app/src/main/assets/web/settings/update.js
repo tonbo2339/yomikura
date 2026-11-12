@@ -5,8 +5,6 @@ const UPD_CACHE = 'nh-upd';
 const CURRENT = (window.NHStore && NHStore.appVersion) ? NHStore.appVersion() : '';
 const CAN_UPDATE = !!(window.NHStore && NHStore.checkUpdate);
 const APP_NAME = (window.NH_EDITION || {}).appName || 'ヨミクラ'; // アプリ名 (版ごと。Kotlin の BuildConfig.APP_NAME)
-// 版によって増える「畳む」項目の設定名 (repaint.js が、畳んでいる数に数える)
-const EXTRA_FOLD = [];
 // 更新に GitHub のログインが要る版か (非公開のリポジトリから取る版だけ)。要らない版は、ログインの表示を隠す
 const NEEDS_LOGIN = !!(window.NHStore && NHStore.updateNeedsLogin && NHStore.updateNeedsLogin());
 $('updLoginBox').hidden = !NEEDS_LOGIN;
@@ -21,6 +19,11 @@ try {
   const c = JSON.parse(localStorage.getItem(UPD_CACHE) || 'null');
   if (c && c.v === CURRENT && Date.now() - c.at < 1800000) { upd = c.r; avail = c.r.state === 'available' ? c.r.latest : ''; }
 } catch (e) { /* 覚えていない */ }
+// アプリを開いたときの確認 (Kotlin の UpdateNotice) で、新しい版を見つけていたら、通信せずにカードを出す。入れるときは、Kotlin が APK の場所を探し直す
+try {
+  const pending = (window.NHStore && NHStore.pendingUpdate) ? NHStore.pendingUpdate() : '';
+  if (!avail && pending) { avail = pending; upd = { state: 'available', latest: pending }; }
+} catch (e) { /* 使わない */ }
 
 window.nhUpdate = (json) => {
   upd = JSON.parse(json);
@@ -90,7 +93,6 @@ function paintUpdate() {
   $('updLoginTop').hidden = !(NEEDS_LOGIN && upd.state === 'login'); // 確認が「ログインが必要」と返ったときだけ、ここからもログインできる
   if (typeof paintGithub === 'function') paintGithub(); // 下のログインの表示も、確認の結果に合わせる
   $('updateCard').hidden = !avail;
+  if (avail && window.NHStore && NHStore.updateSeen) NHStore.updateSeen(avail); // 見せたので、⋮ / 歯車の点は消える
   $('updateCardText').textContent = 'バージョン ' + avail + ' があります';
-  $('v-update').textContent = avail ? '新しい版 ' + avail : upd.state === 'login' ? 'ログインが必要' : CURRENT;
-  $('v-update').style.color = avail ? 'var(--accent-text)' : '';
 }

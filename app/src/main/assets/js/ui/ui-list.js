@@ -31,6 +31,7 @@ window.NH_UI_LIST = function (ctx) {
 
   const entries = []; // {box, key, title, author, tags, status, tag}。ui-list-view と共有する 1 つの配列
   const later = NH_UI_LIST_LATER({ mk, onChip });
+  const fav = NH_UI_LIST_FAV({ mk, onChip });
   const view = NH_UI_LIST_VIEW({ mk, entries });
   const block = NH_UI_LIST_BLOCK({ climbBox });
   // 一覧とリンクの両方の表示を直す (ミュート・ブロックを足したり外したりしたとき)
@@ -54,9 +55,12 @@ window.NH_UI_LIST = function (ctx) {
     });
     // 新しい作品が無ければ何もしない (カクヨムはページが何度も書き換わる。作品の無い話ページでも、広告などで何度も呼ばれる)
     if (!todo.length) { if (!view.viewed()) view.applyView(); block.sweepBlocked(); return; }
-    const listed = NH.load().readLater;
+    const d = NH.load();
+    const listed = d.readLater;
     const inList = new Set(listed.map((x) => x.key));
-    const activeKeys = new Set(listed.filter((x) => !x.done && NH.kindOf(x) === 'later').map((x) => x.key)); // 「追加済み」と出す作品 (「後で読む」だけ。読了と「更新」は除く。ボタンを押したときの判定 NH.inLater と同じ)
+    const favOn = NH.favOn(d); // 設定でお気に入りをオフにしていたら、☆ を出さない
+    const favKeys = new Set(NH.favsOf(d).map((x) => x.key)); // お気に入り済みと出す作品
+    const activeKeys = new Set(listed.filter((x) => NH.kindOf(x) === 'later').map((x) => x.key)); // 「追加済み」と出す作品 (「後で読む」だけ。「更新」は除く。ボタンを押したときの判定 NH.inLater と同じ)
     // リストにある作品は、一覧に出ている連載状態で更新する (リストの絞り込み用。状態が変わったときだけ書く)
     const known = todo.filter(({ entry }) => entry.status && inList.has(entry.key));
     if (known.length) {
@@ -74,6 +78,7 @@ window.NH_UI_LIST = function (ctx) {
       entry.tag = mk('span', 'nh-read-tag');
       entry.tag.hidden = true;
       row.append(btn, muteBtn, entry.tag);
+      if (favOn) btn.insertAdjacentElement('afterend', fav.create(work, entry, item.title, favKeys.has(entry.key)));
       (item.after || item.anchor.parentElement).insertAdjacentElement('afterend', row);
     });
     refreshView();

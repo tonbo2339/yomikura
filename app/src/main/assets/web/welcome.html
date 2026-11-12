@@ -26,7 +26,7 @@
 </div>
 
 <div id="sitesBox" hidden>
-<p class="lead" style="margin-top:24px">読みたいサイトを選んでください。選ばなかったサイトは、上部バーや更新の確認に出ません。あとから設定の「表示するサイト」でいつでも変えられます。</p>
+<p class="lead" style="margin-top:24px">読みたいサイトを選んでください。選ばなかったサイトは、タブバーや更新の確認に出ません。あとから設定の「表示するサイト」でいつでも変えられます。</p>
 
 <div class="group" id="siteList"></div>
 
@@ -77,7 +77,9 @@ $('start').onclick = () => {
     d.settings = Object.assign(d.settings || {}, { sites, autoCheck: $('auto').checked, welcomed: true }, OPT_IN ? {} : { adult });
   });
   // 起動ページ (設定した行き先) へ。このあとは「戻る」でこの画面に戻らないよう replace
-  location.replace(window.NHStore && NHStore.startUrl ? NHStore.startUrl() : NH.LIST_URL);
+  // 初めてなら、使い方のスライド (スキップできる) を先に見せる。見たあとに起動ページへ進む
+  const tutorialDone = !!(NH.load().settings || {}).tutorialDone;
+  location.replace(tutorialDone ? (window.NHStore && NHStore.startUrl ? NHStore.startUrl() : NH.LIST_URL) : 'tutorial.html');
 };
 if (OPT_IN) { $('ageLead').hidden = true; $('adult').hidden = true; }
 refresh();

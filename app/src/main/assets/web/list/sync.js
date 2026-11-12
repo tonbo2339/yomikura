@@ -12,7 +12,7 @@ window.nhDataChanged = () => {
 window.nhProgress = (i, n) => { if (checking) $('checkProg').textContent = i + ' / ' + n; };
 $('collect').onclick = collect;
 // サイト (ノクターンなど) が分からない R18 の作品は、アプリが作品ページを読んで判別する。分かったら描き直す
-window.nhSubsFilled = () => render();
+window.nhSubsFilled = () => window.nhDataChanged();
 (() => {
   const ids = load().readLater.filter((x) => x.site === 'narou18' && !x.sub).map((x) => x.id);
   if (ids.length && window.NHStore && NHStore.fillR18Subs) NHStore.fillR18Subs(JSON.stringify(ids));

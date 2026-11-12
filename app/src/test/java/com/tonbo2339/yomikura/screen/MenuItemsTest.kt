@@ -14,6 +14,14 @@ class MenuItemsTest {
         assertFalse(MenuItems.on(st, MenuItems.DIAGNOSE))
         assertTrue(MenuItems.on(st, MenuItems.READ_ALOUD))
         assertTrue(MenuItems.on(st, MenuItems.OPEN_BROWSER))
+        assertTrue(MenuItems.on(st, MenuItems.VIEWER)) // 表示の設定 (TT) は初期でオン
+    }
+
+    // 表示の設定はメニューの設定で外せる
+    @Test
+    fun viewerCanBeTurnedOff() {
+        val st = JSONObject("""{"menuItems":{"viewer":false}}""")
+        assertFalse(MenuItems.on(st, MenuItems.VIEWER))
     }
 
     // 選んだ値が初期値より優先される

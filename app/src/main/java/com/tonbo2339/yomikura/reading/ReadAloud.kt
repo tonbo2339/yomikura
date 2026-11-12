@@ -22,6 +22,8 @@ class ReadAloud(
     private val onProblem: (String) -> Unit,
     /** 一時停止したか・再開したか (画面のスレッドで呼ぶ) */
     private val onPaused: (Boolean) -> Unit = { },
+    /** 最後の段まで読み終わった (止めた・エラーではない)。画面のスレッドで、読んでいない状態 (onState(false)) にする直前に呼ぶ。次の話へ続けるかを決めるのに使う */
+    private val onEnded: () -> Unit = { },
 ) {
     private var tts: TextToSpeech? = null
     private var ready = false
@@ -72,7 +74,7 @@ class ReadAloud(
                 if (i == 0 || chunks.getOrNull(i - 1)?.para != c.para) post { run("window.nhTtsMark && nhTtsMark(${c.para})") }
             }
             override fun onDone(utteranceId: String?) {
-                if (indexOf(utteranceId) == chunks.size - 1) finish()
+                if (indexOf(utteranceId) == chunks.size - 1) finish(natural = true)
             }
             @Suppress("OVERRIDE_DEPRECATION") // 非推奨だが abstract なので実装が必須 (errorCode 付きの新形式は任意)
             override fun onError(utteranceId: String?) {
@@ -114,10 +116,10 @@ class ReadAloud(
     }
 
     /** 読み終わった・止めた・エラー: 色を消して、読んでいない状態に */
-    private fun finish() {
+    private fun finish(natural: Boolean = false) {
         paused = false
         if (!speakingFlag.compareAndSet(true, false)) return // 読み終わりとエラーが重なっても、1 回だけ
-        post { run("window.nhTtsMark && nhTtsMark(-1)"); onState(false) }
+        post { run("window.nhTtsMark && nhTtsMark(-1)"); if (natural) onEnded(); onState(false) }
     }
 
     /** 一時停止する (読んでいなければ何もしない)。止めた前の発話の終了通知は、世代 (gen) を進めて無視する */

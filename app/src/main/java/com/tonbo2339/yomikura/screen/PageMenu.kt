@@ -55,8 +55,8 @@ class PageMenu(
                 action(R.drawable.ic_arrow_back, "戻る", web.canGoBack()) { web.goBack() },
                 action(R.drawable.ic_arrow_forward, "進む", web.canGoForward()) { web.goForward() },
                 action(R.drawable.ic_refresh, "再読み込み") { web.reload() },
-                action(R.drawable.ic_vertical_align_top, "先頭へ") { web.pageUp(true) },
-                action(R.drawable.ic_vertical_align_bottom, "末尾へ") { web.pageDown(true) },
+                action(R.drawable.ic_vertical_align_top, "先頭へ") { aids.scrollTo(end = false) },
+                action(R.drawable.ic_vertical_align_bottom, "末尾へ") { aids.scrollTo(end = true) },
             ),
             groups = listOf(
                 // 作品のページ・ランキングのページだけ出す (それ以外のページでは項目ごと出さない)
@@ -76,9 +76,11 @@ class PageMenu(
                         else add(action(R.drawable.ic_trophy, "このページをランキングに設定") { ranking.setHere(rankKey) })
                     }
                 },
-                // 読書の補助: 作品のページだけ (本文の読み上げ・ゆっくり下へ進む自動スクロール)
+                // 読書の補助: 作品のページだけ (表示の設定・本文の読み上げ・ゆっくり下へ進む自動スクロール)
                 // 読み上げ中・自動スクロール中は、オフにしていても「止める」を出す (止められなくならないように)
+                // 表示の設定は、話のページだけ (ページの JS が window.nhOpenViewer を用意したとき = nhWorkState の viewer)。設定で出す・出さないを選べる
                 if (onWork) buildList {
+                    if (shown(MenuItems.VIEWER) && work?.optBoolean("viewer") == true) add(action(R.drawable.ic_text_format, "表示の設定") { webView().evaluateJavascript("window.nhOpenViewer && nhOpenViewer()", null) })
                     if (shown(MenuItems.READ_ALOUD) || aids.speaking) add(action(R.drawable.ic_read_aloud, if (aids.speaking) "読み上げを止める" else "読み上げ") { aids.toggleReadAloud() })
                     if (shown(MenuItems.AUTO_SCROLL) || autoScrolling) add(action(R.drawable.ic_auto_scroll, if (autoScrolling) "自動スクロールを止める" else "自動スクロール") { aids.toggleAutoScroll() })
                 } else emptyList(),

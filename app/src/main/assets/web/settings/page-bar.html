@@ -1,29 +1,83 @@
-<!-- ===== 上部バー ===== -->
+<!-- ===== タブバー (上・左・右) =====
+  並びは、決める順 (動線): 置き場所 → 出し方 → 隠れているとき → 見た目 → ボタンと表示 → タブ (画面には番号を出さない)。
+  出し方の選択肢は置き場所で変わる (上は「端から出す」が無い) ので、置き場所を先に決める。-->
 <section class="page" role="main" id="p-bar" hidden>
-  <div class="section-label">表示</div>
+  <div id="barHint"></div>
+
+  <div class="section-label">置き場所</div>
   <div class="group">
-    <label class="cell"><span class="text">スクロールで隠す</span><input type="checkbox" class="switch" id="hideBar" data-setting="hideBarOnScroll"></label>
+    <div class="cell stack"><span class="text">タブバーの位置</span><div class="seg" id="barPosSeg"></div></div>
+  </div>
+  <div class="hint"><ul>
+    <li>上: どの画面でも使いやすい標準の置き方</li>
+    <li>左右: タブバーが縦になる (「端から出す」のときは、ボタンの高さの小さなカードにもできる)</li>
+  </ul></div>
+
+  <div class="section-label">出し方</div>
+  <div class="group">
+    <div id="barModeList"></div>
+  </div>
+
+  <div id="barHideBox">
+    <div class="section-label">隠れているとき</div>
+    <div class="group">
+      <label class="cell"><span class="text">端からスワイプで出す</span><input type="checkbox" class="switch" id="barSwipe" data-setting="barSwipe"></label>
+      <button class="cell" id="barHandleRow" data-go="barhandle"><span class="text">隠している間の目印</span><span class="value" id="v-barhandle"></span></button>
+    </div>
+    <div class="hint"><ul>
+      <li>隠れている間は、置いてある端に目印が出る</li>
+      <li>「端からスワイプで出す」: 端の中ほどから内側へスワイプして出せる (端の上と下は OS の「戻る」)</li>
+    </ul></div>
+    <div id="railHeightBox">
+      <div class="group">
+        <div class="cell stack"><span class="text">出したタブバーの縦の長さ</span><div class="seg" id="railHeightSeg"></div></div>
+        <div class="cell stack"><span class="text">カードの透け具合</span><div class="seg" id="cardAlphaSeg"></div></div>
+      </div>
+      <div class="hint"><ul>
+        <li>ボタンの分だけ: 必要なボタンの高さだけで出す</li>
+        <li>画面いっぱい: 画面の縦いっぱいに出す (タブレット・折りたたみ向け)</li>
+        <li>自動: スマホはボタンの分だけ、広い画面は画面いっぱい</li>
+        <li>カードの透け具合: 「ボタンの分だけ」のときの、カードの後ろの透け方</li>
+      </ul></div>
+    </div>
+  </div>
+
+  <div class="section-label">見た目</div>
+  <div class="group">
+    <div class="cell stack"><span class="text">背景色</span><div class="swatches" id="barBgSwatches"></div></div>
+    <div class="cell" id="barBgCustom" hidden></div>
+    <label class="cell"><span class="text">タブの背景に色を付ける</span><input type="checkbox" class="switch" id="tabsTinted" data-setting="tabsTinted" data-default="off"></label>
+  </div>
+  <div class="hint"><ul>
+    <li>文字の色は、背景の明るさに合わせて自動で変わる</li>
+    <li>いちばん左の丸: ライト・ダークのテーマに合わせた既定の色</li>
+    <li>虹色の丸: 四角と帯で、好きな色を決める</li>
+  </ul></div>
+
+  <div class="section-label">ボタンと表示</div>
+  <div class="group">
     <label class="cell"><span class="text">再読み込みのボタンを出す</span><input type="checkbox" class="switch" id="showReload" data-setting="showReload"></label>
     <label class="cell"><span class="text">読み込みの進み具合を線で出す</span><input type="checkbox" class="switch" id="showLoadBar" data-setting="showLoadBar"></label>
+    <button class="cell" data-go="menu"><span class="text">メニュー (⋮) に出す項目</span><span class="value"></span></button>
   </div>
-  <div class="hint">下へスクロールすると上部バーを隠し、上へ戻すと出します。再読み込みのボタンと進みの線は、サイトのページにだけ出ます。</div>
+  <div class="hint">再読み込みのボタンと進みの線は、サイトのページにだけ出ます。</div>
 
   <div class="section-label">タブ</div>
   <div class="group">
     <label class="cell"><span class="text">いつも 1 段にまとめる</span><input type="checkbox" class="switch" id="tabsOneRow" data-setting="tabsOneRow" data-default="off"></label>
-    <label class="cell"><span class="text">タブの背景に色を付ける</span><input type="checkbox" class="switch" id="tabsTinted" data-setting="tabsTinted" data-default="off"></label>
   </div>
-  <div class="hint">オンはタブを 1 段に並べ、入りきらなければ折り返します。オフは、入りきらないタブだけを 2 段目に並べます。</div>
-
-  <div class="section-label">メニュー (⋮)</div>
-  <div class="group">
-    <button class="cell" data-go="menu"><span class="text">メニューに出す項目</span><span class="value"></span></button>
-  </div>
-  <div class="hint">⋮ メニューに出す項目を、1 つずつ選べます。</div>
-
+  <div class="hint"><ul>
+    <li>オン: タブを 1 段に並べ、入りきらなければ折り返す</li>
+    <li>オフ: 入りきらないタブだけを 2 段目に並べる</li>
+  </ul></div>
   <div class="section-label">タブの並び・名前・色</div>
   <div class="group" id="nameList"></div>
-  <div class="hint">▲▼ で並びを変えます (上から順に、上部バーの左から並びます)。名前は 12 文字までで、空にすると元に戻ります。名前と色は、リストや履歴にも使います。</div>
+  <div class="hint"><ul>
+    <li>▲▼ で並びを変える (上から順に、タブバーの先頭から並ぶ)</li>
+    <li>名前は 12 文字まで。空にすると元に戻る</li>
+    <li>名前と色は、リストや履歴にも使う</li>
+    <li>虹色の丸: 四角と帯で、タブの点の色を好きに決める</li>
+  </ul></div>
   <div id="r18ModeBox">
     <div class="section-label">R18 の出し方</div>
     <div class="group" id="r18ModeList"></div>

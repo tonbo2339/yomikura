@@ -11,17 +11,71 @@ $('reset').onclick = () => ask('設定を初期状態に戻します。リスト
   commit(); snack('設定を初期状態に戻しました');
 });
 // 行間のスライダー: 位置 LH_STD = 標準 (S.lh = 0)、それより右は 1.2〜3.0 (位置 12〜30 = 値 × 10)。オフラインの読み画面の行の間隔 (1.2〜3.0) と同じ範囲
-const LH_STD = 11, LH_MAX = 30;
-const lhPos = () => (S.lh ? Math.round(S.lh * 10) : LH_STD);
-const lhFromPos = (n) => (n <= LH_STD ? 0 : Math.min(LH_MAX, n) / 10);
+const LH_STD = NH_TEXTLOOK.LH.std, LH_MAX = NH_TEXTLOOK.LH.max; // 範囲と変換は、話ページの TT と共通 (site/readbg.js の NH_TEXTLOOK)
+const lhPos = () => NH_TEXTLOOK.lhPos(S.lh);
+const lhFromPos = NH_TEXTLOOK.lhFromPos;
 $('size').oninput = (e) => { S.size = Number(e.target.value); commitSoon(); };
 $('lh').oninput = (e) => { S.lh = lhFromPos(Number(e.target.value)); commitSoon(); };
 $$('.step').forEach((b) => (b.onclick = () => {
   const d = Number(b.dataset.d);
-  if (b.dataset.t === 'size') S.size = Math.min(250, Math.max(80, S.size + d));
+  if (b.dataset.t === "size") S.size = Math.min(NH_TEXTLOOK.SIZE.max, Math.max(NH_TEXTLOOK.SIZE.min, S.size + d));
   else S.lh = lhFromPos(Math.max(LH_STD, Math.min(LH_MAX, lhPos() + d)));
   commitSoon();
 }));
+
+// ---- 色を自由に決める部品: 色の四角 (彩度 × 明るさ) と色合いの帯。色の計算は Kotlin の MainActivity.buttonColor と同じ (HSV) ----
+const hsv2hex = (h, s, v) => { const f = (n) => { const k = (n + h / 60) % 6; return v - v * s * Math.max(0, Math.min(k, 4 - k, 1)); }; return '#' + [f(5), f(3), f(1)].map((x) => Math.round(x * 255).toString(16).padStart(2, '0')).join(''); };
+const hex2hsv = (hex) => {
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+  const max = Math.max(r, g, b), d = max - Math.min(r, g, b);
+  let h = 0;
+  if (d) h = max === r ? ((g - b) / d + 6) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return { h: Math.round(h * 60) % 360, s: max ? d / max : 0, v: max };
+};
+const COLOR_PICK_MIN_V = 0.1; // 真っ黒にはしない (文字が読めるかどうかは、Kotlin 側がバーの色の明るさから自動で決める)
+// 四角と帯の 1 組を作る。onPick(hex) は、動かすたびに呼ぶ (保存は呼び出し側)。sync(hex) は、外で色が変わったときだけ中の HSV を合わせ直す (なぞっている最中に戻すと色合いが飛ぶ)
+function makeColorPicker(onPick) {
+  const sv = el('div', 'cpick-sv'), hue = el('div', 'cpick-hue');
+  const svDot = el('i'), hueDot = el('i');
+  sv.append(svDot); hue.append(hueDot);
+  sv.tabIndex = 0; hue.tabIndex = 0;
+  sv.setAttribute('role', 'slider'); sv.setAttribute('aria-label', '彩度と明るさ');
+  hue.setAttribute('role', 'slider'); hue.setAttribute('aria-label', '色合い');
+  const box = el('div', 'cpick'); box.append(sv, hue);
+  let c = { h: 150, s: 0.5, v: 0.9 };
+  const paint = () => {
+    sv.style.background = 'linear-gradient(to top, #000, rgba(0,0,0,0)), linear-gradient(to right, #fff, ' + hsv2hex(c.h, 1, 1) + ')';
+    svDot.style.left = (c.s * 100) + '%'; svDot.style.top = ((1 - c.v) * 100) + '%'; svDot.style.background = hsv2hex(c.h, c.s, c.v);
+    hueDot.style.left = '50%'; hueDot.style.top = (c.h / 360 * 100) + '%'; hueDot.style.background = hsv2hex(c.h, 1, 1);
+  };
+  const changed = () => { paint(); onPick(hsv2hex(c.h, c.s, c.v)); };
+  dragIn(sv, (x, y) => { c = { ...c, s: x, v: Math.max(COLOR_PICK_MIN_V, 1 - y) }; changed(); });
+  dragIn(hue, (x, y) => { c = { ...c, h: Math.min(359, Math.round(y * 360)) }; changed(); });
+  sv.addEventListener('keydown', (e) => {
+    const d = { ArrowLeft: [-0.05, 0], ArrowRight: [0.05, 0], ArrowUp: [0, 0.05], ArrowDown: [0, -0.05] }[e.key];
+    if (!d) return;
+    c = { ...c, s: Math.min(1, Math.max(0, c.s + d[0])), v: Math.min(1, Math.max(COLOR_PICK_MIN_V, c.v + d[1])) }; changed(); e.preventDefault();
+  });
+  hue.addEventListener('keydown', (e) => {
+    const d = { ArrowUp: -10, ArrowDown: 10 }[e.key];
+    if (!d) return;
+    c = { ...c, h: (c.h + d + 360) % 360 }; changed(); e.preventDefault();
+  });
+  paint();
+  return {
+    el: box,
+    current: () => hsv2hex(c.h, c.s, c.v),
+    sync(hex) { if (hex && hex.toLowerCase() !== hsv2hex(c.h, c.s, c.v)) { c = hex2hsv(hex); paint(); } },
+  };
+}
+const isHexColor = (c) => typeof c === 'string' && /^#[0-9a-fA-F]{6}$/.test(c);
+const sameColor = (a, b) => !!a && !!b && a.toUpperCase() === b.toUpperCase();
+// 「自由」の丸 (虹色)。色の見本の並びの最後に置く
+function customSwatch(label, ring) {
+  const b = el('button', 'swatch custom' + (ring ? ' ring' : ''));
+  b.setAttribute('aria-label', label);
+  return b;
+}
 
 // タブの名前の入力欄 (一度だけ作る。値は paint で入れ直す)
 const nameInputs = {};
@@ -31,7 +85,33 @@ const tabShown = (k) => siteOn(k) && (!SITES.find(([x]) => x === k)[2] || S.r18M
 // タブの点の既定の色は TAB_COLOR_DEFAULT (app.js。Kotlin の BarTheme の色と同じ)。選べる色:
 const TAB_COLORS = ['#4A8FE0', '#E07B3C', '#22B3A4', '#D9529A', '#8E6CD8', '#2F8F5B', '#E0504A', '#D9A400', '#8E8E93'];
 const COLOR_NAMES = { '#4A8FE0': '青', '#E07B3C': 'オレンジ', '#22B3A4': '青緑', '#D9529A': 'ピンク', '#8E6CD8': '紫', '#2F8F5B': '緑', '#E0504A': '赤', '#D9A400': '黄', '#8E8E93': 'グレー' };
-const swatches = {}; // サイト → [{color, button}]
+// バーの背景色 (settings.barBg)。先頭 (null) は、テーマに合わせた既定の色
+const BAR_BGS = [
+  [null, '既定'], ['#FFFFFF', '白'], ['#E5E5EA', '薄いグレー'], ['#F4ECD8', 'ベージュ'], ['#DCE9F7', '薄い青'], ['#DDEEDD', '薄い緑'], ['#F6DDE6', '薄いピンク'],
+  ['#2C2C2E', '濃いグレー'], ['#1B2A41', '紺'], ['#1F3A2B', '深い緑'], ['#000000', '黒'],
+];
+const barBgSwatches = BAR_BGS.map(([c, name]) => {
+  const b = el('button', 'swatch ring');
+  if (c) b.style.backgroundColor = c; else b.style.backgroundImage = 'linear-gradient(135deg, #F9F9F9 50%, #1C1C1E 50%)'; // 既定は、ライトとダークの半分ずつ
+  b.setAttribute('aria-label', 'タブバーの背景色: ' + name);
+  b.onclick = () => { if (c) S.barBg = c; else delete S.barBg; commit(); };
+  $('barBgSwatches').appendChild(b);
+  return { color: c, button: b };
+});
+// 背景色の「自由」: 丸を押すと色の四角と帯が出る (色は settings.barBg に "#rrggbb" で入る。文字の色は Kotlin 側が背景の明るさから決める)
+const barBgPicker = makeColorPicker((hex) => { S.barBg = hex; commitSoon(); });
+$('barBgCustom').appendChild(barBgPicker.el);
+const barBgCustomBtn = customSwatch('タブバーの背景色: 自由', true);
+barBgCustomBtn.onclick = () => { if (!isBarBgCustom()) { S.barBg = barBgPicker.current(); commit(); } };
+$('barBgSwatches').appendChild(barBgCustomBtn);
+const isBarBgCustom = () => isHexColor(S.barBg) && !BAR_BGS.some(([c]) => sameColor(c, S.barBg));
+const swatches = {}; // サイト → [{color, button}] (最後の color: 'custom' は「自由」の丸)
+const sitePickers = {}; // サイト → {picker, box} (「自由」の色の四角と帯)
+// 選べる色 (既定・TAB_COLORS) のどれでもない色が入っているとき、「自由」
+const isSiteColorCustom = (k) => {
+  const cur = (S.siteColors || {})[k];
+  return isHexColor(cur) && !sameColor(cur, TAB_COLOR_DEFAULT[k]) && !TAB_COLORS.some((c) => sameColor(c, cur));
+};
 const tabMoves = {}; // サイト → [上へ, 下へ]
 // タブの並び (settings.tabOrder。TopBar.tabSpecs と同じ: 書いていないサイトは既定の順で後ろに)
 const TAB_KEYS = SITES.map(([k]) => k);
@@ -88,7 +168,15 @@ SITES.forEach(([k, label]) => {
     sw.appendChild(b);
     return { color: i ? c : null, button: b };
   });
-  row.append(top, sw);
+  // 「自由」: 丸を押すと色の四角と帯が出る (色は settings.siteColors[サイト] に "#rrggbb" で入る)
+  const picker = makeColorPicker((hex) => { S.siteColors = Object.assign({}, S.siteColors, { [k]: hex }); commitSoon(); });
+  const pickBox = el('div', 'cpick-wrap'); pickBox.hidden = true; pickBox.appendChild(picker.el);
+  const custom = customSwatch(label + 'のタブの色: 自由', false);
+  custom.onclick = () => { if (!isSiteColorCustom(k)) { S.siteColors = Object.assign({}, S.siteColors, { [k]: picker.current() }); commit(); } };
+  sw.appendChild(custom);
+  swatches[k].push({ color: 'custom', button: custom });
+  sitePickers[k] = { picker, box: pickBox };
+  row.append(top, sw, pickBox);
   $('nameList').appendChild(row);
 });
 
@@ -164,3 +252,45 @@ function paintIcons() {
     g.appendChild(b);
   });
 }
+
+// 隠している間の目印 (棒・小さなボタン) の縦の位置 (settings.barButtonPos = 0〜1。既定 0.5)。小さなボタンをなぞると、アプリ (Kotlin) が書くので、
+// S ではなく保存データを直に読み書きする (LIVE_KEYS)。paintBarHandlePage からも使うので、巻き上げられる function で書く
+function barPosNow() {
+  const raw = (load().settings || {}).barButtonPos;
+  return Math.round(Math.min(1, Math.max(0, typeof raw === 'number' ? raw : 0.5)) * 100);
+}
+function setBarPos(pct) {
+  NH.update((d) => { d.settings = d.settings || {}; d.settings.barButtonPos = Math.min(100, Math.max(0, pct)) / 100; });
+  paint();
+}
+$('barPosRange').oninput = (e) => setBarPos(Number(e.target.value));
+$$('.stepper[data-pos]').forEach((b) => (b.onclick = () => setBarPos(barPosNow() + Number(b.dataset.pos))));
+
+// 使い方: チュートリアルをもう一度見る・ヒントをもう一度出す (ヒントの出し方は app.js の showHint)
+$('tutorialBtn').onclick = () => openUrl('tutorial.html?from=settings');
+$('guideBtn').onclick = () => { NH.update((d) => NH.guideStart(d)); openUrl(NH.LIST_URL); }; // 体験型のガイド (core/guide.js)。リストから始める
+$('hintsReset').onclick = () => {
+  NH.update((d) => { if (d.settings) delete d.settings.hintsSeen; });
+  snack('ヒントをもう一度出します');
+};
+
+// 小さなボタンの色を自由に決める (部品は上の makeColorPicker と同じ作り。こちらは HTML に置いた四角と帯を使い、色は 3 つの値 (barButtonHue / Sat / Val) で持つ)
+const cpick =() => ({ h: S.barButtonHue != null ? S.barButtonHue : 150, s: (S.barButtonSat != null ? S.barButtonSat : 80) / 100, v: (S.barButtonVal != null ? S.barButtonVal : 70) / 100 });
+function paintBarPicker() {
+  const { h, s, v } = cpick();
+  $('cpickSv').style.background = 'linear-gradient(to top, #000, rgba(0,0,0,0)), linear-gradient(to right, #fff, ' + hsv2hex(h, 1, 1) + ')';
+  $('cpickSvDot').style.left = (s * 100) + '%'; $('cpickSvDot').style.top = ((1 - v) * 100) + '%'; $('cpickSvDot').style.background = hsv2hex(h, s, v);
+  $('cpickHueDot').style.left = '50%'; $('cpickHueDot').style.top = (h / 360 * 100) + '%'; $('cpickHueDot').style.background = hsv2hex(h, 1, 1);
+}
+// 指・マウスで四角や帯をなぞる (押している間、動きに合わせて色を変える)。キーボードの矢印でも動かせる
+function dragIn(el, onMove) {
+  const at = (e) => { const r = el.getBoundingClientRect(); return [Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)), Math.min(1, Math.max(0, (e.clientY - r.top) / r.height))]; };
+  el.addEventListener('pointerdown', (e) => { el.setPointerCapture(e.pointerId); onMove(...at(e)); e.preventDefault(); });
+  el.addEventListener('pointermove', (e) => { if (el.hasPointerCapture(e.pointerId)) onMove(...at(e)); });
+  el.addEventListener('pointerup', () => commit());
+}
+const barColorChanged = () => { S.barButtonColor = 'custom'; paintBarPicker(); commitSoon(); };
+dragIn($('cpickSv'), (x, y) => { S.barButtonSat = Math.round(x * 100); S.barButtonVal = Math.round(Math.max(0.2, 1 - y) * 100); barColorChanged(); });
+dragIn($('cpickHue'), (x, y) => { S.barButtonHue = Math.min(359, Math.round(y * 360)); barColorChanged(); });
+$('cpickSv').addEventListener('keydown', (e) => { const d = { ArrowLeft: [-5, 0], ArrowRight: [5, 0], ArrowUp: [0, 5], ArrowDown: [0, -5] }[e.key]; if (!d) return; const c = cpick(); S.barButtonSat = Math.min(100, Math.max(0, Math.round(c.s * 100) + d[0])); S.barButtonVal = Math.min(100, Math.max(20, Math.round(c.v * 100) + d[1])); barColorChanged(); e.preventDefault(); });
+$('cpickHue').addEventListener('keydown', (e) => { const d = { ArrowUp: -10, ArrowDown: 10 }[e.key]; if (!d) return; S.barButtonHue = (cpick().h + d + 360) % 360; barColorChanged(); e.preventDefault(); });

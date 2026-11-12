@@ -109,11 +109,11 @@
     return result;
   };
   window.nhAddCurrent = addCurrentWork;
-  // ⋮ メニューのための今の作品の状態。{inList, saved (端末に保存してある), url (作品のページ。保存は ここ + #nh-save で始める)}。作品のページでなければ null
+  // ⋮ メニューのための今の作品の状態。{inList, saved (端末に保存してある), url (作品のページ。保存は ここ + #nh-save で始める), viewer (話ページ = 「表示の設定」を出せる)}。作品のページでなければ null
   window.nhWorkState = () => {
     const w = NH.parseWork(location.href);
     const it = w && NH.findItem(NH.load(), w);
-    return w ? { inList: !!it && !it.done && NH.kindOf(it) === 'later', saved: !!NH.off.meta(w.site, w.id), url: w.url } : null;
+    return w ? { inList: !!it && NH.kindOf(it) === 'later', saved: !!NH.off.meta(w.site, w.id), url: w.url, viewer: !!window.nhOpenViewer } : null;
   };
   // 今の作品をリストから外す (⋮ メニューの「リストから削除」)。結果: removed / '' (作品のページではない・リストに無い)
   window.nhRemoveCurrent = () => {
@@ -122,8 +122,9 @@
     NH.update((d) => {
       result = '';
       const it = w && NH.findItem(d, w);
-      if (!it || it.done || NH.kindOf(it) !== 'later') return; // メニューに「削除」を出したのは「後で読む」にあるとき (間に状態が変わったら、何もしない)
+      if (!it || NH.kindOf(it) !== 'later') return; // メニューに「削除」を出したのは「後で読む」にあるとき (間に状態が変わったら、何もしない)
       NH.removeItem(d, it);
+      window.__nhNoPosWrite = true; // 外したあとに読書位置を書き戻さない (ui-readpos.js)
       result = 'removed';
     });
     return result;
@@ -155,17 +156,55 @@
   }
   // 作品の小説情報を覚える・公式の閲覧履歴を取り込む (ui-work.js)
   NH_UI_WORK({ adapter, mk, cur });
-  // 話ページの一番上に「目次へ」(作品のページ)。アダプターの topToc が true のサイトだけ (カクヨム。作品へのパンくずは sites.js で隠している)
-  if (cur && cur.episode != null && adapter.topToc && adapter.bodySel && document.querySelector(adapter.bodySel) && !document.getElementById('nh-toc-top')) {
-    const toc = mk('a', 'nh-toc-top', '目次へ');
-    toc.id = 'nh-toc-top';
-    toc.href = cur.url;
-    (document.body || document.documentElement).prepend(toc);
+  // 「表示の設定」(TT): サイトのビューワー設定の代わりに、アプリの表示の設定 (文字の大きさ・行間・書体・背景色。ui-viewer.js) を開く。
+  //   ⋮ メニューの「表示の設定」が window.nhOpenViewer を呼ぶ (nhWorkState の viewer で、出すかを決める)。ページの上には置かない。
+  // 話ページの一番上の列は、カクヨムだけ (サイトの目次パネルを開くハンバーガーが要るため): 「‹ 目次」(作品のページ。作品へのパンくずは sites.js で隠している) と、右に「目次の一覧」(ハンバーガー)。
+  //   横書きでは、ページの一番上に置くだけで、スクロールで流れる (追いかけてこない)。縦書きのときだけ、画面の上に固定して、本文のタップで出し入れする (ui-vertical.js)。
+  //   なろう・ハーメルンには列を置かない (前後の話・目次は各サイトの作りを使う)
+  if (cur && (cur.episode != null || isShort) && adapter.bodySel && document.querySelector(adapter.bodySel) && !window.nhOpenViewer) { // 短編 (話番号が無く本文がある) も、表示の設定を出せる
+    // サイトのビューワー設定のボタン。アプリのシートの下の「サイトの設定 (操作など) を開く」から押す。サイトのパネルの側にアプリのボタンを置くサイト (panelSel) では、行き来になるので出さない
+    const siteBtn = adapter.viewerBtn && !adapter.panelSel ? adapter.viewerBtn : '';
+    // サイトのパネルは、操作設定の欄だけ残してあるので、開いたら、その欄 (2 つ目のタブ) を出す
+    const openSiteSettings = () => { const t = document.querySelector(siteBtn); if (!t) return; t.click(); setTimeout(() => { const tab = [...document.querySelectorAll('.js-episode-setting-tab-button')].find((b) => /操作/.test(b.textContent)); if (tab) tab.click(); }, 150); };
+    const openViewer = NH_UI_VIEWER({ mk, openSite: siteBtn ? openSiteSettings : null });
+    window.nhOpenViewer = openViewer;
+    if (adapter.sideTocBtn) {
+      const row = mk('div', 'nh-toc-top');
+      row.id = 'nh-toc-top';
+      // 左: 目次へ。右: ハンバーガー (サイトの目次パネル)。話のタイトルは、各サイトが本文の上に出している見た目をそのまま使う (ここには置かない)
+      const left = mk('div', 'nh-toc-link');
+      const toc = mk('a', 'nh-toc-nav', '‹ 目次');
+      toc.href = cur.url;
+      left.appendChild(toc);
+      row.appendChild(left);
+      const burger = mk('button', 'nh-toc-tool');
+      burger.type = 'button';
+      burger.setAttribute('aria-label', '目次の一覧');
+      burger.innerHTML = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M3 6h18v2H3V6zm0 5h18v2H3v-2zm0 5h18v2H3v-2z"/></svg>';
+      // 元のボタンは、サイトのヘッダーごと隠している。押すだけなら、隠れたままでも効く (ヘッダーが作り直されたら、そのときの要素を探す)
+      burger.onclick = () => { const t = document.querySelector(adapter.sideTocBtn); if (t) t.click(); };
+      row.appendChild(burger);
+      (document.body || document.documentElement).prepend(row);
+      document.documentElement.classList.add('nh-has-toc'); // 上の列の分、本文を下げる
+      // 背景色の設定 (readBg) があれば、上の列も、その背景と文字の色に合わせる (黒の背景の上に、明るい列だけが浮かないように)
+      const rb = window.NH_READBG && window.NH_READBG.colors((NH.load().settings || {}).readBg);
+      if (rb) { row.style.setProperty('--nh-bar-bg', rb.bg); row.style.setProperty('--nh-bar-fg', rb.fg); }
+    }
+    // なろうの「表示調整」: サイトのパネルはそのまま開く。パネルの一番下に、アプリの表示の設定を開くボタンを足す (アプリが持つ項目はパネルから隠してあるので、そこから行けるように)
+    const panel = adapter.panelSel && document.querySelector(adapter.panelSel);
+    if (panel && !panel.querySelector('.nh-panel-btn')) {
+      const b = mk('button', 'nh-panel-btn', '表示の設定 (文字・背景色など)');
+      b.type = 'button';
+      b.onclick = openViewer;
+      panel.appendChild(b);
+    }
   }
   // 話ページの読書位置の記録と復元 (ui-readpos.js)。移る直前に位置を書き切る関数を、ページ内の移動の見張りに渡す
-  const flush = NH_UI_READPOS({ adapter, cur, isShort, laterBack: !!(laterM && laterM[1]), moved });
+  // 縦書き (アプリの設定 siteVertical。ui-vertical.js): 縦書きの間は、読書位置は横スクロールの進みで読み書きする
+  const vertical = NH_UI_VERTICAL({ adapter, mk, cur, isShort });
+  const flush = NH_UI_READPOS({ adapter, cur, isShort, laterBack: !!(laterM && laterM[1]), moved, vertical });
   if (flush) flushPos = flush;
 
-  // ---- 話ページ最下部の「読了 → 次の小説へ」 (ui-next.js) ----
+  // ---- 話ページ最下部の「読み終わり → 次の小説へ」 (ui-next.js) ----
   NH_UI_NEXT({ adapter, mk, cur });
 })();

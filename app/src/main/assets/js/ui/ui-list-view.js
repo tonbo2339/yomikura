@@ -4,7 +4,6 @@
 // 戻り値: {applyView, viewed (applyView を一度でも呼んだか)}
 window.NH_UI_LIST_VIEW = function (ctx) {
   const { mk, entries } = ctx;
-  const STATUS = [['', 'すべて'], ['serial', '連載中'], ['complete', '完結'], ['unfinished', '未完'], ['short', '短編']];
   let pill = null;
   let filterBar = null;
   const onWorkPage = !!NH.parseWork(location.href);
@@ -54,30 +53,106 @@ window.NH_UI_LIST_VIEW = function (ctx) {
     if (pill.textContent !== label) pill.textContent = label;
   }
 
-  // 連載状態の切り替え (画面の下)
+  // 連載状態の切り替え (画面の下)。帯は filterBarOf が作る
   function paintFilterBar(known, counts, want) {
-    if (!known) { if (filterBar) filterBar.hidden = true; return; }
     if (!filterBar) {
-      filterBar = mk('div', 'nh-filter');
-      (document.body || document.documentElement).appendChild(filterBar);
-      document.documentElement.classList.add('nh-has-filter');
+      if (!known) return;
+      filterBar = NH_UI_LIST_VIEW.filterBarOf(mk, (k) => { NH.setSetting('statusFilter', k); applyView(); });
     }
-    filterBar.hidden = false;
-    // 中身は選択や件数が変わったときだけ作り直す (MutationObserver の繰り返しを避ける)
-    const sig = want + '|' + JSON.stringify(counts);
-    if (filterBar.dataset.sig === sig) return;
-    filterBar.dataset.sig = sig;
-    filterBar.textContent = '';
-    // 選んでいる状態は、このページに 0 件でも出す (解除できるように)
-    STATUS.filter(([k]) => !k || counts[k] || k === want).forEach(([k, label]) => {
-      const b = mk('button', k === want ? 'on' : '', label + (k ? ' ' + (counts[k] || 0) : ''));
-      b.addEventListener('click', () => {
-        NH.setSetting('statusFilter', k);
-        applyView();
-      });
-      filterBar.appendChild(b);
-    });
+    filterBar.paint(known, counts, want);
   }
 
   return { applyView, viewed: () => viewed };
+};
+
+/**
+ * 連載状態の切り替えの帯 (画面の下に固定。.nh-filter)。作った時点で画面に付ける。
+ * paint(known, counts, want): known が false なら隠す (html の nh-has-filter も外す = 余白・お知らせの避けを戻す)。
+ * 中身は選択や件数が変わったときだけ作り直す (書き換えると MutationObserver が反応して繰り返しになるため)。onPick(key) は押されたとき。
+ */
+window.NH_UI_LIST_VIEW.filterBarOf = function (mk, onPick) {
+  const STATUS = [['', 'すべて'], ['serial', '連載中'], ['complete', '完結'], ['unfinished', '未完'], ['short', '短編']];
+  const bar = mk('div', 'nh-filter');
+  const root = document.documentElement;
+  (document.body || root).appendChild(bar);
+  const slide = NH_UI_LIST_VIEW.slideWith(bar);
+
+  function paint(known, counts, want) {
+    if (!known) {
+      bar.hidden = true;
+      root.classList.remove('nh-has-filter');
+      return;
+    }
+    if (bar.hidden || !root.classList.contains('nh-has-filter')) {
+      bar.hidden = false;
+      root.classList.add('nh-has-filter');
+      slide.reset(); // 隠れていた間にスクロールした分・高さの測り直し (隠れている間の高さは 0)
+    }
+    const sig = want + '|' + JSON.stringify(counts);
+    if (bar.dataset.sig === sig) return;
+    bar.dataset.sig = sig;
+    slide.remeasure();
+    bar.textContent = '';
+    // 選んでいる状態は、このページに 0 件でも出す (解除できるように)
+    STATUS.filter(([k]) => !k || counts[k] || k === want).forEach(([k, label]) => {
+      const b = mk('button', k === want ? 'on' : '', label + (k ? ' ' + (counts[k] || 0) : ''));
+      b.addEventListener('click', () => onPick(k));
+      bar.appendChild(b);
+    });
+  }
+  return { paint };
+};
+
+/**
+ * 下へスクロールした分だけ帯を下へ隠し、上へ戻した分だけ出す (上のバー HeaderScroll と同じ。向きで切り替えず、スクロール量にそのまま合わせる =
+ * 指に付いて動く。止めたら途中で止まる。先頭・末尾では出す)。書くのは transform だけ (合成のみ)・スクロールの通知は passive で rAF にまとめ・
+ * 変わらないときは何も書かない。隠れている (hidden) 間は何もしない。
+ * 戻り値: remeasure() = 中身を作り直した (高さが変わりうる)、reset() = 出し直す (再表示のとき)。画面の大きさが変わったときは、自分で測り直す
+ */
+window.NH_UI_LIST_VIEW.slideWith = function (bar) {
+  const M = NH_UI_LIST_VIEW.BAR_SLIDE;
+  let last = window.scrollY;
+  let offset = 0;
+  let travel = 0;
+  let queued = false;
+  const show = () => { offset = 0; bar.classList.remove('nh-snap'); bar.style.transform = ''; };
+  const frame = () => {
+    queued = false;
+    if (bar.hidden) return;
+    const y = window.scrollY;
+    if (!travel) {
+      if (!bar.offsetHeight) return; // まだ高さが分からない (測れるまで待つ)
+      travel = bar.offsetHeight + M.EXTRA;
+    }
+    const edge = y <= 0 || y + window.innerHeight >= document.documentElement.scrollHeight - M.EDGE;
+    const next = NH_UI_LIST_VIEW.barSlide(offset, y - last, travel, edge);
+    if (next.consumed) last = y; // 小さな動きは last を進めず、たまってから動かす
+    if (next.offset === offset) return;
+    bar.classList.toggle('nh-snap', next.reset); // 端で出し直すときだけ、短い動きを付ける (指に付くときは付けない)
+    offset = next.offset;
+    bar.style.transform = offset ? 'translate3d(0,' + offset + 'px,0)' : '';
+  };
+  window.addEventListener('scroll', () => { if (!queued) { queued = true; requestAnimationFrame(frame); } }, { passive: true });
+  window.addEventListener('resize', () => { travel = 0; }, { passive: true }); // 回転・文字の大きさの変更で高さが変わりうる
+  return {
+    remeasure: () => { travel = 0; },
+    reset: () => { travel = 0; last = window.scrollY; show(); },
+  };
+};
+
+// 切り替えの帯の動かし方の定数 (px)
+window.NH_UI_LIST_VIEW.BAR_SLIDE = {
+  EXTRA: 40, // 帯の高さに足す (下の余白・影の分。画面の外まで出す)
+  EDGE: 2, // 末尾とみなす余裕
+  DEADBAND: 2, // これより小さい (たまった) 動きでは動かさない = 揺れで動かない
+};
+
+/**
+ * 帯のずらし量 (0 = 出ている、travel = 隠れ切った) を、スクロールの動き dy (下が +) で進める純粋な関数。
+ * edge = 先頭 / 末尾 (出し直す)。戻り値 {offset, consumed (dy を使った = 呼び出し側が基準を進めてよい), reset (端で出し直した)}
+ */
+window.NH_UI_LIST_VIEW.barSlide = function (offset, dy, travel, edge) {
+  if (edge) return { offset: 0, consumed: true, reset: offset !== 0 };
+  if (Math.abs(dy) < window.NH_UI_LIST_VIEW.BAR_SLIDE.DEADBAND) return { offset, consumed: false, reset: false };
+  return { offset: Math.min(travel, Math.max(0, offset + dy)), consumed: true, reset: false };
 };

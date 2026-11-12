@@ -54,7 +54,7 @@ function setup(initial = { readLater: [] }) {
   ctx.window = ctx;
   vm.createContext(ctx);
   runGroup(vm, ctx, 'adapters');
-  for (const f of ['ui/ui-list-later.js', 'ui/ui-list-block.js', 'ui/ui-list-view.js', 'ui/ui-list-sheet.js', 'ui/ui-list.js']) vm.runInContext(readJs(f), ctx, { filename: f });
+  for (const f of ['ui/ui-list-later.js', 'ui/ui-list-fav.js', 'ui/ui-list-block.js', 'ui/ui-list-view.js', 'ui/ui-list-sheet.js', 'ui/ui-list.js']) vm.runInContext(readJs(f), ctx, { filename: f });
   const NH = ctx.NH;
   ctx.NH_UI_LIST({ adapter: NH.adapter(), mk: NH.el });
   const click = (el) => el.dispatchEvent(new window.Event('click', { bubbles: true, cancelable: true }));
@@ -70,8 +70,8 @@ test('一覧の作品ごとに「後で読む」「ミュート」のボタン�
   const { document } = setup();
   const r = rows(document);
   assert.equal(r.length, 2);
-  assert.deepEqual([...r[0].children].map((c) => c.textContent), ['＋ 後で読む', 'ミュート', '']);
-  assert.equal(r[0].children[2].hidden, true);
+  assert.deepEqual([...r[0].children].map((c) => c.textContent), ['＋ 後で読む', '☆ お気に入り', 'ミュート', '']);
+  assert.equal(r[0].children[3].hidden, true);
 });
 
 test('「後で読む」を押すと足され、もう一度押すと外れ (元に戻すで復活)、同じ作品のボタンの見た目もそろう', () => {
@@ -92,20 +92,37 @@ test('「後で読む」を押すと足され、もう一度押すと外れ (元
   assert.equal(btn().textContent, '✓ リストに追加済み');
 });
 
-test('読了の作品は「追加済み」とは出ず、押すと読了を外してリストに戻る', () => {
+test('「☆ お気に入り」を押すと足され、もう一度押すと外れ (元に戻すで復活)。「後で読む」とは別', () => {
+  const { document, click, data } = setup();
+  const fav = () => rows(document)[0].children[1];
+  assert.equal(fav().textContent, '☆ お気に入り');
+  click(fav());
+  assert.equal(data().favorites.length, 1);
+  assert.equal(data().favorites[0].key, 'narou:n1234ab');
+  assert.equal(data().readLater.length, 0); // 「後で読む」には入らない
+  assert.equal(fav().textContent, '★ お気に入り');
+  click(fav());
+  assert.equal((data().favorites || []).length, 0);
+  assert.equal(fav().textContent, '☆ お気に入り');
+  click(document.querySelector('.nh-toast button')); // 元に戻す
+  assert.equal(data().favorites.length, 1);
+  assert.equal(fav().textContent, '★ お気に入り');
+});
+
+test('「更新」の作品は「追加済み」とは出ず、押すと「後で読む」へ移る', () => {
   const key = 'narou:n1234ab';
-  const { document, click, data } = setup({ readLater: [{ key, site: 'narou', id: 'n1234ab', url: 'https://ncode.syosetu.com/n1234ab/', title: 't', done: true, doneAt: 1 }] });
+  const { document, click, data } = setup({ readLater: [{ key, site: 'narou', id: 'n1234ab', url: 'https://ncode.syosetu.com/n1234ab/', title: 't', kind: 'update', unread: 2 }] });
   const btn = rows(document)[0].children[0];
   assert.equal(btn.textContent, '＋ 後で読む');
   click(btn);
   assert.equal(data().readLater.length, 1);
-  assert.equal(data().readLater[0].done, false);
+  assert.equal(data().readLater[0].kind, 'later');
   assert.equal(btn.textContent, '✓ リストに追加済み');
 });
 
 test('ミュート: 作者をミュートすると、その作品が隠れ (nh-muted)、件数のボタンが出る', () => {
   const { NH, document, click, data } = setup();
-  click(rows(document)[0].children[1]); // 「ミュート」
+  click(rows(document)[0].children[2]); // 「ミュート」
   const sheet = document.querySelector('.nh-sheet');
   assert.ok(sheet);
   const byAuthor = [...sheet.querySelectorAll('button')].find((b) => b.textContent.startsWith('作者「'));
@@ -124,7 +141,7 @@ test('ミュート: 作者をミュートすると、その作品が隠れ (nh-m
 
 test('ブロック: 作品をブロックすると nh-blocked が付き、ミュートの件数に入らない', () => {
   const { document, click, data } = setup();
-  click(rows(document)[1].children[1]);
+  click(rows(document)[1].children[2]);
   const sheet = document.querySelector('.nh-sheet');
   click([...sheet.querySelectorAll('.nh-sheet-seg button')].find((b) => b.textContent === 'ブロック'));
   const sheet2 = document.querySelector('.nh-sheet'); // 描き直される

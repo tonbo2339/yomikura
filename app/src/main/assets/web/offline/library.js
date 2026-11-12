@@ -15,6 +15,9 @@ function library() {
     e.append(el('h2', '', '保存した作品はありません'), el('p', '', 'リストの作品の「⋮」から「オフラインに保存」を選ぶと、通信なしで読めるようになります。'));
     root.appendChild(e);
   } else {
+    const hintBox = el('div'); // 初めて開いたとき 1 回だけ出す説明 (hints.js の offline-library)
+    root.appendChild(hintBox);
+    showHint(hintBox, 'offline-library');
     const list = el('div', 'list');
     works.forEach((w) => {
       const del = iconBtn('del', '削除', () => ask('「' + w.title + '」を削除', '削除', () => { NH.off.remove(w.site, w.id); snack('削除しました'); library(); }, 'この作品の保存データ (' + NH.fmtBytes(w.bytes || 0) + ') を端末から消します。サイトの作品や、リストの記録には影響しません。'));
@@ -46,12 +49,15 @@ function library() {
     b.onclick = () => ask('すべて削除', 'すべて削除', () => { works.forEach((w) => NH.off.remove(w.site, w.id)); snack('削除しました'); library(); }, works.length + ' 作品 (' + NH.fmtBytes(total) + ') を端末から消します。');
     g2.appendChild(b); root.appendChild(g2);
   }
+  // 目次から戻ったときは、出ていった位置へ (描き終えたあと)
+  const y = takeTocY(LIB_Y);
+  if (y > 0) { window.scrollTo(0, y); requestAnimationFrame(() => window.scrollTo(0, y)); }
 }
 
 // 作品の行 (端末・外の作品共通)。count = 「12 / 30 話」、src = 開く元、buttons = 右端のボタン
 function workRow(w, count, src, buttons) {
   const c = el('div', 'card row');
-  asButton(c, () => (location.href = here(w.site + ':' + w.id, null, src)));
+  asButton(c, () => { rememberTocY(LIB_Y); forgetTocY(w.site + ':' + w.id); location.href = here(w.site + ':' + w.id, null, src); });
   const main = el('div', 'main');
   const meta = el('div', 'meta');
   const site = el('span'); site.style.cssText = 'display:inline-flex;align-items:center;gap:6px;font-weight:700';

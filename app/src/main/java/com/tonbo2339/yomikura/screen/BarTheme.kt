@@ -5,6 +5,7 @@ import android.content.res.ColorStateList
 import android.content.res.Configuration
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.RippleDrawable
+import androidx.core.graphics.ColorUtils
 
 /**
  * 画面側 (上部バー・メニュー・シート・お知らせ) の見た目の決まり: 配色 (ライト / ダーク)・サイトの色・寸法の単位・押したときの形。
@@ -22,8 +23,27 @@ class BarTheme(private val ctx: Context) {
     val isNight: Boolean
         get() = (ctx.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
 
+    /** 設定で選んだバーの背景色 (settings.barBg)。選んでいなければ null (テーマの既定)。MainActivity が設定から読む関数を入れる */
+    var bgOverride: () -> Int? = { null }
+
+    /** バーの地色が暗いか (状態バーの文字色・アイコンの色を決める)。背景色を選んでいればその明るさで、なければテーマで決める */
+    val barDark: Boolean
+        get() = bgOverride()?.let { ColorUtils.calculateLuminance(it) < 0.5 } ?: isNight
+
     val pal: Palette
-        get() = if (isNight) DARK else LIGHT
+        get() {
+            val o = bgOverride() ?: return if (isNight) DARK else LIGHT
+            // 選んだ地色に合わせて、文字・区切り線・押したときの色を、明るさで決める (暗い地は明るい文字、明るい地は暗い文字)
+            val dark = ColorUtils.calculateLuminance(o) < 0.5
+            val text = if (dark) DARK.text else LIGHT.text
+            return Palette(
+                o or 0xFF000000.toInt(),
+                ColorUtils.blendARGB(o or 0xFF000000.toInt(), text, 0.2f) or 0xFF000000.toInt(),
+                text,
+                if (dark) DARK.subtext else LIGHT.subtext,
+                if (dark) DARK.ripple else LIGHT.ripple,
+            )
+        }
 
     /** 押したときのリップル (mask の形に収まる)。 */
     fun ripple(mask: GradientDrawable, content: GradientDrawable? = null) =

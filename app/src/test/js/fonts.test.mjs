@@ -51,3 +51,4 @@ for (const [name, fn] of tests) {
   try { fn(); console.log('ok   ' + name); } catch (e) { fail++; console.log('FAIL ' + name + '\n  ' + e.message); }
 }
 console.log(fail ? fail + ' 件失敗' : tests.length + ' 件 OK');
+process.exit(fail ? 1 : 0);

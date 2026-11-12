@@ -6,6 +6,7 @@ const BACKUP_COUNT = {
   list: (d) => (d.readLater || []).length + ' 作品',
   progress: (d) => Object.keys(d.progress || {}).length + ' 作品',
   history: (d) => (d.history || []).length + ' 作品',
+  favorites: (d) => (d.favorites || []).length + ' 作品',
   mute: (d) => { const m = NH.muteOf(d), b = NH.blockOf(d); return (m.words.length + m.authors.length) + ' 件' + (NH.hasBlock(d) ? '・ブロック ' + (b.works.length + b.words.length + b.authors.length) + ' 件' : ''); },
 };
 const exportSel = new Set(BACKUP.map((b) => b[0]));
@@ -57,6 +58,7 @@ window.nhImport = (json) => {
         let v = parts[k];
         if (k === 'list') v = v.filter((x) => x && typeof x === 'object' && typeof x.key === 'string');
         if (k === 'history') v = v.filter((x) => x && typeof x === 'object');
+        if (k === 'favorites') v = v.filter((x) => x && typeof x === 'object' && typeof x.key === 'string');
         if (k === 'settings') v = NH.restoredSettings(v); // 初回の画面をもう一度出さない・アイコンの「後で」の予約は戻さない
         d[b[2]] = v;
       });

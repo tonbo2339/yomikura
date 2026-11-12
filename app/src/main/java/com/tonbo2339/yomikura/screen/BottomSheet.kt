@@ -107,7 +107,8 @@ class BottomSheet(
         dialog.window?.apply {
             setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
             setGravity(Gravity.BOTTOM)
-            setLayout(MATCH_PARENT, WRAP_CONTENT)
+            // 広い画面 (タブレット・横向き) では、全幅に広げず 560dp までにして中央に出す
+            setLayout(minOf(dialog.context.resources.displayMetrics.widthPixels, px(560)), WRAP_CONTENT)
             setWindowAnimations(android.R.style.Animation_InputMethod) // 下からせり上がる
         }
         dialog.show()

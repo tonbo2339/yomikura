@@ -75,6 +75,34 @@ class SiteTabs(private val ctx: Context, private val theme: BarTheme) {
         }
     }
 
+    /**
+     * 左右の縦のバーに置くタブ 1 つ: 色の点を上に、名前をその下に (2 行まで)。幅いっぱい・高さは中身しだい (最低 48dp)。
+     * 押したときの動作は [Spec.setup] が付ける (上のバーのタブと同じ)。
+     */
+    fun railTab(label: String, dot: Int, tinted: Boolean): LinearLayout {
+        val pad = (4 * dp).toInt()
+        return LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            minimumHeight = (48 * dp).toInt()
+            tag = RAIL_TAG // メニューを、バーの横に出すための印 (MainMenu)
+            setPadding(pad, (6 * dp).toInt(), pad, (6 * dp).toInt())
+            background = theme.ripple(theme.pill(Color.WHITE), if (tinted) theme.pill((dot and 0xFFFFFF) or BarTheme.TINT_ALPHA) else null)
+            isClickable = true
+            addView(View(ctx).apply { background = theme.pill(dot) }, LinearLayout.LayoutParams((7 * dp).toInt(), (7 * dp).toInt()).apply { bottomMargin = (3 * dp).toInt() })
+            addView(TextView(ctx).apply {
+                text = label
+                textSize = 11f
+                typeface = MEDIUM
+                setTextColor(theme.pal.text)
+                gravity = Gravity.CENTER
+                maxLines = 2
+                ellipsize = TextUtils.TruncateAt.END
+                setLineSpacing(0f, 0.9f)
+            }, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
+        }
+    }
+
     /** タブ 1 つを縮めずに出すのに要る幅 (px)。[tab] の余白・点・▾ の寸法と合わせる。 */
     fun need(label: String, compact: Boolean): Float {
         // 余白 (左右) + 点 + 点の右 + タブの外側の余白 (左右)
@@ -95,7 +123,9 @@ class SiteTabs(private val ctx: Context, private val theme: BarTheme) {
         textSize = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, sp, ctx.resources.displayMetrics)
     }.measureText(text)
 
-    private companion object {
-        val MEDIUM: Typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+    companion object {
+        /** 左右のバーのタブの印 (View.tag)。このタブから開くメニューは、バーの横に出す (MainMenu.show / MenuPlacement) */
+        const val RAIL_TAG = "rail-tab"
+        private val MEDIUM: Typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
     }
 }

@@ -2,26 +2,44 @@
 <section class="page" role="main" id="p-reading" hidden>
   <div class="section-label" style="margin-top:16px">音量キー</div>
   <div class="group">
-    <label class="cell"><span class="text">音量キーでページを送る</span><input type="checkbox" class="switch" id="volumeKeys" data-setting="volumeKeys" data-default="off"></label>
+    <label data-kw="音量 おんりょう ボリューム ページ送り ぺーじおくり ボタン volume key page turn button" class="cell"><span class="text">音量キーでページを送る</span><input type="checkbox" class="switch" id="volumeKeys" data-setting="volumeKeys" data-default="off"></label>
   </div>
-  <div class="hint">作品のページを読んでいる間、音量の「下」で 1 画面下へ、「上」で 1 画面上へ進みます。そのあいだは、音量の調整には使えません。</div>
+  <div class="hint"><ul>
+    <li>作品のページを読んでいる間、音量の「下」で 1 画面下へ、「上」で 1 画面上へ進む</li>
+    <li>そのあいだは、音量の調整には使えない</li>
+  </ul></div>
+  <div class="section-label" data-kw="自動 じどう 連続 れんぞく 続けて つづけて 次話 じわ オートプレイ auto next episode continuous">次の話へ</div>
+  <div class="group">
+    <label data-kw="自動 じどう 連続 れんぞく 続けて つづけて 次話 じわ オートプレイ 読み上げ よみあげ 自動スクロール auto next episode continuous autoplay keep reading" class="cell"><span class="text">最後まで読んだら、次の話へ進む</span><input type="checkbox" class="switch" id="autoNextEpisode" data-setting="autoNextEpisode" data-default="off"></label>
+  </div>
+  <div class="hint"><ul>
+    <li>読み上げ・自動スクロールが話の最後まで行ったとき、次の話を開いて続ける</li>
+    <li>次の話が無いときは、そこで止まる</li>
+    <li>止めるときは、画面を触る・⋮ メニュー・通知の「止める」</li>
+  </ul></div>
   <div class="section-label">自動スクロール</div>
   <div class="group">
     <div class="cell"><div class="slider"><span class="name">速さ</span>
       <button class="stepper" data-k="autoScrollSpeed" data-d="-1" aria-label="遅く">−</button><input type="range" id="autoSpeed" min="1" max="10" step="1" aria-label="自動スクロールの速さ"><button class="stepper" data-k="autoScrollSpeed" data-d="1" aria-label="速く">＋</button><span class="val" id="autoSpeedV"></span></div></div>
   </div>
-  <div class="hint">作品のページの ⋮ メニューの「自動スクロール」で始めます。画面を触ると止まります。</div>
+  <div class="hint">作品のページの ⋮ メニューの「自動スクロール」で始める。画面を触ると止まる。</div>
   <div class="section-label">読み上げ</div>
   <div class="group">
     <div class="cell"><div class="slider"><span class="name">速さ</span>
       <button class="stepper" data-k="ttsRate" data-d="-1" aria-label="ゆっくり">−</button><input type="range" id="ttsRate" min="5" max="20" step="1" aria-label="読み上げの速さ"><button class="stepper" data-k="ttsRate" data-d="1" aria-label="速く">＋</button><span class="val" id="ttsRateV"></span></div></div>
   </div>
-  <div class="hint">作品のページの ⋮ メニューの「読み上げ」で、開いている話を音声で読み上げます。
+  <div class="section-label" data-kw="スリープ 寝る ねる 停止 ていし 時間 じかん 分 ふん タイマー sleep timer stop time minutes tts">読み上げのタイマー</div>
+  <div class="group" id="ttsTimerList"></div>
+  <div class="hint"><ul>
+    <li>読み上げを始めてから、選んだ時間がたつと止まる (寝る前に聞くときに)</li>
+    <li>「次の話へ進む」がオンでも、時間がきたら止まる</li>
+  </ul></div>
+  <div class="hint">作品のページの ⋮ メニューの「読み上げ」で、開いている話を読み上げる。
     <ul>
-      <li>ルビは読みません。</li>
-      <li>別のページへ移ると止まります。</li>
-      <li>画面を消したり、ほかのアプリに移ったりしても続き、通知から一時停止・停止できます。</li>
-      <li>声は、Android の設定の「音声合成の出力」で選べます。</li>
+      <li>ルビは読まない</li>
+      <li>別のページへ移ると止まる</li>
+      <li>画面を消したり、ほかのアプリに移ったりしても続き、通知から一時停止・停止できる</li>
+      <li>声は、Android の設定の「音声合成の出力」で選べる</li>
     </ul>
   </div>
 </section>

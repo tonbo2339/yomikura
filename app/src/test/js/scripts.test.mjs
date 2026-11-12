@@ -27,6 +27,13 @@ t('assets/js の JS は、どれかのグループで読み込まれている (�
   for (const f of files) assert.ok(used.has(f), `${f} はどのグループにも入っていません`);
 });
 
+t('assets/js の JS は、全部、構文として読める (1 か所の書き間違いで、そのサイトの画面の注入がすべて止まるため)', () => {
+  for (const f of files) {
+    const src = fs.readFileSync(path.join(JS_DIR, f), 'utf8');
+    try { new Function(src); } catch (e) { assert.fail(`${f}: 構文エラー: ${e.message}`); }
+  }
+});
+
 t('1 つのグループに同じファイルを 2 度入れない', () => {
   for (const g of groups) {
     const list = scriptFiles(g);

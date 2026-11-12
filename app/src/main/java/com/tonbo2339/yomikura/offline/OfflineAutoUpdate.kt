@@ -36,6 +36,12 @@ object OfflineAutoUpdate {
     fun onCollected(ctx: Context, logJson: String) {
         try {
             if (!NHData.settings(ctx).optBoolean("offlineAutoUpdate", false)) return
+            // 端末の空きが少ないときは、自動では保存しない (聞けないので見送る)。手で保存するときは、始める前に聞く (ui/ui-save.js)
+            val free = StorageSpace.freeBytes(ctx)
+            if (free in 0 until StorageSpace.LOW_BYTES) {
+                DevLog.eventOf(DevLog.Category.OFFLINE, "auto update skipped", "reason" to "low space", "freeMB" to free / 1_000_000)
+                return
+            }
             val store = OfflineStore(File(ctx.filesDir, "offline"))
             val queue = SaveQueue(File(ctx.filesDir, SaveQueue.FILE_NAME))
             val list = candidates(logJson, { s, id -> store.meta(s, id).isNotEmpty() }, NHData.nsfwOn(NHData.settings(ctx)))
@@ -44,9 +50,11 @@ object OfflineAutoUpdate {
                 val meta = store.meta(site, id).toJsonOrNull() ?: continue
                 val url = meta.optString("url")
                 if (SiteUrls.safeNavUrl(url) == null) continue
+                if (NHData.nsfwOn(NHData.settings(ctx)) && SiteUrls.isR18Url(url)) continue // NSFW モード中は、R18 の作品を自動で更新しない (ハーメルンの R18 も)
                 val job = SaveQueue.Job(
                     site = site, id = id, title = meta.optString("title", id), url = url, eps = emptyList(),
                     total = meta.optInt("total"), refresh = true, addedAt = System.currentTimeMillis(),
+                    images = meta.optBoolean("images", true), // 前回「文字だけ」で保存した作品は、更新でも挿絵を取らない
                 )
                 if (queue.add(job) > 0) added++
             }

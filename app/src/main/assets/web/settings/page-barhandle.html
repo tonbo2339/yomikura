@@ -1,0 +1,39 @@
+<!-- ===== 隠している間の目印 (バー → 隠し方。「端からスワイプで出す」がオンのとき) ===== -->
+<section class="page" role="main" id="p-barhandle" data-title="隠している間の目印" data-back="タブバー" hidden>
+  <div class="section-label">目印の種類</div>
+  <div class="group">
+    <div class="cell stack"><span class="text">タブバーを隠している間に出す目印</span><div class="seg" id="barHiddenSeg"></div></div>
+  </div>
+  <div class="hint" id="barHandleNote">細い棒は、タブバーを置いてある端に出る目印です。小さなボタンは、押すとタブバーが出ます (左右に置いているときだけ)。上に置いているときは、細い棒だけです。</div>
+
+  <div id="barPosBox">
+    <div class="section-label">縦の位置</div>
+    <div class="group">
+      <div class="cell"><div class="slider"><span class="name">位置</span>
+        <button class="stepper" data-pos="-5" aria-label="上へ">−</button><input type="range" id="barPosRange" min="0" max="100" step="1" aria-label="目印の縦の位置 (0 が上、100 が下)"><button class="stepper" data-pos="5" aria-label="下へ">＋</button><span class="val" id="barPosV"></span></div></div>
+    </div>
+    <div class="hint"><ul>
+      <li>0% が上、100% が下</li>
+      <li>タブバーを端から出すときの、バーの縦の位置も、これに合わせる</li>
+      <li>小さなボタンは、指でなぞっても動かせる</li>
+    </ul></div>
+  </div>
+
+  <div id="barBtnBox">
+    <div class="section-label">小さなボタン</div>
+    <div class="group">
+      <div class="cell"><span class="text">見本</span><span class="value" id="barBtnPreview" aria-hidden="true"></span></div>
+      <div class="cell stack"><span class="text">形</span><div class="seg" id="barBtnShapeSeg"></div></div>
+      <div class="cell stack"><span class="text">マーク</span><div class="seg" id="barBtnIconSeg"></div></div>
+      <div class="cell stack"><span class="text">色</span><div class="seg" id="barBtnColorSeg"></div></div>
+      <div id="barBtnCustom" class="cell">
+        <div class="cpick" id="cpick">
+          <div class="cpick-sv" id="cpickSv" role="slider" aria-label="彩度と明るさ" tabindex="0"><i id="cpickSvDot"></i></div>
+          <div class="cpick-hue" id="cpickHue" role="slider" aria-label="色合い" tabindex="0"><i id="cpickHueDot"></i></div>
+        </div>
+      </div>
+      <div class="cell stack"><span class="text">濃さ</span><div class="seg" id="barBtnAlphaSeg"></div></div>
+    </div>
+    <div class="hint">「自由」の色: 四角で明るさと鮮やかさ、帯で色合いを決める</div>
+  </div>
+</section>

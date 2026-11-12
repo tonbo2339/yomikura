@@ -14,7 +14,6 @@ function repairFont() {
   NH.update((d) => { if (d.settings) d.settings.font = 'site'; });
 }
 const fontNames = () => FONT_NAMES.concat(CUSTOM_FONTS.map((f) => [NH_FONTS.valueOf(f.id), f.name]));
-const fontLabel = (font) => nameOf(fontNames(), font) || nameOf(FONT_NAMES, 'site');
 
 // 設定の画面の中でフォントを見せる (プレビュー) ための @font-face
 function paintFontFace() {

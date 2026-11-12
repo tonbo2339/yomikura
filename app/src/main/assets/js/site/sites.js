@@ -30,6 +30,8 @@ window.NH_SITES = {
   kakuyomu: {
     hide:
       '#contentMain-readNextEpisodeWithApp,' +
+      // ビューワー設定のパネルは、操作設定の欄だけ残す。文字サイズ・背景色・フォント・組み方向は、アプリの表示の設定 (TT。ui/ui-viewer.js) が持つので隠す
+      '.widget-displaySetting,[class*="widget-displaySetting-fontFamily"],.js-episode-setting-tab-cont ul>li:first-child,' +
       // トップの告知バナー
       '#banners,' +
       // 公式アプリへの誘導 (「アプリで開く」)
@@ -58,9 +60,12 @@ window.NH_SITES = {
   //       recommend = おすすめ (.p-recommend)、links = 作者マイページ・縦書き PDF・誤字報告・情報提供 (.c-under-nav) と共有 (.c-sns)。
   //       残すもの: ポイントの欄・リアクション・ブックマーク・前へ / 目次 / 次へ
   narou: {
-    hide: 'a[href*="onelink.me"],[class*="c-applink"],.c-novel-attention{display:none!important}',
+    // 「表示調整」のパネルは、挿絵の表示とメニューバーの追従だけ残す。配色・行間・文字サイズは、アプリの表示の設定 (TT。ui/ui-viewer.js) が持つので隠す (子の 2〜7 番目 = その 3 項目の見出しと中身)
+    hide: 'a[href*="onelink.me"],[class*="c-applink"],.c-novel-attention,.p-adjust-layout__controller>:nth-child(n+2):nth-child(-n+7){display:none!important}',
     bars: '.l-header,nav.c-follow-header,.l-footer{display:none!important}',
     episode: /^\/n\w+\/\d+\/?$/,
+    // 作品のページ (連載の目次・短編の本文。URL は同じ形)。短編 (本文の囲みがある) は、話ページと同じ扱い (early.js)
+    workRoot: /^\/n\w+\/?$/,
     body: { box: '.p-novel__text', text: '.p-novel__text,.p-novel__text p' },
     // comments には、感想の下の「▲ページの上部へ」(#view_upline) と、小説の下・感想の上に出る作者のお知らせ (.p-rankingtag。「新連載を始めました」など) も入れる
     // (畳んだら、一緒に消える)。前書き・後書きは本文の一部なので畳まない
@@ -87,5 +92,12 @@ window.NH_FOLDS = [
 window.NH_LIST_SELECTORS = {
   frame: 'main, body, [id*="container" i], [id*="contents" i], [id*="main" i], [class^="l-"], [class*=" l-"], [class*="container" i]',
   tagLinks: 'a[href*="word="], a[href*="/tags/"]',
+};
+
+// ホスト名からサイトのキー (narou / hameln / kakuyomu。対応外は '') を決める。early.js・sitecheck.js・ui-fold.js が共通で使う (判定を 1 か所にするため)。
+// なろうは syosetu.com そのものと、そのサブドメイン (ncode / novel18 など)。ハーメルンは syosetu.org と R18 の h.syosetu.org
+window.NH_siteKeyOf = (host) => {
+  const h = String(host || '');
+  return h === 'syosetu.org' || h === 'h.syosetu.org' ? 'hameln' : h === 'kakuyomu.jp' ? 'kakuyomu' : h === 'syosetu.com' || h.endsWith('.syosetu.com') ? 'narou' : '';
 };
 

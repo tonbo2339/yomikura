@@ -15,6 +15,7 @@ window.NH.define('backup', function (NH) {
     ['list', 'リスト', 'readLater', 'array'],
     ['progress', '読書位置', 'progress', 'object'],
     ['history', '閲覧履歴', 'history', 'array'],
+    ['favorites', 'お気に入り', 'favorites', 'array'],
     ['mute', 'ミュート', 'mute', 'object'],
   ];
   // 設定のうち、その時だけの物 (アイコンの「後で」の予約)。バックアップから戻さない (古いファイルを読み込むと、次の起動でアイコンが勝手に変わるため)

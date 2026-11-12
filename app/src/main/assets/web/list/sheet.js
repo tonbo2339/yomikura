@@ -1,4 +1,4 @@
-// list.html: 作品の操作シート (メモ・ジャンル・読了など)
+// list.html: 作品の操作シート (メモ・ジャンル・並び替え・削除・保存など)
 // ---- 操作シート ----
 function openSheet(key) {
   const d = load();
@@ -19,9 +19,11 @@ function openSheet(key) {
     b.onclick = () => { closeSheet(true); fn(); };
     into.appendChild(b);
   };
-  if (sortMode(d) === 'manual') act('top', '先頭へ', () => toTop(key)); // ほかの並べ替えでは、動かしても表示が変わらないので出さない
-  act('check', '読了にする', () => markDone(key));
+  if (sortMode(d) === 'manual') { act('top', '先頭へ', () => toTop(key)); act('bottom', '末尾へ', () => toBottom(key)); } // ほかの並べ替えでは、動かしても表示が変わらないので出さない
   act('swap', kindOf(it) === 'update' ? '後で読むへ' : '更新へ', () => switchKind(key));
+  const itemWork = { site: it.site, id: it.id, url: it.url };
+  const faved = NH.isFav(d, itemWork);
+  if (NH.favOn(d)) act(faved ? 'starOn' : 'star', faved ? 'お気に入りから外す' : 'お気に入りに追加', () => favToggle(itemWork, it.title, it.status));
   sh.appendChild(acts);
 
   // オフライン保存: 保存してあれば「オフラインで読む」、無ければ「オフラインに保存」。どちらも追加・更新の保存ができる
@@ -53,7 +55,7 @@ function openSheet(key) {
   inp.oninput = paintChips;
   sh.appendChild(row);
 
-  const dr = el('div', 'done-row');
+  const dr = el('div', 'sheet-actions');
   const del = el('button', 'btn danger', '削除'); del.onclick = () => { remove(key); closeSheet(); };
   const ok = el('button', 'btn primary', '保存');
   ok.onclick = () => closeSheet(true);
@@ -63,7 +65,11 @@ function openSheet(key) {
   // 外側のタップや「戻る」で閉じたときも、メモとジャンルは保存する
   ui.sheetSave = () => {
     const tag = tagsNow().join(' ');
-    if (ta.value.trim() !== (it.memo || '') || tag !== NH.tagsOf(it).join(' ')) patch(key, (x) => { x.memo = ta.value.trim(); x.tag = tag; });
+    const memo = ta.value.trim();
+    const memoChanged = memo !== (it.memo || '');
+    const tagChanged = tag !== NH.tagsOf(it).join(' ');
+    // 触った項目だけ書く (開いている間に裏の更新で変わった、もう一方の項目を古い値で上書きしない)
+    if (memoChanged || tagChanged) patch(key, (x) => { if (memoChanged) x.memo = memo; if (tagChanged) x.tag = tag; });
   };
   sheetShow(sh, it.title, () => closeSheet(true));
   history.pushState({ nhSheet: true }, ''); // Android の「戻る」でシートだけ閉じるため

@@ -30,6 +30,22 @@ class SiteUrlsTest {
         assertFalse(SiteUrls.isWorkUrl("not a url"))
     }
 
+    // 話ページだけ (作品トップ・目次・ランキングは違う)。縦書きで開くページかを、開く前に見分ける
+    @Test
+    fun episodeUrls() {
+        assertTrue(SiteUrls.isEpisodeUrl("https://ncode.syosetu.com/n1234ab/12/"))
+        assertTrue(SiteUrls.isEpisodeUrl("https://ncode.syosetu.com/n1234ab/12"))
+        assertTrue(SiteUrls.isEpisodeUrl("https://novel18.syosetu.com/n1234ab/3/"))
+        assertTrue(SiteUrls.isEpisodeUrl("https://syosetu.org/novel/12345/3.html"))
+        assertTrue(SiteUrls.isEpisodeUrl("https://h.syosetu.org/novel/12345/3.html"))
+        assertTrue(SiteUrls.isEpisodeUrl("https://kakuyomu.jp/works/1177354054/episodes/1"))
+        assertFalse(SiteUrls.isEpisodeUrl("https://ncode.syosetu.com/n1234ab/")) // 作品トップ (短編もここ)
+        assertFalse(SiteUrls.isEpisodeUrl("https://syosetu.org/novel/12345/")) // 目次
+        assertFalse(SiteUrls.isEpisodeUrl("https://kakuyomu.jp/works/1177354054"))
+        assertFalse(SiteUrls.isEpisodeUrl("https://yomou.syosetu.com/rank/top/"))
+        assertFalse(SiteUrls.isEpisodeUrl(null))
+    }
+
     @Test
     fun siteKeys() {
         assertEquals("narou", SiteUrls.siteKeyOf("https://yomou.syosetu.com/"))

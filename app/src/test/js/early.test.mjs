@@ -16,7 +16,7 @@ function open(host, path, { settings, ratio, mode, dom } = {}) {
   if (mode) store['nh-size-mode'] = mode;
   const listeners = {};
   const location = { hostname: host, pathname: path, hash: '', search: '' };
-  const documentElement = { appendChild: (el) => styles.push(el) };
+  const documentElement = { appendChild: (el) => styles.push(el), toggleAttribute() {} };
   const history = {
     pushState(_s, _t, url) { location.pathname = url; },
     replaceState(_s, _t, url) { location.pathname = url; },
@@ -52,6 +52,7 @@ function open(host, path, { settings, ratio, mode, dom } = {}) {
   ctx.window = ctx;
   vm.createContext(ctx);
   vm.runInContext(read('site/fonts.js'), ctx); // 書体の表 (scripts.json の early の先頭)
+  vm.runInContext(read('site/readbg.js'), ctx); // 背景色の表
   vm.runInContext(read('site/sites.js'), ctx);
   vm.runInContext(read('site/early.js'), ctx);
   return {
@@ -169,6 +170,22 @@ test('書体: サイト標準・形の違う値は何も付けない', () => {
   for (const font of ['site', 'custom:zzz', undefined]) {
     assert.ok(!bodyCss(open('ncode.syosetu.com', '/n1/1/', { settings: { font } })).includes('font-family'), String(font));
   }
+});
+
+test('行間: 数だけを CSS にする (文字列は混ぜない)', () => {
+  assert.match(bodyCss(open('ncode.syosetu.com', '/n1/1/', { settings: { lh: 1.8 } })), /line-height:1\.8!important/);
+  assert.ok(!bodyCss(open('ncode.syosetu.com', '/n1/1/', { settings: { lh: '1;}body{display:none' } })).includes('line-height'));
+});
+
+test('カクヨム: 背景色と bars の両方があっても、history の包みは 1 重で、両方が切り替わる', () => {
+  const p = open('kakuyomu.jp', '/works/1', { settings: { readBg: 'cream' } });
+  const readbg = () => p.styles.find((s) => s.id === 'nh-readbg');
+  assert.equal(readbg().media, 'not all');
+  p.nav('/works/1/episodes/2');
+  assert.equal(p.bars().media, 'all');
+  assert.equal(readbg().media, 'all');
+  p.back('/works/1');
+  assert.equal(readbg().media, 'not all');
 });
 
 test('対応サイトでなければ何も付けない', () => {

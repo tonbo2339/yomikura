@@ -17,7 +17,12 @@
     // 自動更新 (job.refresh): 話の一覧は渡されないので、この作品のページ (目次) を読んで、保存していない話を求める
     let plan;
     if (job.refresh) {
-      plan = await NH.offlinePlan(adapter, w);
+      // 目次の代わりに確認画面 (Cloudflare・年齢確認) が出ていたら、話が 0 件に見えて「何も無かった」で終わってしまう。止められたと知らせる
+      const blocked = () => { NH.markRest && NH.markRest(adapter.id); return native.finished(JSON.stringify({ blocked: true, ok: 0, total: 0 }), T); };
+      if (NH.isChallenge && NH.isChallenge(document)) return blocked();
+      try { plan = await NH.offlinePlan(adapter, w); } catch (e) { if (e && e.message === NH.CHALLENGE) return blocked(); throw e; } // 目次の 2 ページ目以降で確認画面
+      // 目次が読めない (作りが変わった・ログイン切れ) と、何も無かったことになって静かに終わる。止めたと知らせる
+      if (!plan.eps.length) return native.finished(JSON.stringify({ error: '目次を読めませんでした' }), T);
       plan.images = job.images !== false;
     } else {
       plan = NH.offlinePlanFrom(adapter, w, job.eps, job.title, job.total, job.images);
@@ -25,7 +30,8 @@
     const st = await NH.offlineRun(adapter, w, plan, plan.todo, {
       shouldStop: () => native.stopRequested(T),
       offline: () => !!(native.offline && native.offline(T)),
-      wait: async () => { while (native.waiting(T) && !native.stopRequested(T)) await NH.sleep(2000); },
+      // 一時停止・Wi-Fi 待ち・回線待ちのあいだ、確認の間隔を少しずつ延ばす (2 → 3 → 5 秒)。一晩待つあいだ、端末を 2 秒ごとに起こさない
+      wait: async () => { for (let ms = 2000; native.waiting(T) && !native.stopRequested(T); ms = Math.min(5000, ms + 1000)) await NH.sleep(ms); },
       onEpisode: (e, s) => native.progress(JSON.stringify({ ok: s.ok, total: plan.todo.length, title: e.title }), T),
     });
     native.finished(JSON.stringify({

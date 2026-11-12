@@ -15,18 +15,22 @@
 
   // サイトごとの CSS・セレクターは sites.js (window.NH_SITES)。このスクリプトの前にアプリが入れる
   const SITES = window.NH_SITES || {};
-  const siteKey = h === 'syosetu.org' || h === 'h.syosetu.org' ? 'hameln' : h === 'kakuyomu.jp' ? 'kakuyomu' : h === 'syosetu.com' || h.endsWith('.syosetu.com') ? 'narou' : '';
+  const siteKey = window.NH_siteKeyOf(h);
   const site = SITES[siteKey];
   if (site) {
     css = site.hide;
-    if (site.still) css += site.still + ',' + site.still + ' *{animation:none!important}';
+    // still は複数のセレクター (カンマ区切り) でもよい。子孫にも効かせるため、1 つずつに ' *' を付ける
+    if (site.still) css += site.still + ',' + site.still.split(',').map((x) => x + ' *').join(',') + '{animation:none!important}';
     body = site.body;
     fold = site.fold;
     foldSite = siteKey;
   }
   // ヘッダー・フッター (sites.js の bars) は読書ページ (episode) だけ隠す。別の <style id="nh-bars"> にして、media で有効 / 無効を切り替える
   const bars = (site && site.bars) || '';
-  const isReading = () => !!(site && site.episode && site.episode.test(location.pathname));
+  // 短編 (なろう。URL は連載の目次と同じ形) は、ページが読めて本文の囲みがあると分かったとき、読書ページとして扱う (watchShort)
+  let shortPage = false;
+  const syncs = []; // 読書ページかどうかで切り替える物の、切り替えの関数 (putReadingOnly)
+  const isReading = () => !!(site && ((site.episode && site.episode.test(location.pathname)) || shortPage));
 
   // オフライン保存 (#nh-save): ページの中身を描かずに、保存の画面 (ui.js の .nh-ov) と同じ地色で覆う。
   // ui.js はページの読み込みが終わってから画面を出すので、それまでサイトのページがちらっと見えないように。
@@ -73,17 +77,18 @@
       size = { want: (s.size || 100) / 100, ratio, mode };
       const F = window.NH_FONTS; // 書体の表 (site/fonts.js)
       if (F && F.family(s.font)) css += F.face(s.font, true) + body.text + '{font-family:' + F.family(s.font) + '!important}';
-      if (s.lh) css += body.text + '{line-height:' + s.lh + '!important}';
+      if (Number(s.lh) > 0) css += body.text + '{line-height:' + Number(s.lh) + '!important}'; // 数として作る (CSS に文字列を混ぜない)
       if (window.NH_READBG) readBgCss = window.NH_READBG.css(s.readBg, body); // 読書ページの背景色 (site/readbg.js)
     }
   } catch (e) { /* 設定なし */ }
 
   if (!css && !bars && !readBgCss && !cover && !size) return;
+  const head = () => document.head || document.documentElement;
   const add = (text, id) => {
     const el = document.createElement('style');
     if (id) el.id = id;
     el.textContent = text;
-    (document.head || document.documentElement).appendChild(el);
+    head().appendChild(el);
     return el;
   };
   // 本文の元の大きさを測って比を控え、控えと違っていれば (初めてのサイト・サイト側の変更) 直す。font-size が効いていなければ zoom に切り替える
@@ -128,12 +133,27 @@
     const el = add(text, id);
     const sync = () => { const on = isReading(); el.media = on ? 'all' : 'not all'; if (onSync) onSync(on); };
     sync();
+    syncs.push(sync);
+    hookHistory();
+  };
+  // history の書き換えと戻る操作を 1 度だけ包み、syncs を全部呼ぶ (putReadingOnly が何度呼ばれても、包みは重ねない)
+  let hooked = false;
+  const hookHistory = () => {
+    if (hooked) return;
+    hooked = true;
+    const syncAll = () => syncs.forEach((f) => f());
     ['pushState', 'replaceState'].forEach((m) => {
       const orig = history[m];
       if (typeof orig !== 'function') return;
-      history[m] = function () { const r = orig.apply(this, arguments); sync(); return r; };
+      history[m] = function () { const r = orig.apply(this, arguments); syncAll(); return r; };
     });
-    window.addEventListener('popstate', sync);
+    window.addEventListener('popstate', syncAll);
+  };
+  // 作品のページ (workRoot) で、本文の囲みがある = 短編。DOM が読めてから分かる (連載の目次には本文の囲みが無い)
+  const watchShort = () => {
+    if (!site || !site.workRoot || !body || !site.workRoot.test(location.pathname) || (site.episode && site.episode.test(location.pathname))) return;
+    const check = () => { if (!shortPage && document.querySelector(body.box)) { shortPage = true; syncs.forEach((f) => f()); } };
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', check); else check();
   };
   const put = () => {
     if (css) add(css);
@@ -143,11 +163,12 @@
       // (読書ページにいる間だけ。meta は読書ページを離れたら外す)
       let meta = null;
       putReadingOnly(readBgCss, 'nh-readbg', (on) => {
-        if (on && !meta) { meta = document.createElement('meta'); meta.name = 'color-scheme'; meta.content = 'light dark'; (document.head || document.documentElement).appendChild(meta); }
+        if (on && !meta) { meta = document.createElement('meta'); meta.name = 'color-scheme'; meta.content = 'light dark'; head().appendChild(meta); }
         else if (!on && meta) { meta.remove(); meta = null; }
         document.documentElement.toggleAttribute('data-nh-readbg', on); // ui/ui-readbg.js が、読書ページかどうかをここで見る
       });
     }
+    watchShort();
     if (size) {
       const sc = sizeCss();
       if (sc) add(sc, 'nh-size');

@@ -1,11 +1,13 @@
 <!-- ===== ログイン ===== -->
 <section class="page" role="main" id="p-accounts" hidden>
   <div id="accountList"></div>
-  <div class="hint">ログイン情報は、この端末の中にだけ保存します。「ログイン済み」は、Cookie の有無で判断しています。</div>
+  <div class="hint"><ul>
+    <li>ログイン情報は、この端末の中にだけ保存する</li>
+    <li>「ログイン済み」は、Cookie の有無で判断する</li>
+  </ul></div>
   <div class="group" style="margin-top:20px">
     <button class="cell danger" id="clearLogins">すべてのログイン情報 (Cookie) を削除</button>
   </div>
-  <div class="hint">なろう・ハーメルン・カクヨムのログインをまとめて消します。</div>
   <div class="group" id="totpGroup" style="margin-top:20px" hidden>
     <div class="cell"><span class="text">なろうの 2 段階認証</span><span class="value" id="totpState"></span></div>
     <button class="cell danger" id="totpClear" hidden>登録した認証アプリの鍵を削除</button>
@@ -19,8 +21,8 @@
     </ol>
     <div>鍵の保存:</div>
     <ul>
-      <li>端末の中で暗号化して保存します。</li>
-      <li>Android の自動バックアップと、設定の書き出しには入りません。</li>
+      <li>端末の中で暗号化して保存する</li>
+      <li>Android の自動バックアップと、設定の書き出しには入らない</li>
     </ul>
   </div>
 </section>

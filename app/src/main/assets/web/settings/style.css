@@ -21,12 +21,18 @@
   /* 押せる範囲は 40px、見える丸は 28px (背景を内側だけに塗る) */
   .swatch { width: 40px; height: 40px; border-radius: 50%; border: 0; padding: 6px; background-clip: content-box; cursor: pointer; }
   .swatch.on { box-shadow: inset 0 0 0 2px var(--fg); }
+  /* 白や薄い色も、白い欄の上で輪郭が見えるように、細い縁を付ける (背景色の丸) */
+  .swatch.ring { width: 28px; height: 28px; margin: 6px; padding: 0; background-clip: border-box; border: 1px solid rgba(128, 128, 128, .45); }
+  .swatch.ring.on { box-shadow: none; outline: 2px solid var(--fg); outline-offset: 2px; }
+  /* 「自由」の丸 (虹色)。選ぶと、下に色の四角と帯 (.cpick) が出る */
+  .swatch.custom { background-image: conic-gradient(#f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00); }
+  .cpick-wrap { width: 100%; margin-top: 10px; }
   .name-top .text { flex: none; min-width: 6em; } /* サイト名の長さで入力欄の幅が変わらないように揃える */
   .tab-move { display: flex; flex: none; margin-right: -6px; }
   .tab-move .icon-btn { width: 40px; height: 40px; border-radius: 10px; }
   .tab-move .icon-btn:disabled { opacity: .25; }
   /* 画面 (トップと詳細)。詳細は右からスライドして入る (iOS のナビゲーション) */
-  .page { min-height: 100vh; }
+  .page { min-height: calc(100vh - 40px); } /* 40px = body の下の余白 (app.css)。引かないと、画面より 40px 長くなり、短い画面でもスクロールしてしまう */
   .page.enter { animation: push .32s cubic-bezier(.3, .7, .4, 1); }
   .page.back { animation: pop .28s cubic-bezier(.3, .7, .4, 1); }
   @keyframes push { from { transform: translateX(40%); opacity: 0; } }
@@ -60,6 +66,7 @@
   .step { width: 40px; height: 40px; border-radius: 50%; background: var(--surface-2); font-size: 18px; font-weight: 600; color: var(--accent-text); flex: none; }
   .step:active { opacity: .5; }
   .preview { padding: 18px; border-radius: var(--r); background: var(--surface); }
+  .preview.vertical { writing-mode: vertical-rl; height: 240px; overflow-x: auto; overflow-y: hidden; } /* 「サイトの本文を縦書きで表示」がオンのとき: 縦書きの見本 (右から左へ) */
 
   /* アイコンの選択 */
   .icons { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px 14px; padding: 16px; }
@@ -111,3 +118,30 @@
 .ico.lock.anim { transition: background-color .3s; }
 .ico.lock.anim .shackle { transition: transform .35s cubic-bezier(.3, 1.4, .5, 1); }
 @media (prefers-reduced-motion: reduce) { .ico.lock.anim, .ico.lock.anim .shackle { transition: none; } }
+/* 広い画面 (タブレット・横向き): 左に設定の一覧、右にその詳細 (show() が body.split を付ける)。左の一覧は固定で、右だけスクロールする */
+@media (min-width: 900px) {
+  body { max-width: 1180px; }
+  .split #p-main { position: fixed; top: 0; bottom: 0; left: calc(max(0px, (100vw - 1180px) / 2) + 16px); width: 340px; overflow-y: auto; padding-bottom: 40px; }
+  .split .page:not(#p-main) { margin-left: 364px; }
+  .split .page.enter, .split .page.back { animation: none; }
+  .split .page:not(#p-main) .nav:not(.sub) .back { visibility: hidden; } /* 設定の直下のページは、左に一覧があるので戻るボタンは要らない。その中のページ (.sub) には出す */
+  .split #p-main .cell.current { background: var(--accent-soft); }
+}
+/* 色を選ぶ四角 (settings/toggles-and-actions.js の cpick): 左は彩度 (右ほど濃い) と明るさ (上ほど明るい)、右の帯は色合い */
+.cpick { display: flex; gap: 12px; width: 100%; touch-action: none; }
+.cpick-sv { position: relative; flex: 1; height: 170px; border-radius: 12px; touch-action: none; outline-offset: 2px; }
+.cpick-hue { position: relative; width: 36px; height: 170px; border-radius: 12px; touch-action: none; background: linear-gradient(to bottom, #f00, #ff0 17%, #0f0 33%, #0ff 50%, #00f 67%, #f0f 83%, #f00); outline-offset: 2px; }
+.cpick i { position: absolute; width: 22px; height: 22px; margin: -11px 0 0 -11px; border-radius: 50%; border: 3px solid #fff; box-shadow: 0 0 0 1.5px rgba(0, 0, 0, .45), 0 2px 6px rgba(0, 0, 0, .4); pointer-events: none; }
+/* 小さなボタンの見本 (設定 → バー → 隠している間の目印) */
+.barbtn-preview { display: inline-grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; }
+.barbtn-preview svg { width: 22px; height: 22px; fill: currentColor; }
+.barbtn-preview .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+  /* 設定の検索 (search.js): トップの上の枠・結果・見つけた項目の光り */
+  .search { margin: 4px 0 12px; }
+  .search input { width: 100%; box-sizing: border-box; height: 44px; padding: 0 14px; border: 0; border-radius: 12px; background: var(--surface-2); color: var(--fg); font: inherit; font-size: 17px; }
+  .search input::placeholder { color: var(--sub); }
+  .search-hit { flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; }
+  .search-hit .text { white-space: normal; }
+  .search-hit .where { font-size: 12px; color: var(--sub); }
+  .search-flash { animation: search-flash 1.8s ease-out; }
+  @keyframes search-flash { 0%, 40% { background: color-mix(in srgb, var(--accent-fill) 28%, transparent); } 100% { background: transparent; } }

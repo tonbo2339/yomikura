@@ -25,7 +25,7 @@ window.NH_UI_LIST_SHEET = function (ctx) {
     const paint = () => {
       sheet.textContent = '';
       const verb = mode === 'mute' ? 'ミュート' : 'ブロック';
-      sheet.appendChild(mk('div', 'nh-sheet-title', entry.title));
+      sheet.appendChild(mk('div', 'nh-sheet-title', entry.title || ''));
       const seg = mk('div', 'nh-sheet-seg');
       [['mute', 'ミュート'], ['block', 'ブロック']].forEach(([k, label]) => {
         const b = mk('button', k === mode ? 'on' : '', label);
@@ -38,7 +38,7 @@ window.NH_UI_LIST_SHEET = function (ctx) {
       const g = mk('div', 'nh-sheet-group');
       if (mode === 'block') {
         const b = mk('button', 'nh-sheet-row', 'この作品をブロック');
-        const short = entry.title.length > 20 ? entry.title.slice(0, 20) + '…' : entry.title; // お知らせが長くなりすぎないように
+        const ttl = entry.title || ''; const short = ttl.length > 20 ? ttl.slice(0, 20) + '…' : ttl; // お知らせが長くなりすぎないように
         b.addEventListener('click', () => add('works', { key: entry.key, title: entry.title }, '「' + short + '」'));
         g.appendChild(b);
       }

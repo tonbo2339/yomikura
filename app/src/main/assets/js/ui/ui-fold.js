@@ -7,7 +7,7 @@ window.NH_UI_FOLD = function (ctx) {
   const FOLD = (window.NH_FOLDS || []).map((f) => [f.key, f.flag, f.label]); // 種類の表は sites.js (NH_FOLDS)
   const openers = {};
   const repaints = {};
-  const foldSite = /^(h\.)?syosetu\.org$/.test(location.hostname) ? 'hameln' : location.hostname === 'kakuyomu.jp' ? 'kakuyomu' : 'narou';
+  const foldSite = window.NH_siteKeyOf(location.hostname) || 'narou'; // 判定は sites.js の NH_siteKeyOf (対応外はなろう扱い)
   const rememberFold = (k, open) => {
     if (!NH.flag(NH.load(), 'foldRemember')) return;
     NH.update((d) => {

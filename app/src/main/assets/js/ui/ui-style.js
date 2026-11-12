@@ -48,10 +48,30 @@ window.NH_UI_STYLE = function () {
     .nh-fold{display:block;box-sizing:border-box;width:calc(100% - 24px);margin:10px 12px;height:42px;border:1.5px solid rgba(128,128,134,.3);border-radius:12px;
       background:transparent;color:#85858b;font:600 14px "Noto Sans JP",sans-serif;cursor:pointer}
     .nh-fold:active{opacity:.6}
+    /* カクヨムの縦組み (body の class writingDirection-vertical): 幅いっぱい・高さ 42px だと、縦組みの流れの中で潰れて文字があふれるので、縦長のボタンにする */
+    body.writingDirection-vertical .nh-fold{writing-mode:vertical-rl;width:42px;height:fit-content;max-height:calc(100vh - 32px);margin:12px 10px;padding:14px 0;white-space:nowrap;overflow:hidden}
     .nh-toast{position:fixed;left:50%;bottom:max(24px,env(safe-area-inset-bottom));transform:translateX(-50%);z-index:2147483647;max-width:88vw;
       background:#2b2621;color:#f2ede7;padding:12px 20px;border-radius:14px;font:600 14px/1.4 "Noto Sans JP",sans-serif;
       box-shadow:0 10px 30px rgba(0,0,0,.35);animation:nhin .22s cubic-bezier(.2,.8,.2,1)}
     @keyframes nhin{from{opacity:0;transform:translate(-50%,12px)}}
+    /* 縦書きの読み終わりカード (縦書きの箱 #nh-vwrap の左端 = 読み終わり)。縦書きの文字の向きで、縦長に作る。右から左へ: 見出し → ボタン (次の作品・リストへ) */
+    .nh-next-v{display:flex;flex-direction:column;align-items:stretch;justify-content:flex-start;gap:10px;width:auto;height:min(460px,calc(100vh - 120px))!important;max-height:calc(100vh - 32px);vertical-align:middle;margin:16px 24px!important;padding:22px 18px;writing-mode:vertical-rl;box-sizing:border-box;border-radius:28px;background:#fff;color:#1f1a16;border:1px solid rgba(60,40,20,.10);box-shadow:0 10px 30px rgba(40,30,20,.16);overflow:hidden}
+    .nh-vwrap>.nh-next-v{position:relative;top:50%;transform:translateY(-50%);margin:0 24px!important} /* なろう・ハーメルンの縦書きの箱 (左端) では、縦の真ん中に。カクヨムは、サイト自身の縦組みの流れの中 (ui-next.js が nh-next-v を付ける) */
+    /* 並び (右から左へ): 見出し | 次の作品 (主。緑) | 読み終えてリストへ | リストを見る。ボタンは、カードの高さいっぱいに伸ばして、高さをそろえる。主のボタンは、下に「←」(次へ進む向き) */
+    .nh-next-v .nh-next-cap{order:0;display:block;margin:0;padding:0 12px 0 4px;border-left:1px solid rgba(60,40,20,.14);text-align:center;font-size:12px;font-weight:700;letter-spacing:.3em;color:#6f645a;white-space:nowrap}
+    .nh-next-v .nh-next-cap::before,.nh-next-v .nh-next-cap::after{display:none}
+    .nh-next-v .nh-next-row{display:contents}
+    .nh-next-v .nh-next-row .nh-next-btn{order:1;display:block;flex:0 0 auto;width:auto;height:auto;margin:0;padding:18px 16px 58px;text-align:start;border-radius:22px;writing-mode:vertical-rl;overflow:hidden}
+    .nh-next-v .nh-next-btn::after{display:block;right:auto;top:auto;left:50%;bottom:16px;margin:0 0 0 -14px;transform:rotate(180deg)}
+    .nh-next-v .nh-next-btn .t1,.nh-next-v .nh-next-btn .t2,.nh-next-v .nh-next-btn .t3{display:block;margin:0 0 0 10px;max-height:100%;overflow:hidden}
+    .nh-next-v .nh-next-btn .t1{font-size:12px}
+    .nh-next-v .nh-next-btn .t2{font-size:17px;font-weight:800;line-height:1.5;word-break:break-all;text-orientation:upright} /* 題名の英字も、横に倒さず、縦に起こす */
+    .nh-next-v .nh-next-btn .t3{font-size:12px;margin-left:0;text-orientation:upright} /* 「残り 48 作品」の数字を、横に倒さず、縦に起こす */
+    .nh-next-v .nh-next-leave,.nh-next-v .nh-next-sub,.nh-next-v .nh-next-fav{flex:0 0 auto;display:block;box-sizing:border-box;width:56px;height:auto;margin:0;padding:16px 0;writing-mode:vertical-rl;white-space:nowrap;border-radius:22px;line-height:1.5;text-align:center;font-size:14px} /* 2 つとも 1 列。同じ幅 */
+    .nh-next-v .nh-next-leave br{display:none}
+    .nh-next-v .nh-next-fav{order:1}
+    .nh-next-v .nh-next-leave{order:2}
+    .nh-next-v .nh-next-sub{order:3;background:transparent;border:1.5px solid rgba(60,40,20,.18);color:#6f645a}
     .nh-next{margin:40px 16px 96px;padding:18px;border-radius:24px;background:#fff;color:#1f1a16;
       font-family:"Noto Sans JP",sans-serif;box-shadow:0 1px 2px rgba(0,0,0,.06),0 10px 30px rgba(30,20,10,.12);border:1px solid rgba(60,40,20,.08)}
     .nh-next.inline{margin:20px 12px 28px;text-align:left;clear:both}
@@ -65,21 +85,53 @@ window.NH_UI_STYLE = function () {
     .nh-next-btn .t1{display:block;font-size:12px;font-weight:700;opacity:.85;margin-bottom:4px;letter-spacing:.04em}
     .nh-next-btn .t2{display:block;font-size:16px;font-weight:800;line-height:1.45;word-break:break-all}
     .nh-next-btn .t3{display:block;font-size:12px;opacity:.8;margin-top:6px}
+    .nh-next-btn .t3 .n{margin-inline:.3em}
+    .nh-next-v .nh-next-btn .t3 .n{margin-inline:0}
+    .nh-next-v .nh-next-btn .t3 .n.tcy{text-combine-upright:all}
     .nh-next-btn.last{background:linear-gradient(135deg,#4a3a2c,#2b221b);box-shadow:0 8px 22px rgba(40,30,20,.3)}
-    .nh-next-sub{display:block;width:100%;margin-top:10px;height:44px;border:0;border-radius:14px;background:#efeae3;color:#1f1a16;font:700 14px "Noto Sans JP",sans-serif;cursor:pointer}
+    .nh-next-sub{display:block;width:100%;margin-top:10px;min-height:48px;border:0;border-radius:14px;background:#efeae3;color:#1f1a16;font:700 14px "Noto Sans JP",sans-serif;cursor:pointer}
     .nh-next-row{display:flex;gap:10px;align-items:stretch}
     .nh-next-row .nh-next-btn{flex:1;min-width:0}
     .nh-next-leave{flex:0 0 auto;width:92px;white-space:pre-line;border:0;border-radius:18px;background:#efeae3;color:#1f1a16;font:700 13px/1.4 "Noto Sans JP",sans-serif;cursor:pointer;padding:0 8px}
     .nh-next-leave:active{opacity:.7}
-    .nh-toc-top{display:block;padding:12px 16px;font:700 14px "Noto Sans JP",sans-serif;color:#23744a;text-decoration:none;background:#f6f2ec;border-bottom:1px solid rgba(60,40,20,.08)}
-    .nh-toc-top:active{opacity:.7}
+    .nh-next-leave.done{opacity:.6;cursor:default}
+    .nh-next-fav{display:block;width:100%;margin:0 0 10px;min-height:52px;border:0;border-radius:14px;background:#fff1c2;color:#5a4100;font:800 15px "Noto Sans JP",sans-serif;cursor:pointer}
+    .nh-next-fav:active{opacity:.7}
+    .nh-next-fav.added{background:#e3efe3;color:#1d5a2c;cursor:default}
+    /* 話ページの上の列 (カクヨムだけ): 横書きは、ページの一番上に置くだけ (スクロールで流れる。下の本文は、列の高さの分だけ下げる)。縦書きだけは、画面の上に固定して、本文のタップで出し入れする (html.nh-vbars) */
+    .nh-toc-top{position:absolute;top:0;left:0;right:0;z-index:20;display:flex;align-items:center;gap:2px;padding:0 8px 0 6px;height:48px;box-sizing:border-box;background:var(--nh-bar-bg,#f6f2ec);border-bottom:1px solid rgba(128,128,128,.25)}
+    html.nh-has-toc body{padding-top:48px!important}
+    .nh-toc-link{flex:1;min-width:0;display:flex;gap:0;align-items:center;overflow:hidden}
+    .nh-panel-btn{display:block;width:calc(100% - 24px);margin:12px;padding:12px 14px;border:1px solid #1e9a55;border-radius:10px;background:#fff;color:#1e9a55;font:700 15px "Noto Sans JP",sans-serif;cursor:pointer} /* サイトのパネルの下の、アプリの表示の設定を開くボタン (なろう) */
+    .nh-toc-nav{flex:none;padding:10px 12px;font:700 14px "Noto Sans JP",sans-serif;color:var(--nh-bar-fg,#23744a);text-decoration:none;white-space:nowrap}
+    a.nh-toc-nav:active{opacity:.6}
+    .nh-toc-tool{flex:none;display:grid;place-items:center;width:44px;height:44px;border:0;border-radius:50%;background:none;color:var(--nh-bar-fg,#23744a);cursor:pointer}
+    .nh-toc-tool:active{background:rgba(47,143,91,.14)}
+    /* 縦書きのとき: 上の列は、縦に倒れず、画面の上に固定する */
+    html.nh-vbars #nh-toc-top{position:fixed;top:var(--nh-top-inset,0px);writing-mode:horizontal-tb;direction:ltr;background:color-mix(in srgb,var(--nh-bar-bg,#f6f2ec) 86%,transparent);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);transition:transform .22s ease}
+    html.nh-vbars #nh-toc-top.nh-bar-hidden{transform:translateY(-100%)}
+    @media (prefers-reduced-motion:reduce){html.nh-vbars #nh-toc-top{transition:none}}
+    /* なろう・ハーメルンの縦書き (ui-vertical.js): サイトのほかの部分は隠し、本文の箱だけを縦書きで出す (アプリが足したものは nh- で始まる印で残す) */
+    html.nh-v.nh-has-toc body{padding-top:0!important}
+    html.nh-v body>*:not(#nh-vwrap):not([id^="nh-"]):not([class^="nh-"]){display:none!important}
+    .nh-vwrap{position:fixed;left:0;right:0;top:0;bottom:0;z-index:5;overflow-x:auto;overflow-y:hidden;writing-mode:vertical-rl;box-sizing:border-box;padding:16px 20px}
+    .nh-vwrap>*:not(.nh-vnav):not(.nh-next-v){display:block;height:100%;margin:0 0 0 24px!important;padding:0!important;max-width:none!important}
+    .nh-vwrap p{margin:0!important}
+    .nh-vwrap img{max-height:86vh;width:auto;max-width:none}
+    .nh-vwrap .tcy{text-combine-upright:all}
+    .nh-vwrap .upr{text-orientation:upright}
+    .nh-vnav{display:flex;align-items:center;justify-content:center;gap:10px;height:100%;padding:0 12px;writing-mode:vertical-rl}
+    .nh-vbtn{padding:14px 10px;border:1px solid rgba(60,60,67,.3);border-radius:10px;background:#fff;color:#23744a;font:600 14px "Noto Sans JP",sans-serif;line-height:1.2;cursor:pointer}
+    .nh-vbtn:disabled{opacity:.25;pointer-events:none}
     .nh-hist{display:inline-block;margin:4px 0 2px;padding:2px 10px;border-radius:999px;background:rgba(47,143,91,.12);color:#23744a;font:700 12px/1.6 "Noto Sans JP",sans-serif}
-    .nh-banner{position:fixed;left:16px;right:16px;bottom:max(20px,env(safe-area-inset-bottom));z-index:2147483647;border:0;text-align:left;cursor:pointer;
+    .nh-banner{position:fixed;left:16px;right:16px;max-width:640px;margin:0 auto;bottom:max(20px,env(safe-area-inset-bottom));z-index:2147483647;border:0;text-align:left;cursor:pointer;
       padding:14px 18px;border-radius:14px;background:#2b2621;color:#f2ede7;font:600 14px/1.5 "Noto Sans JP",sans-serif;box-shadow:0 10px 30px rgba(0,0,0,.35);
       animation:nhin .22s cubic-bezier(.2,.8,.2,1)}
     .nh-chips{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 6px}
     .nh-chips .nh-chip{margin:0}
-    .nh-chip-mute{border-color:rgba(120,120,128,.45);color:#6e6e73;background:#fff}
+    .nh-chip-fav{border-color:#c98a00;color:#8a5d00}
+    .nh-chip-fav.on{background:#c98a00;color:#fff;border-color:#c98a00}
+    .nh-chip-mute{border-color:rgba(120,120,128,.45);color:#6e6e73}
     .nh-read{opacity:.5}
     .nh-read-tag{display:inline-flex;align-items:center;height:28px;padding:0 10px;border-radius:999px;background:rgba(120,120,128,.16);color:#6e6e73;font:700 12px "Noto Sans JP",sans-serif}
     .nh-muted{display:none!important}
@@ -89,23 +141,27 @@ window.NH_UI_STYLE = function () {
     .nh-sheet-seg button{flex:1;height:34px;border:0;border-radius:8px;background:none;color:#000;font:600 14px "Noto Sans JP",sans-serif;cursor:pointer}
     .nh-sheet-seg button.on{background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.15)}
     .nh-sheet-note{font-size:12px;color:rgba(60,60,67,.6);margin:-4px 4px 12px}
+    .nh-sheet-note.nh-vs-note{margin:12px 4px 12px} /* 表示の設定のシート: 説明文は、背景色の一覧 (角丸の箱) の下に置く。上を詰めると、箱の下端に食い込む */
     .nh-reveal .nh-muted,.nh-muted.nh-muted-dim{display:revert!important;opacity:.35}
     .nh-muted::before{content:"ミュート中 (" attr(data-nh-muted) ")";display:block;font:600 12px/1.6 "Noto Sans JP",sans-serif;color:#ff3b30}
     .nh-mute-pill{position:fixed;left:50%;transform:translateX(-50%);bottom:max(20px,env(safe-area-inset-bottom));z-index:2147483646;border:0;cursor:pointer;
       padding:10px 18px;border-radius:999px;background:rgba(44,44,46,.94);color:#fff;font:600 13px/1.3 "Noto Sans JP",sans-serif;box-shadow:0 6px 20px rgba(0,0,0,.3)}
     .nh-mute-pill[hidden],.nh-read-tag[hidden]{display:none!important}
     .nh-filtered{display:none!important}
-    .nh-filter{position:fixed;left:12px;right:12px;bottom:max(14px,env(safe-area-inset-bottom));z-index:2147483646;display:flex;gap:2px;padding:3px;
-      border-radius:12px;background:#f2f2f7;box-shadow:0 6px 24px rgba(0,0,0,.18);font:500 13px/1 "Noto Sans JP",sans-serif}
+    :root{--nh-edge:max(14px,env(safe-area-inset-bottom))} /* 下に固定する小さな部品 (絞り込み・お知らせ・ミュートの印) の、画面の下からの距離 */
+    .nh-filter{position:fixed;left:12px;right:12px;max-width:600px;margin:0 auto;bottom:var(--nh-edge);z-index:2147483646;display:flex;gap:2px;padding:3px;
+      border-radius:12px;background:#f2f2f7;box-shadow:0 6px 24px rgba(0,0,0,.18);font:500 13px/1 "Noto Sans JP",sans-serif;will-change:transform}
     .nh-filter[hidden]{display:none}
+    .nh-filter.nh-snap{transition:transform .18s ease}
+    @media (prefers-reduced-motion:reduce){.nh-filter.nh-snap{transition:none}}
     /* 下の絞り込みが出ているときは、お知らせ・ミュートの印をその上に出す (重ねて隠さない) */
-    body:has(.nh-filter:not([hidden])) :is(.nh-toast,.nh-banner,.nh-mute-pill){bottom:calc(max(14px,env(safe-area-inset-bottom)) + 50px)}
+    html.nh-has-filter :is(.nh-toast,.nh-banner,.nh-mute-pill){bottom:calc(var(--nh-edge) + 50px)}
     .nh-filter button{flex:1;border:0;background:none;color:#000;padding:9px 2px;border-radius:9px;font:inherit;cursor:pointer;white-space:nowrap}
     .nh-filter button.on{background:#fff;font-weight:700;box-shadow:0 2px 6px rgba(0,0,0,.12)}
-    .nh-has-filter .nh-mute-pill{bottom:calc(max(14px,env(safe-area-inset-bottom)) + 56px)}
     .nh-has-filter body{padding-bottom:72px}
     .nh-scrim{position:fixed;inset:0;z-index:2147483646;background:rgba(0,0,0,.35)}
-    .nh-sheet{position:fixed;left:0;right:0;bottom:0;z-index:2147483647;max-height:85vh;overflow-y:auto;background:#f2f2f7;color:#000;
+    .nh-sheet,.nh-dialog{writing-mode:horizontal-tb!important;direction:ltr!important} /* 縦書きの話ページ (body が縦組み) でも、シート・ダイアログは横組みのまま */
+    .nh-sheet{position:fixed;left:0;right:0;bottom:0;max-width:720px;margin:0 auto;z-index:2147483647;max-height:85vh;overflow-y:auto;background:#f2f2f7;color:#000;
       border-radius:14px 14px 0 0;padding:16px 16px max(20px,env(safe-area-inset-bottom));font:15px/1.45 "Noto Sans JP",sans-serif;
       animation:nhup .28s cubic-bezier(.3,.7,.4,1)}
     @keyframes nhup{from{transform:translateY(100%)}}
@@ -115,6 +171,22 @@ window.NH_UI_STYLE = function () {
     .nh-sheet-row{display:block;width:100%;min-height:50px;border:0;background:#fff;color:#ff3b30;font:500 16px "Noto Sans JP",sans-serif;cursor:pointer}
     .nh-sheet-group .nh-sheet-row+.nh-sheet-row{border-top:1px solid rgba(60,60,67,.3)} /* ダーク (サイトを暗くする表示) でも境目が見える濃さ */
     .nh-sheet-link{margin-top:16px;border-radius:12px;color:#1e9a55}
+    /* 話ページの表示の設定 (ui-viewer.js。設定の「本文の見た目」と同じ見せ方) */
+    .nh-vs-group{border-radius:12px;overflow:hidden;background:#fff}
+    .nh-vs-preview{padding:12px 14px;border-radius:12px;background:#fff;color:#000;overflow:hidden;font-size:16px}
+    .nh-vs-slider{display:flex;align-items:center;gap:6px;min-height:52px;padding:4px 12px}
+    .nh-vs-slider+.nh-vs-slider{border-top:1px solid rgba(60,60,67,.3)}
+    .nh-vs-name{flex:none;width:42px;font:500 14px "Noto Sans JP",sans-serif;color:#000}
+    /* スライダーは自前の見た目 (サイトの input の枠・背景が付くと、四角い箱の中に点だけが浮く)。細い線と丸いつまみ。サイトの CSS に負けないよう !important */
+    .nh-vs-slider input[type=range]{flex:1;min-width:0;height:32px!important;margin:0!important;padding:0!important;border:0!important;outline:0!important;background:none!important;box-shadow:none!important;-webkit-appearance:none!important;appearance:none!important;accent-color:#1e9a55}
+    .nh-vs-slider input[type=range]::-webkit-slider-runnable-track{height:4px;border-radius:2px;background:rgba(118,118,128,.4)}
+    .nh-vs-slider input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:24px;height:24px;margin-top:-10px;border-radius:50%;border:2px solid #fff;background:#1e9a55;box-shadow:0 1px 4px rgba(0,0,0,.35)}
+    .nh-vs-val{flex:none;min-width:48px;text-align:right;font:600 14px "Noto Sans JP",sans-serif;color:#000;font-variant-numeric:tabular-nums}
+    .nh-vs-step{flex:none;width:34px;height:34px;border:0;border-radius:50%;background:rgba(118,118,128,.14);color:#000;font:600 18px "Noto Sans JP",sans-serif;cursor:pointer}
+    .nh-vs-pick{display:flex;align-items:center;justify-content:space-between;width:100%;min-height:48px;padding:0 14px;border:0;background:#fff;color:#000;font:500 15px "Noto Sans JP",sans-serif;text-align:left;cursor:pointer}
+    .nh-vs-pick+.nh-vs-pick{border-top:1px solid rgba(60,60,67,.3)}
+    .nh-vs-pickname{padding:2px 8px;border-radius:6px}
+    .nh-vs-check{flex:none;width:18px;color:#1e9a55}
     .nh-sheet-cancel{margin-top:8px;border-radius:12px;color:#1e9a55;font-weight:700}
     .nh-dialog{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:2147483647;width:min(300px,86vw);overflow:hidden;
       background:#fff;color:#000;border-radius:14px;text-align:center;font:15px/1.45 "Noto Sans JP",sans-serif;box-shadow:0 10px 30px rgba(0,0,0,.25)}

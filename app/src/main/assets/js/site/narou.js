@@ -30,11 +30,19 @@
       name: v.name,
       collectUrl: v.collectUrl,
       bodySel: '.p-novel__text',
+      panelSel: '.p-adjust-layout__controller', // そのパネルの箱。一番下に、アプリの表示の設定 (ui-viewer.js) を開くボタンを足す (ui.js)
       seqEpisodes: true, // 話番号が 1, 2, 3... の連番
       match: (host, path) => (host === 'syosetu.com' || host.endsWith('.syosetu.com')) && isR18(host, path) === !!v.r18,
       onCollectPage: (loc) => loc.pathname.startsWith(v.favPath),
       // 巡回の開始ページから転送された、ログイン・2 段階認証のページ (ログイン切れ・2 段階認証の途中。巡回の画面はここで「ログイン切れ」として次へ進む = ui-collect.js)
       onLoginPage: (loc) => loc.pathname.startsWith('/login/') || loc.pathname.startsWith('/user2stepauth/'),
+
+      verticalUnit: '.p-novel__body', // 縦書きにするとき、本文の箱ごと移す囲み (題名と本文を含む。ui/ui-vertical.js)
+      // 話ページの「前へ」リンク (第 1 話には無い)
+      prevUrl() {
+        const a = document.querySelector('a.c-pager__item--before');
+        return a ? a.href : null;
+      },
 
       // 話ページの「次へ」リンク (最終話には無い)
       nextUrl() {
@@ -47,7 +55,7 @@
         const out = [];
         const seen = new Set();
         let doc = document;
-        for (let page = 0; page < 40; page++) {
+        for (let page = 0; page < 100; page++) { // 100 話ごと = 1 万話まで
           doc.querySelectorAll('a.p-eplist__subtitle').forEach((a) => {
             const x = this.parseWork(a.href);
             if (!x || x.id !== w.id || x.episode == null || seen.has(x.episode)) return;
@@ -61,7 +69,7 @@
         return out;
       },
 
-      // 「読了 → 次の小説へ」を置く場所: 本文の下の「前へ / 目次 / 次へ」(上にも同じものがあるので最後のもの)
+      // 「読み終わり → 次の小説へ」を置く場所: 本文の下の「前へ / 目次 / 次へ」(上にも同じものがあるので最後のもの)
       endCardAfter() {
         const p = document.querySelectorAll('.c-pager');
         return p.length ? p[p.length - 1] : null;
@@ -159,7 +167,7 @@
         const cats = NH.bookmarkCats(NH.load(), v.id);
         for (const cat of cats) {
           let next = v.collectUrl.replace(/nowcategory=\d+/, 'nowcategory=' + cat);
-          for (let page = 0; next && page < 10; page++, fetched++) {
+          for (let page = 0; next && page < NH.COLLECT_MAX_PAGES; page++, fetched++) {
             const doc = await NH.fetchListDoc(next, fetched);
             if (fetched === 0) saveCategories(doc);
             const lis = [...doc.querySelectorAll('.p-up-bookmark-item')];
@@ -181,11 +189,7 @@
           }
           if (next) truncated = true;
         }
-        // 作品の入ったカテゴリのうち、見ていないものがある (確認するカテゴリを絞った) ときは、見たカテゴリ (cats) を返す。
-        // 見ていないカテゴリの作品を「今回の取得に無い」として読了にしないため (読了から日がたつと、リストから消えてしまう)
-        const info = (NH.load().bookmarkCatInfo || {})[v.id] || [];
-        const partial = info.some((c) => c.n > 0 && !cats.includes(Number(c.id)));
-        return { ok: sawList, items, truncated, cats: partial ? cats : null };
+        return { ok: sawList, items, truncated };
       },
 
       // ランキング / 検索結果 / トップ / 作者ページの作品: [{title, href, anchor, after?}] (after の直後、無ければ anchor の親ブロックの直後にボタンを付ける)

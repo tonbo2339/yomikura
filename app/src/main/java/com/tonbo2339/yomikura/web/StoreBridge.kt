@@ -198,6 +198,14 @@ class StoreBridge(host: BridgeHost) : GuardedBridge(host) {
     @JavascriptInterface
     fun menuItems(): String = forApp("[]") { MenuItems.toJson(NHData.settingsOf(NHData.obj(ctx))).toString() }
 
+    /** アプリを開いたときの確認で見つけていた、入れられる新しい版 (無ければ空)。設定の「アプリの更新」が、通信せずにカードを出すのに使う */
+    @JavascriptInterface
+    fun pendingUpdate(): String = forApp("") { host.updateNotice.pending(BuildConfig.VERSION_NAME) }
+
+    /** 設定の画面で、この版のカードを見せた (⋮ / 歯車の点を消す。次の新しい版が出たら、また出る) */
+    @JavascriptInterface
+    fun updateSeen(version: String): Boolean = forApp(false) { host.updateNotice.markSeen(version); true }
+
     /** アプリの更新を確認する (UpdateFlow)。結果は画面の nhUpdate(JSON) へ返す。 */
     @JavascriptInterface
     fun checkUpdate() = onUiForApp { update.check() }

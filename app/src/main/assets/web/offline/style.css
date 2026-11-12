@@ -19,15 +19,26 @@
   body.reading { padding: 0; background: var(--surface); }
   .rbar { position: fixed; left: 0; right: 0; z-index: 10; display: flex; align-items: center; gap: 4px; padding: 0 6px;
     height: 48px; background: var(--surface); box-shadow: 0 0 0 .5px var(--line); }
-  .rbar.top { top: 0; } .rbar.bottom { bottom: 0; height: 52px; padding-bottom: env(safe-area-inset-bottom); box-sizing: content-box; }
+  .rbar.top { top: var(--nh-top-inset, 0px); } /* --nh-top-inset: 本文に重ねている上のタブバーの高さ (縦書き。アプリが入れる)。その下に置く */
+  .rbar.bottom { bottom: 0; height: 52px; padding-bottom: env(safe-area-inset-bottom); box-sizing: content-box; }
   /* 進むと隠れ、戻す・本文をタップすると出る (reader.js の setBar)。隠れている間は、本文の領域を広げる (縦書き) */
   .rbar { transition: transform .22s ease; }
   body.bars-hidden .rbar.top { transform: translateY(-100%); }
   body.bars-hidden .rbar.bottom { transform: translateY(100%); }
+  /* バーを隠す設定のとき (body.bars-overlay): 本文は画面いっぱいのまま、バーを半透明で上に重ねる (Kindle のように、タップで出し入れ) */
+  body.bars-overlay.bars-opaque .rbar { background: var(--surface); -webkit-backdrop-filter: none; backdrop-filter: none; }
+  body.bars-overlay:not(.bars-opaque) .rbar { background: color-mix(in srgb, var(--surface) 84%, transparent); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
   .rbar .name { flex: 1; min-width: 0; font-size: 13px; color: var(--sub); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .rbar .pos { flex: 1; text-align: center; font-size: 13px; color: var(--sub); font-variant-numeric: tabular-nums; }
   .rbar button:disabled { opacity: .25; pointer-events: none; }
   #page { padding: 64px 22px calc(52px + env(safe-area-inset-bottom) + 32px); max-width: 760px; margin: 0 auto; } /* 下の余白は、下のバーに隠れないよう、バーの高さ (52px + 画面の下の余白) より広く */
+  /* 本文の端の「前の話・目次・次の話」 */
+  .endnav { display: flex; gap: 8px; margin: 1.2em 0; }
+  .endbtn { flex: 1; padding: 12px 8px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--accent-text); font: inherit; font-size: .9em; cursor: pointer; }
+  .endbtn:disabled { opacity: .25; pointer-events: none; }
+  #vwrap .endnav { flex-direction: row; justify-content: center; align-items: center; height: 100%; margin: 0 1.6em; } /* 縦書き: 主軸が縦なので、row でボタンが上から下へ並ぶ。縦の中ほどに置く */
+  #vwrap .endbtn { flex: 0 0 auto; padding: 14px 10px; line-height: 1.2; }
+  body.bars-overlay #page { padding-top: 20px; } /* バーを隠している間は、上の余白を詰める */
   #page h2 { font-size: 1.1em; margin: 0 0 1.4em; line-height: 1.5; }
   #text p { margin: 0; }
   #text hr { border: 0; border-top: 1px solid var(--line); margin: 2em 0; }
@@ -102,8 +113,10 @@
   .bbs-tip { position: fixed; z-index: 30; max-width: calc(100vw - 8px); box-sizing: border-box; padding: 6px 8px; background: var(--surface);
     color: var(--fg); border: 1px solid var(--line); border-radius: 6px; font-size: 14px; line-height: 1.6; pointer-events: none; overflow: hidden; }
   #vwrap { position: fixed; top: 48px; bottom: calc(52px + env(safe-area-inset-bottom)); left: 0; right: 0; overflow-x: auto; overflow-y: hidden; writing-mode: vertical-rl; }
-  body.bars-hidden #vwrap { top: 0; bottom: 0; }
+  body.bars-hidden #vwrap, body.bars-overlay #vwrap { top: 0; bottom: 0; }
   #vwrap #inner { height: 100%; padding: 22px 26px; box-sizing: border-box; text-combine-upright: digits 2; }
+  #vwrap .tcy { text-combine-upright: all; }
+  #vwrap .upr { text-orientation: upright; }
   #vwrap hr { border: 0; border-right: 1px solid var(--line); margin: 0 2em; }
   #vwrap h2 { margin: 0 0 0 1.4em; }
   .setrow { display: flex; align-items: center; gap: 10px; padding: 12px 16px; background: var(--surface); }
@@ -114,3 +127,5 @@
   .setrow .seg { flex: 1; }
   .setrow .picker { appearance: none; -webkit-appearance: none; border: 0; background: none; color: var(--sub); font-size: 16px; text-align: right; max-width: 60%; }
   .loading { padding: 14px 16px; color: var(--sub); font-size: 14px; }
+/* 読む画面の下のバーが出ているとき、お知らせ (snack) は、そのバーの上に出す (重なって見えなくなるため) */
+body.reading:not(.bars-hidden) .snack { bottom: calc(52px + 16px + env(safe-area-inset-bottom)); }

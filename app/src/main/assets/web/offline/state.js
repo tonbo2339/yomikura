@@ -21,6 +21,20 @@ const source = SRC && EXT.source ? EXT.source
   : { meta: async (site, id) => NH.off.meta(site, id), episode: async (site, id, ep) => NH.off.episode(site, id, ep) };
 const here = (w, ep, src = SRC) => 'offline.html?w=' + encodeURIComponent(w) + (ep != null ? '&ep=' + encodeURIComponent(ep) : '') + (src ? '&src=' + src : '');
 
+// 目次のスクロール位置: 本文へ移る前に控え、本文から目次へ戻って作り直すとき (戻る・本文の「目次」ボタン) に 1 回だけ戻す。
+// 一覧から目次を開くときは控えを捨てて、先頭から表示する (古い控えで途中から始まらないように)
+const LIB_Y = '#library'; // 作品の一覧の位置は、目次と同じ仕組みで控える (w の代わりにこの名前)
+const tocYKey = (w) => 'nh-toc-y:' + w;
+function rememberTocY(w) { try { sessionStorage.setItem(tocYKey(w), String(Math.round(window.scrollY))); } catch (e) { /* 保存できなくても動く */ } }
+function takeTocY(w) {
+  try {
+    const v = Number(sessionStorage.getItem(tocYKey(w))) || 0;
+    sessionStorage.removeItem(tocYKey(w));
+    return v;
+  } catch (e) { return 0; }
+}
+function forgetTocY(w) { try { sessionStorage.removeItem(tocYKey(w)); } catch (e) { /* 無視 */ } }
+
 // 上の帯の「‹ オフライン」(一覧へ戻る)
 function backNav() {
   const nav = el('div', 'topnav');

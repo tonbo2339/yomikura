@@ -9,8 +9,8 @@ import org.json.JSONObject
 object DiagReport {
     /** 保存データの要約に載せてよい設定 (数・真偽・短い選択肢だけ)。成人向けに関わる設定やタブの名前などは載せない */
     private val SETTING_KEYS = listOf(
-        "theme", "font", "readBg", "size", "lh", "start", "autoCheck", "autoCheckHours", "listArrows", "listSwipe", "repaintOnResume", "forceManualCheck", "netLog", "dimRead",
-        "pruneDone", "pruneDays", "historyMax", "historyDays",
+        "theme", "font", "readBg", "barPos", "barEdge", "barHidden", "barButtonPos", "barButtonColor", "barButtonIcon", "barButtonAlpha", "barButtonShape", "fullscreen", "fullscreenClock", "fullscreenClockSide", "statusOverlay", "updateNotice", "autoNextEpisode", "ttsTimer", "removeOnNext", "fullscreenCutout", "barButtonHue", "barButtonSat", "barButtonVal", "favoritePosMax", "favOn", "size", "lh", "start", "autoCheck", "autoCheckHours", "listArrows", "listSwipe", "repaintOnResume", "forceManualCheck", "netLog", "dimRead",
+        "historyMax", "historyDays",
     )
 
     /** 載せてよい設定の、`key=値` の並び (値が無いものは飛ばす)。診断情報と、開発用ログの起動の行が使う */
@@ -26,7 +26,7 @@ object DiagReport {
         val s = d.optJSONObject("settings")
         val shown = shownSettings(s)
         return listOf(
-            "リスト ${n("readLater")} 作品 / 履歴 ${n("history")} 作品 / 読書位置 ${k("progress")} 作品",
+            "リスト ${n("readLater")} 作品 / お気に入り ${n("favorites")} 作品 / 履歴 ${n("history")} 作品 / 読書位置 ${k("progress")} 作品",
             "設定 ${s?.length() ?: 0} 項目" + if (shown.isEmpty()) "" else " (" + shown.joinToString(", ") + ")",
         )
     }

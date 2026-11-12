@@ -10,6 +10,4 @@ object Politeness {
 
     /** 次のアクセスまで待つ長さ。random は 0 以上 1 未満 */
     fun pauseMs(random: Double = Math.random()): Long = MIN_MS + (random.coerceIn(0.0, 0.999999) * JITTER_MS).toLong()
-
-    fun pause() = Thread.sleep(pauseMs())
 }

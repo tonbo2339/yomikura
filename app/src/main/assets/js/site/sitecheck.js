@@ -30,7 +30,7 @@
     return String(css || '').split('}').map((r) => r.split('{')[0]).flatMap(splitSelectors);
   }
 
-  const siteKeyOf = (host) => host === 'syosetu.org' || host === 'h.syosetu.org' ? 'hameln' : host === 'kakuyomu.jp' ? 'kakuyomu' : /\.syosetu\.com$/.test(host) ? 'narou' : null;
+  const siteKeyOf = (host) => window.NH_siteKeyOf(host) || null; // 判定は sites.js の NH_siteKeyOf (対応外は null)
   // パスの形だけ。数字は 9 に (作品の ID を載せない)。なろうの ncode (n1234ab) は nXXXX に
   const shapeOf = (path) => String(path || '/').replace(/\/n\d{1,6}[a-z]{1,3}(?=\/|$)/g, '/nXXXX').replace(/\d+/g, '9');
 

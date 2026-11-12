@@ -5,10 +5,10 @@ window.NH.define('store', function (NH, T) { // T = 保存データの窓口に�
   // アプリ内ページ (リスト / 設定) もこのファイルを読み込んで同じ関数を使う。
   // データ形式:
   //   settings.menuItems: {項目: true/false}  ⋮ メニューに出す項目 (項目と初期値は Kotlin の MenuItems。未設定は初期値。診断だけ初期値オフ)
-  //   readLater: [{key, site, id, url, title, addedAt, done, kind('update'|'later'), unread, lastEp, total, totalAt, totalTry, r18, urlAt, memo, tag, sub, status}]  (total = 全話数、作品ページを開いたときに覚える。totalAt は覚えた時刻、totalTry は全話数を読みにいった時刻 = 読めなかったときも 1 日は読み直さない)
+  //   readLater: [{key, site, id, url, title, addedAt, kind('update'|'later'), unread, lastEp, total, totalAt, totalTry, r18, urlAt, memo, tag, sub, status}]  (total = 全話数、作品ページを開いたときに覚える。totalAt は覚えた時刻、totalTry は全話数を読みにいった時刻 = 読めなかったときも 1 日は読み直さない)
   //              status: 連載状態 serial | complete | short (分かったときだけ。ランキング・検索の一覧と作品ページから。リストの絞り込み用)
-  //              cat: なろうのブックマークのカテゴリ番号 (更新の確認で取り込んだ作品。カテゴリを絞って確認したとき、ほかのカテゴリの作品を読了にしないため)
-  //              manualKind: 手で「未読の更新」へ移した作品 (更新の確認で、サイトの一覧に無くても読了にしない。サイトの一覧に出たら外す)
+  //              cat: なろうのブックマークのカテゴリ番号 (更新の確認で取り込んだ作品。カテゴリを絞って確認したとき、ほかのカテゴリの作品をリストから外さないため)
+  //              manualKind: 手で「未読の更新」へ移した作品 (更新の確認で、サイトの一覧に無くてもリストから外さない。サイトの一覧に出たら外す)
   //              sub: R18 (site narou18) のサイト noc | mnlt | mid (NH.r18Sub。分かったときだけ。history とオフラインの meta にも)
   //   logins:    {narou, hameln, kakuyomu: bool}   各サイトのログインの印 (Cookie) の有無。Kotlin が写す (NH.collectActive)
   //   progress:  {key: {url, ep, no, y, done, next, at}}   話ごとの読書位置。no = 何話目か (カクヨムなど話 ID が連番でないサイトだけ。目次の並びから数える。NH.epNumber)
@@ -24,9 +24,11 @@ window.NH.define('store', function (NH, T) { // T = 保存データの窓口に�
   //               tabOrder:[サイトのキー] (上部バーのタブの並び。設定画面の ▲▼),
   //               adult (18 歳以上か。初回の画面で聞く。false なら R18 のサイトは sites でもオフにしてあり、選ぶ欄も出さない。未設定は true 扱い),
   //               nsfw (NSFW モード。オンなら R18 のサイトへ一切アクセスせず、リスト・履歴・ランキングにも R18 を出さない。未設定は false)}
-  //   readSeq:{keys: [作品のキー], at} (リストで絞り込み・検索中に作品を開いたときの並び。読了の次の作品に使う。絞り込みなしで開いたら null)
+  //   readSeq:{keys: [作品のキー], at} (リストで絞り込み・検索中に作品を開いたときの並び。読み終えたあとの次の作品に使う。絞り込みなしで開いたら null)
+  //   favorites: [{key, site, id, url, title, addedAt, status, sub, r18}]  お気に入り (★)。新しい順。作品の数に上限は無い。core/favorites.js。settings.favoritePosMax = 読んだ場所を守る作品の数 (未設定 100、0 = 無制限)
   //   history, mute, rest:{site: 止められた時刻}, lastCollect, lastCollectFg (アプリの画面で確認した時刻), collectStartAt (確認を始めた時刻。Kotlin の CollectCooldown), collectLog:{site: {n, added, fresh} | {err}},
   //   bookmarkCatInfo:{narou|narou18: [{id, name, n}]} (ブックマークのカテゴリ名と件数。更新の確認のときに控える)
+  NH.DAY_MS = 24 * 60 * 60 * 1000; // 1 日 (履歴の保存日数・読んだ話の記録・次の小説の並びの期限が使う)
   const EMPTY = () => ({ readLater: [] });
 
   // strict = 書き込みのために読む。保存データを読めなかった (窓口が例外・中身が壊れている) ときは、空のデータを返さずに例外にする
@@ -67,18 +69,29 @@ window.NH.define('store', function (NH, T) { // T = 保存データの窓口に�
   // 想定と違う項目は捨てる (作品の一覧は、中身が作品の形 = key が文字の物だけ残す)。
   const isObj = (NH.isObj = (x) => !!x && typeof x === 'object' && !Array.isArray(x)); // 統計 (stats.js) も使う
   const OBJECT_KEYS = ['settings', 'progress', 'mute', 'rest', 'collectLog', 'rankings', 'bookmarkCatInfo', 'statusFilter', 'readStats'];
-  const ARRAY_KEYS = ['history']; // 閲覧履歴は配列 (オブジェクトの扱いにすると、読むたびに消えてしまう)
+  // 以前の版が書いて、いまは読むコードが無い設定 (読み込むときに除く。pruneDone / pruneDays = 読了から日数での片付け、barButtonLight / barSplit / barWide = 以前のバーの設定)
+  const LEGACY_SETTINGS = ['pruneDone', 'pruneDays', 'barButtonLight', 'barSplit', 'barWide'];
+  const ARRAY_KEYS = ['history', 'favorites']; // 閲覧履歴は配列 (オブジェクトの扱いにすると、読むたびに消えてしまう)
+  // 作品の形 (key が文字) でないものを除き、同じ key は最初の 1 つだけ残した配列 (リスト・履歴・お気に入りが共通)
+  const uniqueWorks = (arr) => {
+    const seen = new Set();
+    return arr.filter((e) => isObj(e) && typeof e.key === 'string' && !seen.has(e.key) && seen.add(e.key));
+  };
   NH.sanitize = function (d) {
     if (!isObj(d)) return EMPTY();
     if (!Array.isArray(d.readLater)) d.readLater = [];
-    d.readLater = d.readLater.filter((e) => isObj(e) && typeof e.key === 'string');
+    // 以前の版で「読了」の印 (done) を付けて隠していた作品は、リストから外す (読んだ記録は履歴に残る。読了の印は、もう使わない)
+    // 同じキーの作品が重複していたら (手で直した・混ぜたバックアップ) 最初の 1 つだけ残す。読了の印は、残る作品からも外す
+    d.readLater = uniqueWorks(d.readLater.filter((e) => !(isObj(e) && e.done)));
+    d.readLater.forEach((e) => { delete e.done; delete e.doneAt; });
     OBJECT_KEYS.forEach((k) => { if (k in d && !isObj(d[k])) delete d[k]; });
     ARRAY_KEYS.forEach((k) => { if (k in d && !Array.isArray(d[k])) delete d[k]; });
     // 中の形もそろえる (手で直したバックアップや古い版のデータで、配列のはずの所が文字列などだと、ミュートや履歴の並べ替えが例外で止まる)
     if (d.history) {
-      d.history = d.history.filter((e) => isObj(e) && typeof e.key === 'string');
+      d.history = uniqueWorks(d.history); // 同じ作品が二重にあると (混ぜたバックアップ)、履歴に 2 行出て、「読んだ話」の開閉も一緒に動くので、先頭 (新しい方) だけ残す
       d.history.forEach((e) => { if (typeof e.at !== 'number' || !isFinite(e.at)) e.at = 0; });
     }
+    if (d.favorites) d.favorites = uniqueWorks(d.favorites); // 同じ作品が二重にあると、★ の付け外しがずれるので、先頭 (新しい方) だけ残す
     const strings = (a) => (Array.isArray(a) ? a.filter((x) => typeof x === 'string') : []);
     if (d.mute) {
       ['authors', 'words'].forEach((k) => { if (k in d.mute) d.mute[k] = strings(d.mute[k]); });
@@ -89,6 +102,13 @@ window.NH.define('store', function (NH, T) { // T = 保存データの窓口に�
         d.mute.block = b;
       }
     }
+    // 使わなくなった古い項目を除く (以前の版が書いたもので、読むコードが無いまま、保存データに残り続けるため)
+    if (isObj(d.settings)) LEGACY_SETTINGS.forEach((k) => { delete d.settings[k]; });
+    if (isObj(d.progress)) { // 読書位置の値が作品の形でない (null など) と、pruneProgress の並べ替えが例外になり、リストが開けなくなる
+      Object.keys(d.progress).forEach((k) => { if (!isObj(d.progress[k])) delete d.progress[k]; });
+      Object.values(d.progress).forEach((p) => { delete p.lt; });
+    }
+    if (d.history) d.history.forEach((e) => { if (isObj(e.pr)) delete e.pr.last; });
     return d;
   };
 
@@ -108,6 +128,14 @@ window.NH.define('store', function (NH, T) { // T = 保存データの窓口に�
   NH.unreadable = false;
   // 外のリンクの作品を「後で読む」に追加して戻る: アプリに知らせる (窓口には合言葉を添える)
   NH.laterBack = function (result) { if (window.NHStore && window.NHStore.laterBack) window.NHStore.laterBack(result, T); };
+  // 巡回 (ui/ui-collect.js) が、Kotlin の巡回の窓口 (Collector) を呼ぶ入口。合言葉を添える (添えない呼び出しは窓口が無視する。広告などの別フレームから呼ばれないため)。
+  // 呼べるのはここに並べたものだけ。窓口が無いページ (ふつうのブラウザ・アプリ内ページ) では何もしない (undefined)
+  const COLLECT_CALLS = ['bgDone', 'challenge', 'progress', 'isSplit', 'devLog'];
+  NH.collectCall = function (name, ...args) {
+    const s = window.NHStore;
+    if (!COLLECT_CALLS.includes(name) || !s || typeof s[name] !== 'function') return undefined;
+    return s[name](...args, T);
+  };
   // 版付きの書き込みを 8 回とも断られて書けなかったとき、直後の NH.updateGaveUp が true (呼び出し側が「保存できなかった」と知らせられる)。読めなくて書かなかったときは NH.unreadable
   NH.updateGaveUp = false;
   NH.update = function (fn, opts = {}) {
@@ -140,12 +168,13 @@ window.NH.define('store', function (NH, T) { // T = 保存データの窓口に�
     return d;
   };
 
-  // 読書位置 (d.progress) は、リストに入っている作品 (読了を除く) と、それ以外で最近読んだ PROGRESS_KEEP 作品だけ残す
+  // 読書位置 (d.progress) は、リストに入っている作品・お気に入りの作品と、それ以外で最近読んだ PROGRESS_KEEP 作品だけ残す
   NH.PROGRESS_KEEP = 100; // 履歴の「途・未」や話数の判定にも使うので、少なすぎると読んだ作品が「未」に戻る
   NH.pruneProgress = function (d) {
     const p = d.progress;
     if (!p) return;
-    const inList = new Set(d.readLater.filter((x) => !x.done).map((x) => x.key));
+    const inList = new Set(d.readLater.map((x) => x.key));
+    if (NH.favProtected) NH.favProtected(d).forEach((k) => inList.add(k)); // お気に入りの作品 (新しく読んだ順に最大数まで) も守る (core/favorites.js)
     const others = Object.keys(p).filter((k) => !inList.has(k)).sort((a, b) => (p[b].at || 0) - (p[a].at || 0));
     others.slice(NH.PROGRESS_KEEP).forEach((k) => delete p[k]);
   };
@@ -153,8 +182,27 @@ window.NH.define('store', function (NH, T) { // T = 保存データの窓口に�
   // 設定の 1 項目を書く (設定画面の外 = リスト・オフライン・サイトのページの画面から。設定画面は S を通して書く)
   NH.setSetting = (k, v) => NH.update((d) => { d.settings = d.settings || {}; d.settings[k] = v; });
 
+  // ヒント (初めて開いた画面に 1 回だけ出す説明) を、いま出してよいか / 見たことにする。アプリ内ページ (app.js の showHint) とサイト上 (ui.js) の共通の窓口。
+  // 出すのは、設定 hints がオフでなく、settings.hintsSeen[id] がまだ無いとき。文章は、アプリ内ページは web/hints.js、サイト上は呼ぶ側
+  NH.hintDue = (id) => { const s = NH.load().settings || {}; return s.hints !== false && !(s.hintsSeen || {})[id]; };
+  NH.hintDone = (id) => NH.update((d) => { d.settings = d.settings || {}; d.settings.hintsSeen = Object.assign({}, d.settings.hintsSeen, { [id]: true }); });
+
   // 設定のオン / オフの項目の読み取り。未設定 (undefined / null) は def (既定はオン)。既定オンの項目は false と書かれたときだけオフ (early.js の `!== false` と同じ)、既定オフの項目は真のときだけオン。
   // 設定の画面側は NH.flagOf(S, 'キー')、保存データ d (settings を持つ) からは NH.flag(d, 'キー')。既定オフの項目は def に false を渡す
   NH.flagOf = (st, key, def = true) => { const v = st ? st[key] : undefined; return v === undefined || v === null ? def : def ? v !== false : !!v; };
   NH.flag = (d, key, def = true) => NH.flagOf(d && d.settings, key, def);
+
+  // バーの出し方 (設定の「バー」の一番上と、チュートリアルが共通で使う)。2 つの設定 (hideBarOnScroll・barEdge) を、1 つの選択に見せる
+  //   always = いつも出す / scroll = スクロールで隠す (既定) / edge = 隠しておき、端からスワイプで出す
+  NH.BAR_MODES = [['always', 'いつも表示', ''], ['scroll', 'スクロールで隠す', '下へスクロールで隠れ、上へ戻すと出る'], ['edge', '普段は隠しておく', '端のスワイプか目印で出す。ページを触るか下へスクロールすると、また隠れる']];
+  // バーを上に置くときは、「端から出す」を選べない (状態バーと重なるため)。置き場所 (barPos) に合わせた選択肢
+  // 左右に置くときは、「スクロールで隠す」を選べない (隠したいときは「普段は隠しておく」)。上は always / scroll、左右は always / edge
+  NH.barModesFor = (pos) => NH.BAR_MODES.filter((m) => ((pos || 'top') !== 'top' ? m[0] !== 'scroll' : m[0] !== 'edge'));
+  NH.barModeOf = (st) => ((st && st.barPos || 'top') !== 'top' ? (NH.flagOf(st, 'barEdge', false) ? 'edge' : 'always') : NH.flagOf(st, 'hideBarOnScroll') ? 'scroll' : 'always');
+  // 選んだ出し方に合わせて、設定 (st) を書き換える
+  NH.setBarMode = (st, mode) => {
+    st.barEdge = mode === 'edge';
+    st.hideBarOnScroll = mode !== 'always';
+    return st;
+  };
 });

@@ -23,19 +23,25 @@ window.NH_UI_COLLECT = function (ctx) {
   const forceManual = !!(window.NH_EDITION || {}).debugTools && !!(d0.settings || {}).forceManualCheck && mode === 'fg';
   const resting = forceManual ? [] : usable.filter((id) => NH.isResting(d0, id, auto));
   const enabled = usable.filter((id) => !resting.includes(id));
-  const here = enabled.includes(adapter.id);
+  // ログインのページへ転送されたとき、そのページがどのサイトの一覧から転送されたかは、ページの場所 (ホスト) からは決まらない
+  // (なろうと R18 のブックマークは、同じ syosetu.com のログインへ転送される)。直前にこの巡回が移った先 (collectNext) を、転送元のサイトとする。
+  // 今回の巡回より前の古い印 (中断した巡回の残り) は使わない
+  const nx = d0.collectNext;
+  const loginFor = onLoginPage && nx && nx.at >= (d0.collectStartAt || 0) && enabled.includes(nx.id) ? nx.id : null;
+  const selfId = loginFor || adapter.id; // この WebView が確認しているサイト
+  const here = enabled.includes(selfId);
   // 確認画面で止まったこのページを画面に出して通してもらうとき、次のサイトからの巡回は別の WebView が続けている (Collector の split)。
   // その場合、この WebView は自分のサイトだけで終わり (次へ進まない)、結果もまっさらにしない (続きの WebView の結果を消さない)
-  const split = !!(window.NHStore && NHStore.isSplit && NHStore.isSplit());
-  const nextIdOf = () => SEQ.slice(SEQ.indexOf(adapter.id) + 1).find((id) => enabled.includes(id));
+  const split = !!NH.collectCall('isSplit');
+  const nextIdOf = () => SEQ.slice(SEQ.indexOf(selfId) + 1).find((id) => enabled.includes(id));
   const urlOf = (id) => NH.adapters.find((a) => a.id === id).collectUrl + '#nh-collect-' + mode;
   // 巡回は、休んでいない最初の対象サイトから始まる (SiteConfig.collectStartUrl。休んでいるサイトは開きもしない)。そのサイトが結果をまっさらにする
-  if (adapter.id === enabled[0] && !split) {
+  if (selfId === enabled[0] && !split) {
     // この実行の中で止められて休止になったサイト (確認画面・アクセス制限。先のサイトが休止にしたあと、次のサイトのページがここへ来る) は、
     // その結果 (challenge など) を残す。実行の前から休んでいたサイトだけを rest と書く (実行の始まり = collectStartAt。CollectCooldown.markStarted)
     const prev = d0.collectLog || {};
     const started = d0.collectStartAt || 0;
-    NH.update((d) => { d.collectLog = {}; });
+    NH.update((d) => { d.collectLog = {}; delete d.collectNext; });
     resting.forEach((id) => {
       const stoppedNow = prev[id] && ((d0.rest || {})[id] || 0) >= started;
       if (stoppedNow) NH.update((d) => { d.collectLog[id] = prev[id]; });
@@ -47,20 +53,21 @@ window.NH_UI_COLLECT = function (ctx) {
   const go = (delay) => setTimeout(() => {
     const nextId = split ? null : nextIdOf();
     if (nextId) {
+      NH.update((d) => { d.collectNext = { id: nextId, at: Date.now() }; }); // 次のページがログインへ転送されたとき、どのサイトの一覧だったかを知るため
       location.replace(urlOf(nextId));
       return;
     }
     // lastCollectFg = アプリの画面で確認した時刻 (直後の裏での確認は通知しない)
-    NH.update((d) => { d.lastCollect = Date.now(); if (!bg) d.lastCollectFg = d.lastCollect; });
-    if (window.NHStore && NHStore.bgDone) NHStore.bgDone(JSON.stringify(NH.load().collectLog || {}));
+    NH.update((d) => { d.lastCollect = Date.now(); if (!bg) d.lastCollectFg = d.lastCollect; delete d.collectNext; });
+    NH.collectCall('bgDone', JSON.stringify(NH.load().collectLog || {}));
   }, delay);
 
   if (!here) { go(0); return true; }
   // 確認の進み具合 (リスト画面の「1 / 4」): 対象のサイトの何番目か
-  if (window.NHStore && NHStore.progress) NHStore.progress(String(enabled.indexOf(adapter.id) + 1), String(enabled.length));
+  NH.collectCall('progress', String(enabled.indexOf(selfId) + 1), String(enabled.length));
   // ログイン (2 段階認証を含む) のページへ転送された: 一覧を読めないので、止まって待たず (90 秒で諦めるのを待たず)、ログイン切れと残して次のサイトへ
   if (onLoginPage) {
-    logErr(adapter.id, 'login');
+    logErr(selfId, 'login'); // 転送元のサイトのログイン切れとして残す (なろう R18 のログインが、なろうのログイン切れにならないように)
     go(2500);
     return true;
   }
@@ -72,19 +79,35 @@ window.NH_UI_COLLECT = function (ctx) {
     NH.markRest(adapter.id);
     setTimeout(() => {
       const nextId = nextIdOf();
-      const hold = window.NHStore && NHStore.challenge && NHStore.challenge(adapter.id, nextId ? urlOf(nextId) : '') === 'hold';
+      const hold = NH.collectCall('challenge', adapter.id, nextId ? urlOf(nextId) : '') === 'hold';
       if (!hold) go(0);
     }, 15000);
     return true;
   }
+  // 開発用ログ (Kotlin の DevLog。デバッグ用の機能がある版で、「ログを取る」と分類「確認」がオンのときだけ残る。無い版・巡回の外では何もしない)
+  const devLog = (message, fields) => { try { NH.collectCall('devLog', String(message), String(fields || '')); } catch (e) { /* ログが取れなくても巡回は続ける */ } };
+  devLog('collect start', 'site=' + adapter.id + ' mode=' + mode + ' enabled=' + enabled.join(',') + ' resting=' + resting.join(','));
   adapter.collectUpdates().then(
     (r) => {
+      const st = r.stat || {};
+      devLog('collect fetched', 'site=' + adapter.id + ' ok=' + r.ok + ' items=' + (r.items || []).length +' truncated=' + !!r.truncated + ' pages=' + (st.pages == null ? '-' : st.pages)
+        + ' lis=' + (st.lis == null ? '-' : st.lis) + ' unparsed=' + (st.unparsed == null ? '-' : st.unparsed) + ' allRead=' + (st.allRead == null ? '-' : st.allRead) + ' head=' + (st.head || '-').replace(/ /g, '_'));
       if (!r.ok) {
         logErr(adapter.id, 'login');
         return go(2500);
       }
       // 「後で読む」に置いた作品は数えない (未読の更新には出さない)
-      const { added, updates, fresh, freshKeys } = NH.mergeUpdates(adapter.id, r.items, { truncated: !!r.truncated, readIds: r.readIds, cats: r.cats });
+      const { added, updates, fresh, freshKeys, trace } = NH.mergeUpdates(adapter.id, r.items);
+      // 取り込みの書き込みを 8 回とも断られた (保存できなかった): 新着として結果・通知に出さず、このサイトは「確認できなかった」と残して次へ進む
+      if (NH.updateGaveUp) {
+        devLog('collect merge gave up', 'site=' + adapter.id);
+        logErr(adapter.id, 'error');
+        return go(2500);
+      }
+      devLog('collect merged', 'site=' + adapter.id + ' updates=' + updates + ' added=' + added + ' fresh=' + fresh.length);
+      const titleOf = Object.fromEntries(r.items.map((u) => [adapter.id + ':' + u.id, String(u.title || '').slice(0, 16)]));
+      (trace || []).slice(0, 80).forEach((line) => devLog('collect item', line.replace(/^(\S+)/, (k) => k + ' [' + (titleOf[k] || '') + ']')));
+      if ((trace || []).length > 80) devLog('collect item', 'ほか ' + (trace.length - 80) + ' 件 (省略)');
       NH.update((d) => {
         d.collectLog = d.collectLog || {};
         d.collectLog[adapter.id] = { n: updates, added, fresh, keys: freshKeys }; // keys = 新しい話が出た作品 (保存済みなら Kotlin の OfflineAutoUpdate が追加で保存する)

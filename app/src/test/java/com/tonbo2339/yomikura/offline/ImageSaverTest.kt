@@ -64,8 +64,25 @@ class ImageSaverTest {
         assertEquals("{}", ImageSaver.saveData(s, "hameln", "1", "http://syosetu.org/a.jpg", b64(jpeg))) // 平文の URL
         assertEquals("{}", ImageSaver.saveData(s, "hameln", "1", url, b64("<svg onload=alert(1)>".toByteArray()))) // 画像でない
         assertEquals("{}", ImageSaver.saveData(s, "hameln", "1", url, "これは base64 ではない")) // 壊れた base64
-        assertEquals("{}", ImageSaver.saveData(s, "hameln", "1", url, b64(jpeg)) { it == "syosetu.org" }) // 止める配信元
+        assertEquals("{}", ImageSaver.saveData(s, "hameln", "1", url, b64(jpeg), blocked = { it == "syosetu.org" })) // 止める配信元
         assertEquals("{}", ImageSaver.saveData(s, "hameln", "1", url, "A".repeat(OfflineStore.MAX_IMAGE_BASE64 + 1))) // 大きすぎる
         assertEquals("{}", ImageSaver.saveData(s, "hameln", "1", "not a url", b64(jpeg)))
+    }
+
+    // 通信のあいだに作品が消されたとき (stillWanted が false) は、書き戻さない
+    @Test
+    fun saveDataDoesNotWriteBackAfterWorkWasDeleted() {
+        val s = store()
+        assertEquals("{}", ImageSaver.saveData(s, "hameln", "431079", url, b64(jpeg), stillWanted = { false }))
+        assertEquals(emptyList<String>(), s.imageNames("hameln", "431079"))
+    }
+
+    // 本文のサイトの外へは、話のページの全体ではなく、サイトの名前だけを Referer に付ける
+    @Test
+    fun refererIsTrimmedForOtherHosts() {
+        val page = "https://syosetu.org/novel/431079/3.html?x=1"
+        assertEquals(page, ImageSaver.refererFor(page, "syosetu.org"))
+        assertEquals("https://syosetu.org/", ImageSaver.refererFor(page, "img.example.com"))
+        assertEquals("", ImageSaver.refererFor("not a url", "img.example.com"))
     }
 }

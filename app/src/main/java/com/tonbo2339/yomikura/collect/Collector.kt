@@ -129,7 +129,8 @@ class Collector(
         fun startUrl(): String = SiteConfig.LIST_URL
 
         @JavascriptInterface
-        fun bgDone(log: String) {
+        fun bgDone(log: String, t: String?) {
+            if (t != NHData.token) return // 合言葉の無い呼び出し (広告などの別フレーム) は無視する
             mainHandler.post {
                 OfflineAutoUpdate.onCollected(ctx, log)
                 finish(log)
@@ -138,11 +139,12 @@ class Collector(
 
         /** この WebView が、自分のサイトだけで終わる側か (確認画面で止まって、続きを別の WebView に渡したあと) */
         @JavascriptInterface
-        fun isSplit(): Boolean = holding
+        fun isSplit(t: String?): Boolean = t == NHData.token && holding
 
         /** 確認画面で止まった (ui.js)。"hold" を返したら、この WebView は待つ。そうでなければ、ui.js が次へ進む */
         @JavascriptInterface
-        fun challenge(site: String, nextUrl: String): String {
+        fun challenge(site: String, nextUrl: String, t: String?): String {
+            if (t != NHData.token) return ""
             if (!SiteConfig.isCollectSite(site)) return ""
             // すでに待っている: 確認画面が読み込み直されて ui.js がもう一度知らせてきただけ。続きの巡回はもう別の WebView が始めているので、
             // 知らせ直さない (知らせ直すと、次のサイトからの Collector が二重にでき、問いかけも出直す)
@@ -157,8 +159,16 @@ class Collector(
             return if (holdable) "hold" else ""
         }
 
+        /** 巡回の JS (ui-collect.js) から、開発用ログ (分類「確認」) へ 1 行書く。DevLog が使えない版・スイッチがオフなら何も残らない。長さは切る */
         @JavascriptInterface
-        fun progress(i: String, n: String) {
+        fun devLog(message: String, fields: String, t: String?) {
+            if (t != NHData.token) return
+            DevLog.event(DevLog.Category.CHECK, "js " + message.take(120), fields.take(600))
+        }
+
+        @JavascriptInterface
+        fun progress(i: String, n: String, t: String?) {
+            if (t != NHData.token) return
             if (holding) return // 通ったあと自分のサイトだけを取る間は、続きの巡回の進み具合 (「3 / 4」など) を「1 / 4」に戻さない
             val a = i.toIntOrNull() ?: return
             val b = n.toIntOrNull() ?: return
